@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useHosts } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { useDownloadStore } from "@/stores/download-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 
@@ -20,6 +22,7 @@ export function useFileDownload({
   workspaceId,
   workspaceRoot,
 }: UseFileDownloadParams): (input: { fileName: string; path: string }) => void {
+  const { t } = useTranslation();
   const daemons = useHosts();
   const daemonProfile = useMemo(
     () => daemons.find((daemon) => daemon.serverId === serverId),
@@ -30,12 +33,24 @@ export function useFileDownload({
     () => workspaceId?.trim() || normalizedWorkspaceRoot,
     [normalizedWorkspaceRoot, workspaceId],
   );
+  const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const { requestFileDownloadToken } = useFileExplorerActions({
     serverId,
     workspaceId,
     workspaceRoot: normalizedWorkspaceRoot,
   });
   const startDownload = useDownloadStore((state) => state.startDownload);
+
+  const readFileBytes = useCallback(
+    async (targetPath: string) => {
+      if (!client) {
+        throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      const file = await client.readFile(normalizedWorkspaceRoot, targetPath);
+      return { bytes: file.bytes, mime: file.mime };
+    },
+    [client, normalizedWorkspaceRoot, t],
+  );
 
   return useCallback(
     ({ fileName, path }) => {
@@ -49,8 +64,16 @@ export function useFileDownload({
         path,
         daemonProfile,
         requestFileDownloadToken: (targetPath) => requestFileDownloadToken(targetPath),
+        readFileBytes,
       });
     },
-    [daemonProfile, requestFileDownloadToken, serverId, startDownload, workspaceScopeId],
+    [
+      daemonProfile,
+      readFileBytes,
+      requestFileDownloadToken,
+      serverId,
+      startDownload,
+      workspaceScopeId,
+    ],
   );
 }
