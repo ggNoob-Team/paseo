@@ -125,6 +125,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  ArchifyArtifact,
+  ArchifyArtifactSummary,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -5267,6 +5269,42 @@ export class DaemonClient {
       },
       responseType: "agent.skills.save_selection.response",
     });
+  }
+
+  async openArchifyWorkspace(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<{ artifacts: ArchifyArtifactSummary[]; autoGenerate: boolean }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.workspace.open.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.workspace.open.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+        },
+      });
+    return { artifacts: payload.artifacts, autoGenerate: payload.autoGenerate };
+  }
+
+  async readArchifyArtifact(
+    workspaceId: string,
+    artifactId: string,
+    requestId?: string,
+  ): Promise<{ artifact: ArchifyArtifact | null; error: string | null }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.artifact.read.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.artifact.read.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+          artifactId,
+        },
+      });
+    return { artifact: payload.artifact, error: payload.error };
   }
 
   async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{

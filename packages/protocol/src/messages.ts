@@ -1590,6 +1590,54 @@ export const AgentSkillsImportLegacySelectionRequestSchema = z
   })
   .strict();
 
+export const ArchifyDiagramTypeSchema = z.enum([
+  "architecture",
+  "sequence",
+  "dataflow",
+  "workflow",
+  "lifecycle",
+]);
+export type ArchifyDiagramType = z.infer<typeof ArchifyDiagramTypeSchema>;
+
+export const ArchifyArtifactSummarySchema = z
+  .object({
+    id: z.string(),
+    type: ArchifyDiagramTypeSchema,
+    title: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    specBytes: z.number().int().nonnegative(),
+    artifactBytes: z.number().int().nonnegative(),
+    generatorAgentId: z.string().nullable(),
+    request: z.string().nullable(),
+    scope: z.string().nullable(),
+  })
+  .strict();
+export type ArchifyArtifactSummary = z.infer<typeof ArchifyArtifactSummarySchema>;
+
+export const ArchifyArtifactSchema = ArchifyArtifactSummarySchema.extend({
+  spec: z.record(z.string(), z.unknown()),
+  html: z.string(),
+}).strict();
+export type ArchifyArtifact = z.infer<typeof ArchifyArtifactSchema>;
+
+export const ArchifyWorkspaceOpenRequestSchema = z
+  .object({
+    type: z.literal("archify.workspace.open.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+  })
+  .strict();
+
+export const ArchifyArtifactReadRequestSchema = z
+  .object({
+    type: z.literal("archify.artifact.read.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+    artifactId: z.string(),
+  })
+  .strict();
+
 export const GetDaemonConfigRequestMessageSchema = z.object({
   type: z.literal("get_daemon_config_request"),
   requestId: z.string(),
@@ -3215,6 +3263,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsUninstallRequestSchema,
   AgentSkillsSaveSelectionRequestSchema,
   AgentSkillsImportLegacySelectionRequestSchema,
+  ArchifyWorkspaceOpenRequestSchema,
+  ArchifyArtifactReadRequestSchema,
   GetDaemonConfigRequestMessageSchema,
   SetDaemonConfigRequestMessageSchema,
   ReadProjectConfigRequestMessageSchema,
@@ -3591,6 +3641,7 @@ export const ServerInfoStatusPayloadSchema = z
         pluginTimelineItems: z.boolean().optional(),
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
+        archify: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -6716,6 +6767,26 @@ export const AgentSkillsImportLegacySelectionResponseSchema = z.object({
   }),
 });
 
+export const ArchifyWorkspaceOpenResponseSchema = z.object({
+  type: z.literal("archify.workspace.open.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    artifacts: z.array(ArchifyArtifactSummarySchema),
+    autoGenerate: z.boolean(),
+  }),
+});
+
+export const ArchifyArtifactReadResponseSchema = z.object({
+  type: z.literal("archify.artifact.read.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    artifact: ArchifyArtifactSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
@@ -6747,6 +6818,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsUninstallResponseSchema,
   AgentSkillsSaveSelectionResponseSchema,
   AgentSkillsImportLegacySelectionResponseSchema,
+  ArchifyWorkspaceOpenResponseSchema,
+  ArchifyArtifactReadResponseSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,

@@ -2,6 +2,36 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
+  archify: {
+    tabLabel: "架构图",
+    tabSubtitle: "可交互图表",
+    tabTooltip: "打开 Archify 图表",
+    open: "打开 Archify",
+    unavailable: "请更新此主机以使用 Archify。",
+    providerUnavailable: "当前没有可用的 Agent Provider。",
+    generationFailed: "Archify 生成失败。",
+    generating: "正在生成图表...",
+    ready: "图表已就绪",
+    refresh: "刷新图表",
+    searchPlaceholder: "搜索方法调用、变量、流转或业务步骤",
+    noResults: "没有匹配的图表元素",
+    loadingArtifact: "正在加载图表...",
+    node: "节点",
+    relationship: "关系",
+    requestPlaceholder: "可选：描述要分析的方法调用链、变量或业务流程",
+    scopePlaceholder: "可选范围：路径、符号或功能",
+    generate: "生成",
+    emptyTitle: "创建第一张图",
+    emptyDescription:
+      "Archify 将分析当前 workspace，并生成可搜索的架构图、方法调用图和变量流转图。",
+    types: {
+      architecture: "架构总览",
+      sequence: "方法调用",
+      dataflow: "变量流转",
+      workflow: "业务流程",
+      lifecycle: "生命周期",
+    },
+  },
   paneFind: {
     searchFailed: "无法搜索此聊天。请检查主机连接后重试。",
     searching: "搜索中…",

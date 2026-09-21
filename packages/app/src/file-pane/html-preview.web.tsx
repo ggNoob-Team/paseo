@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { withPreviewCsp } from "./html-preview-csp";
 
@@ -23,17 +23,66 @@ const iframeStyle = {
   backgroundColor: "white",
 } as const;
 
-export function FileHtmlPreview({ html, testID }: { html: string; testID?: string }) {
+const COMMAND_BRIDGE = `<script>(() => {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const data = event.data;
+    if (!data || data.type !== "paseo-html-preview-command" || typeof data.source !== "string") return;
+    try { (0, eval)(data.source); } catch (_) {}
+  });
+})();</script>`;
+
+export interface FileHtmlPreviewCommand {
+  id: number;
+  source: string;
+}
+
+function withCommandBridge(html: string): string {
+  return html.includes("</body>")
+    ? html.replace("</body>", `${COMMAND_BRIDGE}</body>`)
+    : html + COMMAND_BRIDGE;
+}
+
+export function FileHtmlPreview({
+  html,
+  testID,
+  command,
+  commandBridge = false,
+}: {
+  html: string;
+  testID?: string;
+  command?: FileHtmlPreviewCommand | null;
+  commandBridge?: boolean;
+}) {
   const { t } = useTranslation();
-  const document = useMemo(() => withPreviewCsp(html), [html]);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [ready, setReady] = useState(false);
+  const document = useMemo(
+    () => withPreviewCsp(commandBridge ? withCommandBridge(html) : html),
+    [commandBridge, html],
+  );
+  useEffect(() => {
+    setReady(false);
+  }, [document]);
+
+  const handleLoad = useCallback(() => setReady(true), []);
+  useEffect(() => {
+    if (!ready || !command) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "paseo-html-preview-command", id: command.id, source: command.source },
+      "*",
+    );
+  }, [command, ready]);
   return (
     <iframe
+      ref={iframeRef}
       data-testid={testID}
       title={t("panels.file.editor.preview")}
       srcDoc={document}
       sandbox={SANDBOX}
       referrerPolicy="no-referrer"
       style={iframeStyle}
+      onLoad={handleLoad}
     />
   );
 }

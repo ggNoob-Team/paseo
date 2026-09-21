@@ -2,6 +2,36 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
+  archify: {
+    tabLabel: "Archify",
+    tabSubtitle: "Interactive diagrams",
+    tabTooltip: "Open Archify diagrams",
+    open: "Open Archify",
+    unavailable: "Update this host to use Archify.",
+    providerUnavailable: "No agent provider is ready.",
+    generationFailed: "Archify generation failed.",
+    generating: "Generating diagrams...",
+    ready: "Diagrams ready",
+    refresh: "Refresh diagrams",
+    searchPlaceholder: "Search calls, variables, flows, or steps",
+    noResults: "No matching diagram elements",
+    loadingArtifact: "Loading diagram...",
+    node: "Node",
+    relationship: "Relationship",
+    requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
+    scopePlaceholder: "Optional scope: path, symbol, or feature",
+    generate: "Generate",
+    emptyTitle: "Create your first diagram",
+    emptyDescription:
+      "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",
+    types: {
+      architecture: "Architecture",
+      sequence: "Method calls",
+      dataflow: "Data flow",
+      workflow: "Business flow",
+      lifecycle: "Lifecycle",
+    },
+  },
   paneFind: {
     searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
     searching: "검색 중…",

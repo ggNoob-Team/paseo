@@ -614,6 +614,9 @@ function getFallbackTabLabel(
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
   }
+  if (tab.target.kind === "archify") {
+    return "Archify";
+  }
   return labels.agent;
 }
 

@@ -1,4 +1,5 @@
 import { agentPanelRegistration } from "@/panels/agent-panel";
+import { archifyPanelRegistration } from "@/panels/archify-panel";
 import { browserPanelRegistration } from "@/desktop/browser/panel";
 import {
   changesTreePanelRegistration,
@@ -35,6 +36,7 @@ export function ensurePanelsRegistered(): void {
   registerPanel(commitDiffPanelRegistration);
   registerPanel(workingDiffPanelRegistration);
   registerPanel(changesTreePanelRegistration);
+  registerPanel(archifyPanelRegistration);
   registerPanel(pluginPanelRegistration);
   panelsRegistered = true;
 }
