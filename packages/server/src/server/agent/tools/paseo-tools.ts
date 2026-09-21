@@ -1228,7 +1228,12 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         request: z.string().trim().max(4000).optional(),
         scope: z.string().trim().max(1000).optional(),
       },
-      outputSchema: ArchifyArtifactSummarySchema.shape,
+      outputSchema: {
+        ok: z.boolean(),
+        artifact: ArchifyArtifactSummarySchema.nullable(),
+        error: z.string().optional(),
+        diagnostics: z.unknown().optional(),
+      },
     },
     async ({ artifactId, diagramType, title, spec, request, scope }) => {
       const callerAgent = resolveCallerAgent();
@@ -1268,6 +1273,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         if (error instanceof ArchifyRenderError) {
           const structured = ensureValidJson({
             ok: false,
+            artifact: null,
             error: error.message,
             diagnostics: error.diagnostics,
           });
