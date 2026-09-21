@@ -80,10 +80,13 @@ async function ensureArchifySkill(input: {
     throw new Error("This Paseo host does not include the paseo-archify skill.");
   }
   if (status.selection.mode === "custom" && !status.selection.skills.includes("paseo-archify")) {
-    await input.client.saveAgentSkillsSelection({
+    const saved = await input.client.saveAgentSkillsSelection({
       mode: "custom",
       skills: [...status.selection.skills, "paseo-archify"],
     });
+    if (saved.confirmationRequired) {
+      throw new Error("Paseo needs confirmation before updating the managed skill selection.");
+    }
   }
   await input.client.reconcileAgentSkills();
 }
