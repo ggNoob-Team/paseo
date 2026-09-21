@@ -8,8 +8,10 @@ user may already use for an upstream `archify` installation.
 ## Generation flow
 
 The panel does not statically analyze source code. It creates an independent agent with the
-`paseo.archify.generator` label. The agent reads the workspace, uses the `paseo-archify` skill to
-author a schema-valid specification, then calls the `archify_render` Paseo tool once per artifact.
+`paseo.archify.generator` label. That agent uses the provider's unattended mode when the provider
+advertises one, so repository inspection and renderer calls do not stop for permission prompts. The
+agent reads the workspace, uses the `paseo-archify` skill to author a schema-valid specification,
+then calls the `archify_render` Paseo tool once per artifact.
 
 `archify_render` resolves the caller agent's workspace, writes the specification to
 `$PASEO_HOME/archify/<workspaceId>/<artifactId>/spec.json`, runs the vendored

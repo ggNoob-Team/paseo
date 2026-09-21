@@ -1,5 +1,6 @@
 import type { ArchifyArtifactSummary, ArchifyDiagramType } from "@getpaseo/protocol/messages";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+import { getUnattendedModeId } from "@getpaseo/protocol/provider-manifest";
 import type { FormPreferences } from "@/hooks/use-form-preferences";
 
 export const ARCHIFY_INITIAL_TYPES: readonly ArchifyDiagramType[] = [
@@ -27,6 +28,7 @@ export interface ArchifySearchEntry {
 export interface ArchifyAgentConfig {
   provider: string;
   model?: string;
+  modeId?: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -70,6 +72,20 @@ export function latestArchifyArtifactByType(
   return result;
 }
 
+function resolveArchifyFullAccessModeId(entry: ProviderSnapshotEntry): string | undefined {
+  const staticModeId = getUnattendedModeId(entry.provider);
+  if (staticModeId) return staticModeId;
+  const candidate = entry.modes?.find((mode) =>
+    /full[\s_-]*access|allow[\s_-]*all|bypass|yolo|unattended/i.test(`${mode.id} ${mode.label}`),
+  );
+  if (candidate) return candidate.id;
+  // OpenCode keeps the old full-access alias even though current renames can remove
+  // it from the advertised mode list. Its provider adapter maps the alias to
+  // build plus auto-accept.
+  if (entry.provider === "opencode") return "full-access";
+  return undefined;
+}
+
 export function resolveArchifyAgentConfig(input: {
   entries: readonly ProviderSnapshotEntry[] | undefined;
   preferences: FormPreferences;
@@ -87,9 +103,11 @@ export function resolveArchifyAgentConfig(input: {
     entry.models?.find((candidate) => candidate.id === preferredModel) ??
     entry.models?.find((candidate) => candidate.isDefault) ??
     entry.models?.[0];
+  const modeId = resolveArchifyFullAccessModeId(entry);
   return {
     provider: entry.provider,
     ...(model?.id ? { model: model.id } : {}),
+    ...(modeId ? { modeId } : {}),
   };
 }
 

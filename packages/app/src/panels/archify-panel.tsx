@@ -351,6 +351,7 @@ function ArchifyPanel(): ReactElement {
         const created = await client.createAgent({
           provider: agentConfig.provider,
           ...(agentConfig.model ? { model: agentConfig.model } : {}),
+          ...(agentConfig.modeId ? { modeId: agentConfig.modeId } : {}),
           cwd: workspaceDirectory,
           workspaceId,
           title: "Archify",

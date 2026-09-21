@@ -5,6 +5,7 @@ import {
   buildArchifyGenerationPrompt,
   buildArchifySearchEntries,
   filterArchifySearchEntries,
+  resolveArchifyAgentConfig,
 } from "./model";
 
 describe("archify model", () => {
@@ -17,6 +18,44 @@ describe("archify model", () => {
     expect(prompt).toContain('artifactId="archify-test-sequence"');
     expect(prompt).toContain('artifactId="archify-test-dataflow"');
     expect(prompt).toContain("archify_render");
+  });
+
+  it.each([
+    ["codex", "full-access"],
+    ["claude", "bypassPermissions"],
+    ["copilot", "allow-all"],
+    ["omp", "full"],
+    ["opencode", "full-access"],
+  ])("uses the provider's full-access mode for %s", (provider, modeId) => {
+    const config = resolveArchifyAgentConfig({
+      entries: [
+        {
+          provider,
+          status: "ready",
+          enabled: true,
+          modes: [],
+          models: [{ provider, id: "test-model", label: "Test model", isDefault: true }],
+        },
+      ],
+      preferences: { provider },
+    });
+    expect(config).toEqual({ provider, model: "test-model", modeId });
+  });
+
+  it("recognizes a full-access mode on a dynamic provider", () => {
+    const config = resolveArchifyAgentConfig({
+      entries: [
+        {
+          provider: "custom-agent",
+          status: "ready",
+          enabled: true,
+          modes: [{ id: "yolo", label: "Full Access" }],
+          models: [{ provider: "custom-agent", id: "custom-model", label: "Custom model" }],
+        },
+      ],
+      preferences: {},
+    });
+    expect(config?.modeId).toBe("yolo");
   });
 
   it("builds searchable nodes and relationships for a sequence", () => {
