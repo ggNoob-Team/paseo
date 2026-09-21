@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import {
+  ChevronDown,
+  ChevronUp,
   Database,
   GitBranch,
   Layers,
@@ -21,6 +23,7 @@ import {
   filterArchifySearchEntries,
   latestArchifyArtifactByType,
   resolveArchifyAgentConfig,
+  resolveArchifyArtifactTabLabel,
   type ArchifySearchEntry,
 } from "@/archify/model";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
@@ -140,16 +143,22 @@ function ArchifyArtifactTab({
   artifact,
   active,
   label,
+  typeLabel,
   onSelect,
 }: {
   artifact: ArchifyArtifactSummary;
   active: boolean;
   label: string;
+  typeLabel: string;
   onSelect: (artifactId: string) => void;
 }): ReactElement {
   const handlePress = useCallback(() => onSelect(artifact.id), [artifact.id, onSelect]);
+  const accessibilityState = useMemo(() => ({ selected: active }), [active]);
   return (
     <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={`${typeLabel}: ${label}`}
+      accessibilityState={accessibilityState}
       onPress={handlePress}
       style={[styles.artifactTab, active && styles.artifactTabActive]}
     >
@@ -158,7 +167,37 @@ function ArchifyArtifactTab({
         size={14}
         color={active ? styles.activeColor.color : styles.mutedColor.color}
       />
-      <Text style={[styles.artifactTabText, active && styles.activeText]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.artifactTabText, active && styles.activeText]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ArchifyGenerationToggle({
+  collapsed,
+  label,
+  onToggle,
+}: {
+  collapsed: boolean;
+  label: string;
+  onToggle: () => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onToggle(), [onToggle]);
+  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={accessibilityState}
+      onPress={handlePress}
+      style={styles.generationToggle}
+    >
+      {collapsed ? (
+        <ChevronDown size={16} color={styles.mutedColor.color} />
+      ) : (
+        <ChevronUp size={16} color={styles.mutedColor.color} />
+      )}
     </Pressable>
   );
 }
@@ -263,6 +302,7 @@ function ArchifyPanel(): ReactElement {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [command, setCommand] = useState<ArchifyPreviewCommand | null>(null);
+  const [isGenerationPanelCollapsed, setIsGenerationPanelCollapsed] = useState(false);
   const [request, setRequest] = useState("");
   const [scope, setScope] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<ArchifyDiagramType[]>([
@@ -335,6 +375,23 @@ function ArchifyPanel(): ReactElement {
     [searchEntries, searchQuery],
   );
   const latestByType = useMemo(() => latestArchifyArtifactByType(artifacts), [artifacts]);
+  const artifactTabLabels = useMemo(() => {
+    const counts = new Map<ArchifyDiagramType, number>();
+    const labels = new Map<string, string>();
+    for (const item of artifacts) {
+      const ordinal = (counts.get(item.type) ?? 0) + 1;
+      counts.set(item.type, ordinal);
+      labels.set(
+        item.id,
+        resolveArchifyArtifactTabLabel({
+          artifact: item,
+          typeLabel: t(`archify.types.${item.type}`),
+          ordinal,
+        }),
+      );
+    }
+    return labels;
+  }, [artifacts, t]);
 
   const startGeneration = useCallback(
     async (input?: { types?: readonly ArchifyDiagramType[]; request?: string; scope?: string }) => {
@@ -426,6 +483,10 @@ function ArchifyPanel(): ReactElement {
     void startGeneration({ types: selectedTypes, request, scope });
   }, [request, scope, selectedTypes, startGeneration]);
 
+  const toggleGenerationPanel = useCallback(() => {
+    setIsGenerationPanelCollapsed((collapsed) => !collapsed);
+  }, []);
+
   if (!client) return <UnavailableState message={t("workspace.terminal.hostDisconnected")} />;
   if (!supported) return <UnavailableState message={t("archify.unavailable")} />;
   if (!workspaceDirectory) {
@@ -502,69 +563,83 @@ function ArchifyPanel(): ReactElement {
       ) : null}
 
       <View style={styles.artifactTabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.artifactTabsScroll}
+        >
           {artifacts.map((item) => (
             <ArchifyArtifactTab
               key={item.id}
               artifact={item}
               active={item.id === selectedArtifactId}
-              label={t(`archify.types.${item.type}`)}
+              label={artifactTabLabels.get(item.id) ?? t(`archify.types.${item.type}`)}
+              typeLabel={t(`archify.types.${item.type}`)}
               onSelect={handleSelectArtifact}
             />
           ))}
         </ScrollView>
+        <ArchifyGenerationToggle
+          collapsed={isGenerationPanelCollapsed}
+          label={
+            isGenerationPanelCollapsed ? t("archify.showGeneration") : t("archify.hideGeneration")
+          }
+          onToggle={toggleGenerationPanel}
+        />
       </View>
 
-      <View style={styles.generationPanel}>
-        <View style={styles.generationHeader}>
-          <Text style={styles.generationTitle}>{statusText}</Text>
-          {generating ? <ActivityIndicator size="small" /> : null}
-        </View>
-        {currentGenerationError ? (
-          <Text style={styles.errorText}>{currentGenerationError}</Text>
-        ) : null}
-        <View style={styles.typeRow}>
-          {ARCHIFY_ALL_TYPES.map((type) => (
-            <ArchifyTypeOption
-              key={type}
-              type={type}
-              label={t(`archify.types.${type}`)}
-              selected={selectedTypes.includes(type)}
-              ready={latestByType.has(type)}
-              disabled={generating}
-              onToggle={toggleType}
+      {isGenerationPanelCollapsed ? null : (
+        <View style={styles.generationPanel}>
+          <View style={styles.generationHeader}>
+            <Text style={styles.generationTitle}>{statusText}</Text>
+            {generating ? <ActivityIndicator size="small" /> : null}
+          </View>
+          {currentGenerationError ? (
+            <Text style={styles.errorText}>{currentGenerationError}</Text>
+          ) : null}
+          <View style={styles.typeRow}>
+            {ARCHIFY_ALL_TYPES.map((type) => (
+              <ArchifyTypeOption
+                key={type}
+                type={type}
+                label={t(`archify.types.${type}`)}
+                selected={selectedTypes.includes(type)}
+                ready={latestByType.has(type)}
+                disabled={generating}
+                onToggle={toggleType}
+              />
+            ))}
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              initialValue={request}
+              onChangeText={setRequest}
+              placeholder={t("archify.requestPlaceholder")}
+              placeholderTextColor={styles.mutedColor.color}
+              style={[styles.formInput, styles.requestInput]}
+              multiline
             />
-          ))}
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              initialValue={scope}
+              onChangeText={setScope}
+              placeholder={t("archify.scopePlaceholder")}
+              placeholderTextColor={styles.mutedColor.color}
+              style={styles.formInput}
+            />
+            <ArchifyGenerateButton
+              disabled={generating || selectedTypes.length === 0 || !agentConfig}
+              generating={generating}
+              label={t("archify.generate")}
+              onPress={handleGenerate}
+            />
+          </View>
+          {!agentConfig ? (
+            <Text style={styles.errorText}>{t("archify.providerUnavailable")}</Text>
+          ) : null}
         </View>
-        <View style={styles.inputRow}>
-          <TextInput
-            initialValue={request}
-            onChangeText={setRequest}
-            placeholder={t("archify.requestPlaceholder")}
-            placeholderTextColor={styles.mutedColor.color}
-            style={[styles.formInput, styles.requestInput]}
-            multiline
-          />
-        </View>
-        <View style={styles.inputRow}>
-          <TextInput
-            initialValue={scope}
-            onChangeText={setScope}
-            placeholder={t("archify.scopePlaceholder")}
-            placeholderTextColor={styles.mutedColor.color}
-            style={styles.formInput}
-          />
-          <ArchifyGenerateButton
-            disabled={generating || selectedTypes.length === 0 || !agentConfig}
-            generating={generating}
-            label={t("archify.generate")}
-            onPress={handleGenerate}
-          />
-        </View>
-        {!agentConfig ? (
-          <Text style={styles.errorText}>{t("archify.providerUnavailable")}</Text>
-        ) : null}
-      </View>
+      )}
 
       <View style={styles.preview}>{previewContent}</View>
     </View>
@@ -658,11 +733,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   artifactTabs: {
     minHeight: 40,
-    paddingHorizontal: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: theme.spacing[2],
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
   },
+  artifactTabsScroll: {
+    flex: 1,
+    minWidth: 0,
+  },
+  generationToggle: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   artifactTab: {
+    maxWidth: 240,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],

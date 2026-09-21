@@ -20,7 +20,10 @@ only after delivery succeeds. A failed candidate leaves any previous successful 
 
 The first open of a workspace writes `.initialized` and returns `autoGenerate: true`. The panel uses
 that one-shot signal to create the initial architecture, method-call, and variable-flow diagrams.
-Later opens return stored artifacts and do not spend another agent run.
+Later opens return stored artifacts and do not spend another agent run. Each successful artifact
+has its own viewer tab. When a workspace has several method-call or workflow artifacts, their
+specific titles distinguish the variants; legacy or generic titles fall back to the type plus a
+one-based ordinal.
 
 ## Viewer and search
 

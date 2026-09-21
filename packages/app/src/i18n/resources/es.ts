@@ -21,6 +21,8 @@ export const es: TranslationResources = {
     requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
     scopePlaceholder: "Optional scope: path, symbol, or feature",
     generate: "Generate",
+    showGeneration: "Show generation controls",
+    hideGeneration: "Hide generation controls",
     emptyTitle: "Create your first diagram",
     emptyDescription:
       "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",

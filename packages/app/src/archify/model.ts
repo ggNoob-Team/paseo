@@ -131,7 +131,7 @@ export function buildArchifyGenerationPrompt(input: {
   };
   const artifactLines = input.types.map((type, index) => {
     const artifactId = `${input.artifactPrefix}-${type}`;
-    return `${index + 1}. ${type}: artifactId="${artifactId}", title="${type}", diagramType="${type}". ${typeInstructions[type]}`;
+    return `${index + 1}. ${type}: artifactId="${artifactId}", title="<specific title>", diagramType="${type}". Use a short title that names the analyzed flow, scope, or feature, not only the diagram type. ${typeInstructions[type]}`;
   });
   return [
     "Use the `paseo-archify` skill to inspect the current repository and produce the requested Archify diagrams.",
@@ -148,6 +148,19 @@ export function buildArchifyGenerationPrompt(input: {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+export function resolveArchifyArtifactTabLabel(input: {
+  artifact: ArchifyArtifactSummary;
+  typeLabel: string;
+  ordinal: number;
+}): string {
+  const title = input.artifact.title.trim();
+  const generic =
+    !title ||
+    title.toLowerCase() === input.artifact.type ||
+    title.toLowerCase() === input.typeLabel.toLowerCase();
+  return generic ? `${input.typeLabel} ${input.ordinal}` : title;
 }
 
 export function buildArchifySearchEntries(spec: Record<string, unknown>): ArchifySearchEntry[] {

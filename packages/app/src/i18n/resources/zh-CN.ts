@@ -21,6 +21,8 @@ export const zhCN: TranslationResources = {
     requestPlaceholder: "可选：描述要分析的方法调用链、变量或业务流程",
     scopePlaceholder: "可选范围：路径、符号或功能",
     generate: "生成",
+    showGeneration: "展开生成选项",
+    hideGeneration: "收起生成选项",
     emptyTitle: "创建第一张图",
     emptyDescription:
       "Archify 将分析当前 workspace，并生成可搜索的架构图、方法调用图和变量流转图。",
