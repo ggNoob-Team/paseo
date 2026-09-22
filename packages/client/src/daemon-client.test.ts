@@ -1396,6 +1396,54 @@ test("honors explicit fetchAgent timeout below the session RPC default", async (
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (5000ms)");
 });
 
+test("gives explorer downloads twice the default session RPC deadline", async () => {
+  useHeartbeatClock();
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const readPromise = client.readFileForDownload("/tmp/project", "big.bin", "req-download");
+  const tokenPromise = client.requestDownloadToken("/tmp/project", "big.bin", "req-token");
+  // Attach both expectations before the deadline fires so neither rejection is
+  // reported as unhandled while the other is awaited.
+  const readRejection = expect(readPromise).rejects.toThrow(
+    "Timeout waiting for message (120000ms)",
+  );
+  const tokenRejection = expect(tokenPromise).rejects.toThrow(
+    "Timeout waiting for message (120000ms)",
+  );
+  let settled = false;
+  void readPromise.then(
+    () => {
+      settled = true;
+      return undefined;
+    },
+    () => {
+      settled = true;
+      return undefined;
+    },
+  );
+
+  await vi.advanceTimersByTimeAsync(119_999);
+  expect(settled).toBe(false);
+
+  await vi.advanceTimersByTimeAsync(1);
+  await readRejection;
+  await tokenRejection;
+});
+
 test("preserves legacy fetchAgent id overload", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

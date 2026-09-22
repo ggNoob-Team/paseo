@@ -46,7 +46,7 @@ export function useFileDownload({
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      const file = await client.readFile(normalizedWorkspaceRoot, targetPath);
+      const file = await client.readFileForDownload(normalizedWorkspaceRoot, targetPath);
       return { bytes: file.bytes, mime: file.mime };
     },
     [client, normalizedWorkspaceRoot, t],

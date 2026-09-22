@@ -623,7 +623,10 @@ export async function createPaseoDaemon(
   let relayRuntime: RelayRuntime | null = null;
 
   const staticDir = config.staticDir;
-  const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 60000;
+  // Downloads start right after the token is issued, but a slow or flapping
+  // link can delay the HTTP GET: keep the token valid twice as long as the
+  // original one-minute window.
+  const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 120000;
 
   const downloadTokenStore = new DownloadTokenStore({
     ttlMs: downloadTokenTtlMs,
