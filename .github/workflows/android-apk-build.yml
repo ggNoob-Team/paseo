@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
         type: string
+      architectures:
+        description: "Comma-separated React Native ABIs to build."
+        required: false
+        default: "arm64-v8a"
+        type: string
 
 permissions:
   contents: read
@@ -55,10 +60,12 @@ jobs:
       - name: Build release APK
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false
+          PASEO_ARCHITECTURES: ${{ inputs.architectures }}
         run: |
           set -euo pipefail
           cd packages/app/android
-          ./gradlew :app:assembleRelease --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon \
+            -PreactNativeArchitectures="$PASEO_ARCHITECTURES"
 
       - name: Stage APK
         env:
