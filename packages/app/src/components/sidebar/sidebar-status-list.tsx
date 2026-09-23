@@ -22,8 +22,13 @@ import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store"
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
-import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
+import type {
+  HostProjectSection,
+  SidebarWorkspaceGroup,
+} from "@/components/sidebar/sidebar-labels";
 import { HostStatusDot } from "@/components/host-status-dot";
+import { ProjectIconView } from "@/components/project-icon-view";
+import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
@@ -335,12 +340,15 @@ function StatusGroupRows({
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
-  const {
-    visibleItems: visibleWorkspaces,
-    expanded: workspacesExpanded,
-    canToggle: canToggleWorkspaces,
-    toggleExpanded: toggleWorkspacesExpanded,
-  } = useLimitedSidebarGroup(group.rows);
+  const rowListProps = {
+    projectIconByProjectViewKey,
+    shortcutIndex,
+    showShortcutBadges,
+    onWorkspacePress,
+    hostBadgeByServerId,
+    supportsPinningByServerId,
+    onToggleWorkspacePin,
+  };
 
   return (
     <View style={collapsed ? undefined : styles.statusGroupBlockExpanded}>
@@ -350,39 +358,246 @@ function StatusGroupRows({
           style={styles.statusWorkspaceListContainer}
           testID={`sidebar-status-group-rows-${group.key}`}
         >
-          {visibleWorkspaces.map((workspace) => (
-            <StatusWorkspaceRow
-              key={workspace.workspaceKey}
-              workspace={workspace}
-              {...buildStatusRowProjectPresentation({
-                workspace,
-                projectIconByProjectViewKey,
-                hostBadgeByServerId,
-              })}
-              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-              showShortcutBadge={showShortcutBadges}
-              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-              onToggleWorkspacePin={onToggleWorkspacePin}
-              onWorkspacePress={onWorkspacePress}
+          {group.projectSections ? (
+            group.projectSections.map((section) => (
+              <HostProjectSectionRows
+                key={section.projectViewKey}
+                section={section}
+                groupKey={group.key}
+                {...rowListProps}
+              />
+            ))
+          ) : (
+            <SidebarGroupRowList
+              rows={group.rows}
+              showMoreTestID={`sidebar-status-group-show-more-${group.key}`}
+              {...rowListProps}
             />
-          ))}
-          {canToggleWorkspaces ? (
-            <SidebarGroupToggleRow
-              expanded={workspacesExpanded}
-              onPress={toggleWorkspacesExpanded}
-              indented
-              testID={`sidebar-status-group-show-more-${group.key}`}
-            />
-          ) : null}
+          )}
         </View>
       ) : null}
     </View>
   );
 }
 
+interface SidebarGroupRowListProps {
+  projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
+  shortcutIndex: Map<string, number>;
+  showShortcutBadges: boolean;
+  onWorkspacePress?: () => void;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  supportsPinningByServerId: ReadonlyMap<string, boolean>;
+  onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  /**
+   * Whether each row says which project it belongs to. False inside a project section, where the
+   * header above it already says so and a second copy of the same icon on every row is width the
+   * workspace's own name could be using.
+   */
+  projectLeading?: boolean;
+}
+
+/**
+ * A group's rows plus its own "show more". Its own, because the limit is per stack of rows: a
+ * host section that nests projects shows each project up to the limit rather than cutting the
+ * host's flattened list in the middle of one.
+ */
+function SidebarGroupRowList({
+  rows,
+  showMoreTestID,
+  projectLeading = true,
+  projectIconByProjectViewKey,
+  shortcutIndex,
+  showShortcutBadges,
+  onWorkspacePress,
+  hostBadgeByServerId,
+  supportsPinningByServerId,
+  onToggleWorkspacePin,
+}: SidebarGroupRowListProps & { rows: SidebarWorkspaceEntry[]; showMoreTestID: string }) {
+  const {
+    visibleItems: visibleWorkspaces,
+    expanded: workspacesExpanded,
+    canToggle: canToggleWorkspaces,
+    toggleExpanded: toggleWorkspacesExpanded,
+  } = useLimitedSidebarGroup(rows);
+
+  return (
+    <>
+      {visibleWorkspaces.map((workspace) => (
+        <StatusWorkspaceRow
+          key={workspace.workspaceKey}
+          workspace={workspace}
+          {...buildStatusRowProjectPresentation({
+            workspace,
+            projectIconByProjectViewKey,
+            hostBadgeByServerId,
+            projectLeading,
+          })}
+          shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+          showShortcutBadge={showShortcutBadges}
+          canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+          onToggleWorkspacePin={onToggleWorkspacePin}
+          onWorkspacePress={onWorkspacePress}
+        />
+      ))}
+      {canToggleWorkspaces ? (
+        <SidebarGroupToggleRow
+          expanded={workspacesExpanded}
+          onPress={toggleWorkspacesExpanded}
+          indented
+          testID={showMoreTestID}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * One project inside a host section.
+ *
+ * Collapsing reuses the project-level key rather than a host-scoped one: it means the same thing
+ * in both modes ("this project is folded away"), so a project someone collapsed in project mode
+ * arrives collapsed here instead of asking to be collapsed once per machine.
+ */
+function HostProjectSectionRows({
+  section,
+  groupKey,
+  ...rowListProps
+}: SidebarGroupRowListProps & { section: HostProjectSection; groupKey: string }) {
+  const collapsed = useSidebarCollapsedSectionsStore((state) =>
+    state.collapsedProjectKeys.has(section.projectViewKey),
+  );
+  const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
+    (state) => state.toggleProjectCollapsed,
+  );
+  const handleToggle = useCallback(() => {
+    toggleProjectCollapsed(section.projectViewKey);
+  }, [section.projectViewKey, toggleProjectCollapsed]);
+
+  return (
+    <View
+      role="group"
+      accessibilityLabel={section.label}
+      style={collapsed ? undefined : styles.hostProjectSection}
+      testID={`sidebar-status-project-${groupKey}:${section.projectViewKey}`}
+    >
+      <HostProjectHeader
+        label={section.label}
+        projectViewKey={section.projectViewKey}
+        iconDataUri={rowListProps.projectIconByProjectViewKey.get(section.projectViewKey) ?? null}
+        collapsed={collapsed}
+        onToggle={handleToggle}
+      />
+      {!collapsed ? (
+        <SidebarGroupRowList
+          rows={section.rows}
+          showMoreTestID={`sidebar-status-project-show-more-${groupKey}:${section.projectViewKey}`}
+          projectLeading={false}
+          {...rowListProps}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/** The icon column every row of the sidebar uses, so a project's mark lines up with its rows'. */
+const HOST_PROJECT_ICON_SIZE = 16;
+
+/**
+ * A project's header inside a host section.
+ *
+ * It carries the project's own icon rather than a status mark: the host header above it already
+ * reports the machine, and the rows below it report themselves. Folding it away is the same
+ * gesture as every other header here — chevron on hover, press to toggle.
+ */
+function HostProjectHeader({
+  label,
+  projectViewKey,
+  iconDataUri,
+  collapsed,
+  onToggle,
+}: {
+  label: string;
+  projectViewKey: string;
+  iconDataUri: string | null;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const rowStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      styles.hostProjectRow,
+      isHovered && styles.hostProjectRowHovered,
+      pressed && styles.hostProjectRowPressed,
+    ],
+    [isHovered],
+  );
+  const initial = useMemo(
+    () => projectIconPlaceholderLabelFromDisplayName(label).charAt(0).toUpperCase(),
+    [label],
+  );
+  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
+
+  return (
+    <View onPointerEnter={handleHoverIn} onPointerLeave={handleHoverOut}>
+      <Pressable
+        accessibilityRole={platformIsWeb ? undefined : "button"}
+        accessibilityState={accessibilityState}
+        style={rowStyle}
+        onPress={onToggle}
+      >
+        <View style={styles.hostProjectLeadingSlot}>
+          <HostProjectLeadingVisual
+            isHovered={isHovered}
+            collapsed={collapsed}
+            iconDataUri={iconDataUri}
+            initial={initial}
+            projectViewKey={projectViewKey}
+          />
+        </View>
+        <Text style={styles.hostProjectTitle} numberOfLines={1}>
+          {label}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function HostProjectLeadingVisual({
+  isHovered,
+  collapsed,
+  iconDataUri,
+  initial,
+  projectViewKey,
+}: {
+  isHovered: boolean;
+  collapsed: boolean;
+  iconDataUri: string | null;
+  initial: string;
+  projectViewKey: string;
+}) {
+  if (isHovered) {
+    return collapsed ? (
+      <ThemedChevronRight size={12} uniProps={foregroundMutedColorMapping} />
+    ) : (
+      <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
+    );
+  }
+  return (
+    <ProjectIconView
+      iconDataUri={iconDataUri}
+      initial={initial}
+      projectViewKey={projectViewKey}
+      size={HOST_PROJECT_ICON_SIZE}
+      textStyle={styles.hostProjectIconText}
+    />
+  );
+}
+
 interface StatusRowProjectPresentation {
   hostBadge: HostBadgeModel | null;
-  projectName: string;
+  projectName: string | null;
   projectIconDataUri: string | null;
 }
 
@@ -390,15 +605,19 @@ function buildStatusRowProjectPresentation({
   workspace,
   projectIconByProjectViewKey,
   hostBadgeByServerId,
+  projectLeading = true,
 }: {
   workspace: SidebarWorkspaceEntry;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  projectLeading?: boolean;
 }): StatusRowProjectPresentation {
   return {
     hostBadge: hostBadgeByServerId.get(workspace.serverId) ?? null,
-    projectName: workspace.projectName,
-    projectIconDataUri: projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null,
+    projectName: projectLeading ? workspace.projectName : null,
+    projectIconDataUri: projectLeading
+      ? (projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null)
+      : null,
   };
 }
 
@@ -514,7 +733,8 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 }: {
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
-  projectName: string;
+  /** Null when the row sits under a project header that already carries the identity. */
+  projectName: string | null;
   projectIconDataUri: string | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -582,7 +802,7 @@ function StatusWorkspaceRowWithMenu({
 }: {
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
-  projectName: string;
+  projectName: string | null;
   projectIconDataUri: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -719,7 +939,7 @@ function StatusWorkspaceRowWithMenu({
 interface StatusWorkspaceRowInnerProps {
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
-  projectName: string;
+  projectName: string | null;
   projectIconDataUri: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -1063,6 +1283,48 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[3],
   },
   statusWorkspaceListContainer: {},
+  // One project inside a host section, a step tighter than the gap between hosts.
+  hostProjectSection: {
+    paddingBottom: theme.spacing[2],
+  },
+  hostProjectRow: {
+    minHeight: 28,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    // Rows under a group header are indented; the project they belong to starts on that rail.
+    paddingLeft: theme.spacing[2] + theme.spacing[2],
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: theme.spacing[1],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    userSelect: "none",
+  },
+  hostProjectRowHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  hostProjectRowPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  hostProjectLeadingSlot: {
+    width: theme.iconSize.md,
+    height: theme.iconSize.md,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hostProjectIconText: {
+    fontSize: 9,
+  },
+  // A structural label, one size under the host header it sits in: medium weight and muted, so
+  // the nesting reads without indenting the rows a second time.
+  hostProjectTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+    minWidth: 0,
+    flexShrink: 1,
+  },
   statusGroupRow: {
     minHeight: 36,
     paddingVertical: theme.spacing[2],

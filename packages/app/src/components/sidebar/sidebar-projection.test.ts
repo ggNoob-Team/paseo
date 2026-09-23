@@ -129,6 +129,32 @@ function twoHostInput(hosts: Array<{ serverId: string; label: string }>) {
   };
 }
 
+/**
+ * One host carrying two projects. Host grouping has to hand each project its own section rather
+ * than one run of rows whose project is only visible in the row's own icon.
+ */
+function twoProjectsOnOneHostInput() {
+  const laterProject = makeWorkspace("backend", "running", [], "zeta-project", "srv-a");
+  const earlierProject = makeWorkspace("app", "done", [], "alpha-project", "srv-a");
+  return {
+    ...projectionInput({ groupMode: "host" }),
+    projects: [
+      makeProject([earlierProject.placement], "alpha-project"),
+      makeProject([laterProject.placement], "zeta-project"),
+    ],
+    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+    workspaceEntriesByKey: new Map([
+      [earlierProject.entry.workspaceKey, earlierProject.entry],
+      [laterProject.entry.workspaceKey, laterProject.entry],
+    ]),
+    projectNamesByViewKey: new Map([
+      ["alpha-project", "Alpha project"],
+      ["zeta-project", "Zeta project"],
+    ]),
+    hosts: [{ serverId: "srv-a", label: "Primary Host" }],
+  };
+}
+
 describe("buildSidebarProjection", () => {
   // The rule that outlived the bug it was written for: a project icon is fetched per project, so
   // whatever a mode groups by, the rows it produces can only reference projects already covered.
@@ -244,6 +270,27 @@ describe("buildSidebarProjection", () => {
     expect(withUnknownHost.workspaceGroups.map((group) => group.label)).toEqual([
       "Secondary Host",
       "srv-a",
+    ]);
+  });
+
+  it("sections a host's rows by project, ordered by project name", () => {
+    const projection = buildSidebarProjection(twoProjectsOnOneHostInput());
+    const [hostGroup] = projection.workspaceGroups;
+
+    expect(hostGroup?.projectSections?.map((section) => section.label)).toEqual([
+      "Alpha project",
+      "Zeta project",
+    ]);
+    const sectionRowIds: string[][] = [];
+    for (const section of hostGroup?.projectSections ?? []) {
+      sectionRowIds.push(section.rows.map((row) => row.workspaceId));
+    }
+    expect(sectionRowIds).toEqual([["app"], ["backend"]]);
+    // The flat list stays the render order the shortcuts and the "show more" limit walk.
+    expect(hostGroup?.rows.map((row) => row.workspaceId)).toEqual(["app", "backend"]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv-a", workspaceId: "app" },
+      { serverId: "srv-a", workspaceId: "backend" },
     ]);
   });
 });

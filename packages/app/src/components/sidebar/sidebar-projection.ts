@@ -114,6 +114,8 @@ function buildWorkspaceGroups(
         buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey),
       );
     case "host":
-      return hostWorkspaceGroups(buildHostGroups(unpinnedWorkspaces, input.hosts));
+      return hostWorkspaceGroups(
+        buildHostGroups(unpinnedWorkspaces, input.hosts, input.projectNamesByViewKey),
+      );
   }
 }

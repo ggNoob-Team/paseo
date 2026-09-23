@@ -431,6 +431,30 @@ test.describe("Sidebar project grouping", () => {
     ]);
   });
 
+  /**
+   * Host sections are not the end of the structure: a machine holding several projects still reads
+   * by project, which is the only way to tell whose workspaces a run of rows belongs to.
+   */
+  test("sections one host's projects when grouping by host", async ({ page, sameHostClones }) => {
+    await openScenario(page, sameHostClones);
+    await selectSidebarHostGrouping(page);
+
+    await expect(page.getByTestId(`sidebar-status-group-host:${getServerId()}`)).toBeVisible({
+      timeout: PROJECT_VISIBILITY_TIMEOUT,
+    });
+    await expectProjectContainsWorkspaces(page, {
+      projectName: "First clone",
+      workspaceNames: ["First clone workspace"],
+    });
+    await expectProjectContainsWorkspaces(page, {
+      projectName: "Second clone",
+      workspaceNames: ["Second clone workspace"],
+    });
+    await expect(page.getByRole("group", { name: "First clone", exact: true })).not.toContainText(
+      "Second clone workspace",
+    );
+  });
+
   test("renames only the selected host's grouped project", async ({ page, crossHostProject }) => {
     await openScenario(page, crossHostProject);
     await openGroupedProjectSettings(page, {

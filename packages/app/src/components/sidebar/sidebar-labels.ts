@@ -6,7 +6,17 @@ import type { StatusBucket, StatusGroup } from "@/hooks/sidebar-status-view-mode
 export interface SidebarWorkspaceGroup {
   key: string;
   label: string;
+  /**
+   * Every row in the group, in render order. Kept flat for the modes that have no nesting: the
+   * keyboard shortcuts walk it, and a limit over it is one "show more" for the whole group.
+   */
   rows: SidebarWorkspaceEntry[];
+  /**
+   * Set when the group's rows are themselves sectioned — host mode splits the list by machine and
+   * a machine still reads by project, so a host holding several projects does not come out as one
+   * undifferentiated run of workspaces.
+   */
+  projectSections?: HostProjectSection[];
   /**
    * What the header's leading slot marks, and with it which header renders it: status groups carry
    * their bucket, host groups the host they hold.
@@ -29,10 +39,18 @@ export interface SidebarGroupHost {
   label: string;
 }
 
+/** One project's rows inside a host section. */
+export interface HostProjectSection {
+  projectViewKey: string;
+  label: string;
+  rows: SidebarWorkspaceEntry[];
+}
+
 /** A host's section, before it becomes a `SidebarWorkspaceGroup`. */
 export interface HostGroup {
   serverId: string;
   label: string;
+  projectSections: HostProjectSection[];
   rows: SidebarWorkspaceEntry[];
 }
 
@@ -54,6 +72,7 @@ export function hostWorkspaceGroupKey(serverId: string): string {
 export function buildHostGroups(
   workspaces: readonly SidebarWorkspaceEntry[],
   hosts: readonly SidebarGroupHost[],
+  projectNamesByViewKey: Map<string, string>,
 ): HostGroup[] {
   const rowsByServerId = new Map<string, SidebarWorkspaceEntry[]>();
   for (const workspace of workspaces) {
@@ -68,11 +87,15 @@ export function buildHostGroups(
   const labelByServerId = new Map(hosts.map((host) => [host.serverId, host.label]));
   const registryRankByServerId = new Map(hosts.map((host, index) => [host.serverId, index]));
 
-  const groups = [...rowsByServerId].map(([serverId, rows]) => ({
-    serverId,
-    label: labelByServerId.get(serverId) ?? serverId,
-    rows: rows.sort(compareHostRows),
-  }));
+  const groups = [...rowsByServerId].map(([serverId, rows]) => {
+    const projectSections = buildHostProjectSections(rows, projectNamesByViewKey);
+    return {
+      serverId,
+      label: labelByServerId.get(serverId) ?? serverId,
+      projectSections,
+      rows: projectSections.flatMap((section) => section.rows),
+    };
+  });
 
   return groups.sort((a, b) => {
     const aRank = registryRankByServerId.get(a.serverId);
@@ -86,14 +109,38 @@ export function buildHostGroups(
 }
 
 /**
- * Rows inside a host stay project-adjacent. Splitting the list by machine should not also scatter
- * each project's workspaces, so the project structure the user reads in project mode survives the
- * split; inside one project the workspace whose state moved most recently leads.
+ * Splits one host's rows by project. Splitting the list by machine should not also scatter each
+ * project's workspaces, so the structure the user reads in project mode survives the split.
+ *
+ * Sections are ordered by the project's name from the sidebar's own project list rather than by
+ * anything a host reports, so two machines order the same project the same way.
  */
-function compareHostRows(a: SidebarWorkspaceEntry, b: SidebarWorkspaceEntry): number {
-  const projectCmp = a.projectName.localeCompare(b.projectName);
-  if (projectCmp !== 0) return projectCmp;
+function buildHostProjectSections(
+  rows: readonly SidebarWorkspaceEntry[],
+  projectNamesByViewKey: Map<string, string>,
+): HostProjectSection[] {
+  const rowsByProjectViewKey = new Map<string, SidebarWorkspaceEntry[]>();
+  for (const row of rows) {
+    const projectRows = rowsByProjectViewKey.get(row.projectViewKey);
+    if (projectRows) {
+      projectRows.push(row);
+    } else {
+      rowsByProjectViewKey.set(row.projectViewKey, [row]);
+    }
+  }
 
+  return [...rowsByProjectViewKey]
+    .map(([projectViewKey, projectRows]) => ({
+      projectViewKey,
+      label:
+        projectNamesByViewKey.get(projectViewKey) ?? projectRows[0]?.projectName ?? projectViewKey,
+      rows: projectRows.sort(compareHostRows),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Inside one project the workspace whose state moved most recently leads, then name. */
+function compareHostRows(a: SidebarWorkspaceEntry, b: SidebarWorkspaceEntry): number {
   const aTime = a.statusEnteredAt?.getTime() ?? null;
   const bTime = b.statusEnteredAt?.getTime() ?? null;
   if (aTime !== null && bTime !== null) {
@@ -114,6 +161,7 @@ export function hostWorkspaceGroups(groups: readonly HostGroup[]): SidebarWorksp
     key: hostWorkspaceGroupKey(group.serverId),
     label: group.label,
     rows: group.rows,
+    projectSections: group.projectSections,
     leading: { kind: "host", serverId: group.serverId },
   }));
 }
