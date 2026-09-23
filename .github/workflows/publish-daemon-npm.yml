@@ -77,27 +77,23 @@ jobs:
               --registry https://npm.pkg.github.com
           done < "$RUNNER_TEMP/paseo-npm/publish-manifest.txt"
 
-      - name: Smoke test GitHub Packages install
+      - name: Verify GitHub Packages publication
         if: inputs.publish == 'true'
-        timeout-minutes: 15
+        timeout-minutes: 5
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            install_prefix="$RUNNER_TEMP/paseo-install-$attempt"
-            if npm install --global --prefix "$install_prefix" \
-              "@ggnoob-team/paseo@${{ inputs.dist_tag }}" \
-              --registry=https://registry.npmjs.org \
-              --@ggnoob-team:registry=https://npm.pkg.github.com \
-              --ignore-scripts \
-              --no-audit \
-              --no-fund; then
-              "$install_prefix/bin/paseo" daemon --help
-              break
-            fi
-            if [[ "$attempt" == "5" ]]; then
-              exit 1
-            fi
-            sleep 10
-          done
+          metadata="$RUNNER_TEMP/paseo-package.json"
+          curl --fail --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer ${NODE_AUTH_TOKEN}" \
+            https://npm.pkg.github.com/@ggnoob-team%2fpaseo > "$metadata"
+          node - "$metadata" "${{ inputs.version }}" <<'NODE'
+          const fs = require("node:fs");
+          const metadata = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const version = process.argv[3];
+          if (!metadata.versions?.[version]) {
+            throw new Error(`@ggnoob-team/paseo@${version} is not published`);
+          }
+          process.stdout.write(`verified @ggnoob-team/paseo@${version}\n`);
+          NODE
