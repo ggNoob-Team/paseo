@@ -128,6 +128,7 @@ export const ru: TranslationResources = {
       home: "Главная",
       groupByProject: "Группировать по проекту",
       groupByStatus: "Группировать по статусу",
+      groupByHost: "Группировать по хосту",
       modelGroupLabel: "Модель",
       modelSearchKeywords: "Сменить, изменить, выбрать или установить модель",
       thinkingGroupLabel: "Мышление",
@@ -1138,6 +1139,7 @@ export const ru: TranslationResources = {
         label: "Группировка",
         project: "Проект",
         status: "Статус",
+        host: "Хост",
         labels: "Метки",
       },
       titleSource: {

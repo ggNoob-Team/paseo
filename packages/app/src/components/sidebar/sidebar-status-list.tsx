@@ -23,6 +23,7 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
+import { HostStatusDot } from "@/components/host-status-dot";
 import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
@@ -465,13 +466,19 @@ function StatusGroupLeadingVisual({
   collapsed: boolean;
   showChevron: boolean;
 }) {
-  if (!showChevron) {
-    return <StatusGroupIcon bucket={leading.bucket} />;
+  if (showChevron) {
+    return collapsed ? (
+      <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
+    ) : (
+      <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />
+    );
   }
-  if (collapsed) {
-    return <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />;
+  // A host section marks itself with its own connection state — the same dot the host rows of the
+  // display preferences use — so a host that dropped off reads as offline from the header alone.
+  if (leading.kind === "host") {
+    return <HostStatusDot serverId={leading.serverId} />;
   }
-  return <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />;
+  return <StatusGroupIcon bucket={leading.bucket} />;
 }
 
 function StatusGroupIcon({ bucket }: { bucket: StatusBucket }) {

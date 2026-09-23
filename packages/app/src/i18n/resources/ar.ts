@@ -127,6 +127,7 @@ export const ar: TranslationResources = {
       home: "بيت",
       groupByProject: "تجميع حسب المشروع",
       groupByStatus: "تجميع حسب الحالة",
+      groupByHost: "تجميع حسب المضيف",
       modelGroupLabel: "النموذج",
       modelSearchKeywords: "تبديل النموذج تغيير النموذج تعيين النموذج اختيار النموذج",
       thinkingGroupLabel: "التفكير",
@@ -1121,6 +1122,7 @@ export const ar: TranslationResources = {
         label: "التجميع",
         project: "المشروع",
         status: "الحالة",
+        host: "المضيف",
         labels: "التسميات",
       },
       titleSource: {

@@ -6,7 +6,7 @@ import { selectSettingsHost } from "./settings";
 import { waitForSidebarHydration } from "./workspace-ui";
 import { buildProjectsSettingsRoute } from "@/utils/host-routes";
 
-const PROJECT_VISIBILITY_TIMEOUT = 30_000;
+export const PROJECT_VISIBILITY_TIMEOUT = 30_000;
 
 function projectGroup(page: Page, projectName: string): Locator {
   return page.getByRole("group", { name: projectName, exact: true });

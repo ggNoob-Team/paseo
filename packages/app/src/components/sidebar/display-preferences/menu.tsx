@@ -48,6 +48,7 @@ import type { Theme } from "@/styles/theme";
 import {
   hasActiveSidebarLabelFilter,
   SIDEBAR_UNLABELLED_LABEL_KEY,
+  SIDEBAR_GROUP_MODES,
   type SidebarGroupMode,
 } from "@/stores/sidebar-view-store";
 import { workspaceLabelKey, type WorkspaceLabelColor } from "@getpaseo/protocol/workspace-labels";
@@ -89,6 +90,7 @@ type OptionIcon = ComponentType<{
 const GROUPING_ICONS: Record<SidebarGroupMode, OptionIcon> = {
   project: withUnistyles(Folder),
   status: withUnistyles(CircleDashed),
+  host: withUnistyles(Server),
 };
 
 const TITLE_SOURCE_ICONS: Record<WorkspaceTitleSource, OptionIcon> = {
@@ -120,13 +122,13 @@ const TRAILING_ICONS: Record<SidebarTrailingChoice, OptionIcon> = {
   timestamp: withUnistyles(Clock),
 };
 
-const GROUPING_MODES: readonly SidebarGroupMode[] = ["project", "status"];
 const TITLE_SOURCES: readonly WorkspaceTitleSource[] = ["title", "branch"];
 const TRAILING_CHOICES: readonly SidebarTrailingChoice[] = ["diff", "timestamp"];
 
 const GROUPING_LABEL_KEYS: Record<SidebarGroupMode, string> = {
   project: "sidebar.display.grouping.project",
   status: "sidebar.display.grouping.status",
+  host: "sidebar.display.grouping.host",
 };
 
 const TITLE_SOURCE_LABEL_KEYS: Record<WorkspaceTitleSource, string> = {
@@ -196,7 +198,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
         title: t("sidebar.display.grouping.label"),
         content: (
           <OptionList
-            values={GROUPING_MODES}
+            values={SIDEBAR_GROUP_MODES}
             icons={GROUPING_ICONS}
             labelKeys={GROUPING_LABEL_KEYS}
             selectedValue={preferences.grouping}

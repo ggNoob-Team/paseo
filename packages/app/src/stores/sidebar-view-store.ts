@@ -5,7 +5,19 @@ import { z } from "zod";
 import { workspaceLabelKey } from "@getpaseo/protocol/workspace-labels";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 
-export type SidebarGroupMode = "project" | "status";
+/**
+ * Every way the sidebar's workspace list can be sectioned, in the order the display preferences
+ * and the Command Center offer them. One list, so the two surfaces cannot disagree about which
+ * modes exist or where the cycle goes next.
+ */
+export const SIDEBAR_GROUP_MODES = ["project", "status", "host"] as const;
+
+export type SidebarGroupMode = (typeof SIDEBAR_GROUP_MODES)[number];
+
+export function nextSidebarGroupMode(mode: SidebarGroupMode): SidebarGroupMode {
+  const index = SIDEBAR_GROUP_MODES.indexOf(mode);
+  return SIDEBAR_GROUP_MODES[(index + 1) % SIDEBAR_GROUP_MODES.length] ?? "project";
+}
 
 const SIDEBAR_VIEW_STORAGE_KEY = "sidebar-view";
 const LEGACY_SIDEBAR_GROUP_MODE_STORAGE_KEY = "sidebar-group-mode";
@@ -79,7 +91,9 @@ interface SidebarViewPersistedState {
   labelFilter: SidebarLabelFilter;
 }
 
-const PersistedSidebarGroupModeSchema = z.enum(["project", "status", "label"]);
+// `label` is a grouping mode that no longer exists; it stays in the schema so state written by
+// the build that had it still parses and falls back to project rather than resetting the store.
+const PersistedSidebarGroupModeSchema = z.enum(["project", "status", "host", "label"]);
 const SidebarLabelFilterSchema = z.object({
   labels: z.array(z.string()),
 });
@@ -141,13 +155,19 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
   }
 
   return {
-    groupMode: state.groupMode === "status" ? "status" : "project",
+    groupMode: normalizePersistedGroupMode(state.groupMode),
     hostFilters: readHostFilters(state),
     projectFilters: state.projectFilters ?? [],
     labelFilter: state.labelFilter
       ? normalizeSidebarLabelFilter(state.labelFilter)
       : emptyLabelFilter(),
   };
+}
+
+function normalizePersistedGroupMode(
+  mode: z.infer<typeof PersistedSidebarGroupModeSchema> | undefined,
+): SidebarGroupMode {
+  return mode === "status" || mode === "host" ? mode : "project";
 }
 
 /**

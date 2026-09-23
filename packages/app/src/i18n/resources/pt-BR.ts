@@ -128,6 +128,7 @@ export const ptBR: TranslationResources = {
       home: "Início",
       groupByProject: "Agrupar por projeto",
       groupByStatus: "Agrupar por status",
+      groupByHost: "Agrupar por host",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "trocar modelo mudar modelo definir modelo selecionar modelo",
       thinkingGroupLabel: "Raciocínio",
@@ -1147,6 +1148,7 @@ export const ptBR: TranslationResources = {
         label: "Agrupamento",
         project: "Projeto",
         status: "Status",
+        host: "Host",
         labels: "Etiquetas",
       },
       titleSource: {

@@ -128,6 +128,7 @@ export const es: TranslationResources = {
       home: "Hogar",
       groupByProject: "Agrupar por proyecto",
       groupByStatus: "Agrupar por estado",
+      groupByHost: "Agrupar por host",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "cambiar modelo modificar modelo establecer modelo seleccionar modelo",
       thinkingGroupLabel: "Razonamiento",
@@ -1157,6 +1158,7 @@ export const es: TranslationResources = {
         label: "Agrupación",
         project: "Proyecto",
         status: "Estado",
+        host: "Host",
         labels: "Etiquetas",
       },
       titleSource: {

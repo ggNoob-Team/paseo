@@ -123,6 +123,7 @@ export const en = {
       home: "Home",
       groupByProject: "Group by project",
       groupByStatus: "Group by status",
+      groupByHost: "Group by host",
       modelGroupLabel: "Model",
       modelSearchKeywords: "switch model change model set model select model",
       thinkingGroupLabel: "Thinking",
@@ -1129,6 +1130,7 @@ export const en = {
         label: "Grouping",
         project: "Project",
         status: "Status",
+        host: "Host",
         labels: "Labels",
       },
       titleSource: {

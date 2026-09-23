@@ -129,6 +129,7 @@ export const fr: TranslationResources = {
       home: "Maison",
       groupByProject: "Grouper par projet",
       groupByStatus: "Grouper par statut",
+      groupByHost: "Grouper par hôte",
       modelGroupLabel: "Modèle",
       modelSearchKeywords:
         "changer de modèle modifier le modèle définir le modèle sélectionner le modèle",
@@ -1156,6 +1157,7 @@ export const fr: TranslationResources = {
         label: "Regroupement",
         project: "Projet",
         status: "Statut",
+        host: "Hôte",
         labels: "Libellés",
       },
       titleSource: {
