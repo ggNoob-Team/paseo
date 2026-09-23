@@ -6,7 +6,7 @@ on:
       version:
         description: "Version for the @ggnoob-team/paseo package."
         required: true
-        default: "0.9.0-archify.1"
+        default: ""
         type: string
       dist_tag:
         description: "npm dist-tag to publish."
