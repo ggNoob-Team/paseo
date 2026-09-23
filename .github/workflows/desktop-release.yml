@@ -404,6 +404,14 @@ jobs:
           path: ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
           retention-days: 7
 
+      - name: Upload Windows installers to workflow
+        if: env.SHOULD_PUBLISH != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-installers
+          path: ${{ env.DESKTOP_PACKAGE_PATH }}/release/Paseo-Setup-*-*.exe
+          retention-days: 7
+
       - name: Upload manifest artifact
         if: env.SHOULD_PUBLISH == 'true' && env.IS_SMOKE_TAG != 'true'
         uses: actions/upload-artifact@v4
