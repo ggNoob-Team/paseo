@@ -7,6 +7,7 @@ import {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarWorkspaceEntries } from "@/hooks/use-sidebar-workspace-entries";
 import { usePinnedSidebarKeys, type PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
+import { useHosts } from "@/runtime/host-runtime";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import {
   hasActiveSidebarLabelFilter,
@@ -56,6 +57,14 @@ export function SidebarModelProvider({
 }) {
   const list = useSidebarWorkspacesList({ enabled: active });
   const groupMode = useSidebarViewStore((state) => state.groupMode);
+  const hosts = useHosts();
+  // Host sections are titled and ordered by the registry, so the projection needs the list rather
+  // than the rows it can see: a host with no workspace in view still holds its place in the order.
+  const groupHosts = useMemo(
+    () =>
+      hosts.map((host) => ({ serverId: host.serverId, label: host.label.trim() || host.serverId })),
+    [hosts],
+  );
   const labelFilter = useSidebarViewStore((state) => state.labelFilter);
   const projectFilters = useSidebarViewStore((state) => state.projectFilters);
   const reconcileLabelFilter = useSidebarViewStore((state) => state.reconcileLabelFilter);
@@ -147,6 +156,7 @@ export function SidebarModelProvider({
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
+      hosts: groupHosts,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -154,6 +164,7 @@ export function SidebarModelProvider({
     [
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
+      groupHosts,
       groupMode,
       list.projectNamesByViewKey,
       filteredProjects,

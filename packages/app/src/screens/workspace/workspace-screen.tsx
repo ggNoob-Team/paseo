@@ -29,6 +29,7 @@ import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HostBadge } from "@/hosts/host-badge";
 import { useHostBadges } from "@/hosts/use-host-badges";
+import { useHostFeature } from "@/runtime/host-features";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -40,6 +41,7 @@ import { RetainedPanel } from "@/components/retained-panel";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/workspace/open-in-editor/button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
+import { WorkspaceArchifyButton } from "@/screens/workspace/workspace-explorer-toggle";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useNavigateToImportedAgent } from "@/hooks/use-import-session";
 import { useToast } from "@/contexts/toast-context";
@@ -345,6 +347,9 @@ function getFallbackTabOptionLabel(
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
   }
+  if (tab.target.kind === "archify") {
+    return "Archify";
+  }
   return labels.agent;
 }
 
@@ -397,6 +402,9 @@ function getFallbackTabOptionDescription(
   }
   if (tab.target.kind === "plugin") {
     return tab.target.panelId;
+  }
+  if (tab.target.kind === "archify") {
+    return "Interactive diagrams";
   }
   return tab.target.path;
 }
@@ -1554,6 +1562,7 @@ function WorkspaceScreenContent({
     () => resolveWorkspaceRouteId({ routeWorkspaceId: workspaceId }) ?? "",
     [workspaceId],
   );
+  const archifySupported = useHostFeature(normalizedServerId, "archify");
   const workspaceDescriptor = useWorkspace(normalizedServerId, normalizedWorkspaceId);
   useEffect(() => {
     if (!normalizedServerId || !normalizedWorkspaceId || workspaceDescriptor) return;
@@ -3828,21 +3837,34 @@ function WorkspaceScreenContent({
     () => shouldShowWorkspaceScreenHeader({ isFocusModeEnabled, isMobile }),
     [isFocusModeEnabled, isMobile],
   );
+  const handleOpenArchify = useCallback(() => {
+    if (!persistenceKey || !archifySupported) return;
+    openWorkspaceTabFocused(persistenceKey, { kind: "archify" }, FOCUSED_PANE_PLACEMENT);
+    if (isMobile) usePanelStore.getState().showMobileAgent();
+  }, [archifySupported, isMobile, openWorkspaceTabFocused, persistenceKey]);
+
   const renderExplorerSidebarHeaderAction = useCallback(
     () => (
-      <WorkspaceExplorerSidebarToggle
-        owner={explorerToggleOwner}
-        onPress={handleToggleExplorerSidebar}
-        label={explorerSidebarToggleLabel}
-        tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
-        tooltipKeys={EXPLORER_TOGGLE_KEYS}
-        accessibilityState={explorerSidebarToggleAccessibilityState}
-      />
+      <View style={styles.explorerHeaderActions}>
+        {archifySupported ? (
+          <WorkspaceArchifyButton onPress={handleOpenArchify} label={t("archify.open")} />
+        ) : null}
+        <WorkspaceExplorerSidebarToggle
+          owner={explorerToggleOwner}
+          onPress={handleToggleExplorerSidebar}
+          label={explorerSidebarToggleLabel}
+          tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+          tooltipKeys={EXPLORER_TOGGLE_KEYS}
+          accessibilityState={explorerSidebarToggleAccessibilityState}
+        />
+      </View>
     ),
     [
+      archifySupported,
       explorerSidebarToggleAccessibilityState,
       explorerSidebarToggleLabel,
       explorerToggleOwner,
+      handleOpenArchify,
       handleToggleExplorerSidebar,
       t,
     ],
@@ -4145,6 +4167,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   containerWorkspaceBackground: {
     backgroundColor: theme.colors.surfaceWorkspace,
+  },
+  explorerHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   threePaneRow: {
     flex: 1,

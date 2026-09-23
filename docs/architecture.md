@@ -313,6 +313,11 @@ from one stable file handle. Each transfer awaits completion of its own physical
 reading the next chunk; it is scoped to the requesting physical socket and does not queue unrelated
 messages or transfers.
 
+An explorer download waits for a whole file transfer rather than for a single response, so it runs on
+its own deadlines instead of the default session RPC wait: `DaemonClient.readFileForDownload` and
+`requestDownloadToken` use twice that wait, and `downloadTokenTtlMs` (two minutes) bounds the host side
+of the same path.
+
 ### Compatibility rules
 
 - WebSocket schemas are append-only. Add fields, do not remove fields, and never make optional fields required.

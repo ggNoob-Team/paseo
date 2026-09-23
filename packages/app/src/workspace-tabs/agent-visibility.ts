@@ -39,7 +39,8 @@ export function deriveWorkspaceAgentVisibility(input: {
     if (!agent.archivedAt) {
       activeAgentIds.add(agent.id);
       const parentAgent = agent.parentAgentId ? agentsById.get(agent.parentAgentId) : undefined;
-      if (isWorkspaceRootAgent(agent, parentAgent)) {
+      const backgroundGenerator = agent.labels["paseo.archify.generator"] === "true";
+      if (!backgroundGenerator && isWorkspaceRootAgent(agent, parentAgent)) {
         autoOpenAgentIds.add(agent.id);
       }
     }

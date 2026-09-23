@@ -5,16 +5,18 @@ import type {
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { buildSidebarProjection } from "./sidebar-projection";
+import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
 
 function makeWorkspace(
   id: string,
   statusBucket: SidebarWorkspaceEntry["statusBucket"] = "done",
   labels: string[] = [],
   projectViewKey = "project",
+  serverId = "srv",
 ) {
   const placement: SidebarWorkspacePlacement = {
-    workspaceKey: `srv:${id}`,
-    serverId: "srv",
+    workspaceKey: `${serverId}:${id}`,
+    serverId,
     workspaceId: id,
     projectViewKey,
     projectName: "Project",
@@ -63,10 +65,7 @@ function makeProject(
   };
 }
 
-function projectionInput(options?: {
-  groupMode?: "project" | "status";
-  pinnedCollapsed?: boolean;
-}) {
+function projectionInput(options?: { groupMode?: SidebarGroupMode; pinnedCollapsed?: boolean }) {
   const pinned = makeWorkspace("pinned", "running");
   const unpinned = makeWorkspace("unpinned", "needs_input");
   return {
@@ -82,6 +81,7 @@ function projectionInput(options?: {
     ]),
     projectNamesByViewKey: new Map([["project", "Project"]]),
     groupMode: options?.groupMode ?? ("project" as const),
+    hosts: [{ serverId: "srv", label: "Solo Host" }],
     pinnedCollapsed: options?.pinnedCollapsed ?? false,
     collapsedProjectKeys: new Set<string>(),
     collapsedWorkspaceGroupKeys: new Set<string>(),
@@ -92,7 +92,7 @@ function projectionInput(options?: {
  * Two projects, one workspace each, both labelled — so every grouping mode puts rows from more
  * than one project on screen, and a mode that asked for fewer icons than it renders would show it.
  */
-function twoProjectInput(groupMode: "project" | "status") {
+function twoProjectInput(groupMode: SidebarGroupMode) {
   const first = makeWorkspace("first", "running", ["Urgent"], "project");
   const second = makeWorkspace("second", "needs_input", ["Backend"], "other-project");
   return {
@@ -110,10 +110,55 @@ function twoProjectInput(groupMode: "project" | "status") {
   };
 }
 
+/**
+ * One project, one workspace, on two hosts — the case host grouping exists for. Project mode merges
+ * these rows under a single header; host mode has to hand each host its own section.
+ */
+function twoHostInput(hosts: Array<{ serverId: string; label: string }>) {
+  const primary = makeWorkspace("primary", "running", [], "project", "srv-a");
+  const secondary = makeWorkspace("secondary", "done", [], "project", "srv-b");
+  return {
+    ...projectionInput({ groupMode: "host" }),
+    projects: [makeProject([primary.placement, secondary.placement])],
+    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+    workspaceEntriesByKey: new Map([
+      [primary.entry.workspaceKey, primary.entry],
+      [secondary.entry.workspaceKey, secondary.entry],
+    ]),
+    hosts,
+  };
+}
+
+/**
+ * One host carrying two projects. Host grouping has to hand each project its own section rather
+ * than one run of rows whose project is only visible in the row's own icon.
+ */
+function twoProjectsOnOneHostInput() {
+  const laterProject = makeWorkspace("backend", "running", [], "zeta-project", "srv-a");
+  const earlierProject = makeWorkspace("app", "done", [], "alpha-project", "srv-a");
+  return {
+    ...projectionInput({ groupMode: "host" }),
+    projects: [
+      makeProject([earlierProject.placement], "alpha-project"),
+      makeProject([laterProject.placement], "zeta-project"),
+    ],
+    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+    workspaceEntriesByKey: new Map([
+      [earlierProject.entry.workspaceKey, earlierProject.entry],
+      [laterProject.entry.workspaceKey, laterProject.entry],
+    ]),
+    projectNamesByViewKey: new Map([
+      ["alpha-project", "Alpha project"],
+      ["zeta-project", "Zeta project"],
+    ]),
+    hosts: [{ serverId: "srv-a", label: "Primary Host" }],
+  };
+}
+
 describe("buildSidebarProjection", () => {
   // The rule that outlived the bug it was written for: a project icon is fetched per project, so
   // whatever a mode groups by, the rows it produces can only reference projects already covered.
-  for (const groupMode of ["project", "status"] as const) {
+  for (const groupMode of ["project", "status", "host"] as const) {
     it(`covers every row ${groupMode} grouping renders with a project icon target`, () => {
       const projection = buildSidebarProjection(twoProjectInput(groupMode));
       const covered = new Set(projection.projectIconTargets.map((target) => target.projectViewKey));
@@ -171,6 +216,81 @@ describe("buildSidebarProjection", () => {
 
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "unpinned" },
+    ]);
+  });
+
+  it("splits one project into a section per host", () => {
+    const projection = buildSidebarProjection(
+      twoHostInput([
+        { serverId: "srv-a", label: "Primary Host" },
+        { serverId: "srv-b", label: "Secondary Host" },
+      ]),
+    );
+
+    expect(projection.workspaceGroups.map((group) => group.key)).toEqual([
+      "host:srv-a",
+      "host:srv-b",
+    ]);
+    expect(projection.workspaceGroups.map((group) => group.label)).toEqual([
+      "Primary Host",
+      "Secondary Host",
+    ]);
+    expect(projection.workspaceGroups.map((group) => group.leading)).toEqual([
+      { kind: "host", serverId: "srv-a" },
+      { kind: "host", serverId: "srv-b" },
+    ]);
+    const rowIdsPerGroup: string[][] = [];
+    for (const group of projection.workspaceGroups) {
+      rowIdsPerGroup.push(group.rows.map((row) => row.workspaceId));
+    }
+    expect(rowIdsPerGroup).toEqual([["primary"], ["secondary"]]);
+    // Shortcuts walk the sections on screen, so a host section numbers its rows like any other.
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv-a", workspaceId: "primary" },
+      { serverId: "srv-b", workspaceId: "secondary" },
+    ]);
+  });
+
+  it("orders host sections by the registry and keeps a dropped host last", () => {
+    const projection = buildSidebarProjection(
+      twoHostInput([
+        { serverId: "srv-b", label: "Secondary Host" },
+        { serverId: "srv-a", label: "Primary Host" },
+      ]),
+    );
+    expect(projection.workspaceGroups.map((group) => group.key)).toEqual([
+      "host:srv-b",
+      "host:srv-a",
+    ]);
+
+    // A session the registry dropped keeps its rows and falls in after the hosts it still knows.
+    const withUnknownHost = buildSidebarProjection(
+      twoHostInput([{ serverId: "srv-b", label: "Secondary Host" }]),
+    );
+    expect(withUnknownHost.workspaceGroups.map((group) => group.label)).toEqual([
+      "Secondary Host",
+      "srv-a",
+    ]);
+  });
+
+  it("sections a host's rows by project, ordered by project name", () => {
+    const projection = buildSidebarProjection(twoProjectsOnOneHostInput());
+    const [hostGroup] = projection.workspaceGroups;
+
+    expect(hostGroup?.projectSections?.map((section) => section.label)).toEqual([
+      "Alpha project",
+      "Zeta project",
+    ]);
+    const sectionRowIds: string[][] = [];
+    for (const section of hostGroup?.projectSections ?? []) {
+      sectionRowIds.push(section.rows.map((row) => row.workspaceId));
+    }
+    expect(sectionRowIds).toEqual([["app"], ["backend"]]);
+    // The flat list stays the render order the shortcuts and the "show more" limit walk.
+    expect(hostGroup?.rows.map((row) => row.workspaceId)).toEqual(["app", "backend"]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv-a", workspaceId: "app" },
+      { serverId: "srv-a", workspaceId: "backend" },
     ]);
   });
 });

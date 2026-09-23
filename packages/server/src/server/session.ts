@@ -1,4 +1,5 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
+import { openArchifyWorkspace, readArchifyArtifact } from "./archify/service.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { BrowserAutomationHostCapabilitySchema } from "@getpaseo/protocol/browser-automation/capabilities";
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
@@ -2268,6 +2269,7 @@ export class Session {
     return undefined;
   }
 
+  // eslint-disable-next-line complexity
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.dispatchSubscriptionMessage(msg, source) ??
@@ -2281,6 +2283,7 @@ export class Session {
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceLifecycleMessage(msg) ??
+      this.dispatchArchifyMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
       this.dispatchOrchestrationSkillsMessage(msg) ??
@@ -2926,6 +2929,58 @@ export class Session {
       default:
         return undefined;
     }
+  }
+
+  private dispatchArchifyMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "archify.workspace.open.request":
+        return this.handleArchifyWorkspaceOpenRequest(msg);
+      case "archify.artifact.read.request":
+        return this.handleArchifyArtifactReadRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private async handleArchifyWorkspaceOpenRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.workspace.open.request" }>,
+  ): Promise<void> {
+    const workspace = await this.workspaceRegistry.get(msg.workspaceId);
+    if (!workspace) throw new Error("Workspace not found");
+    const result = await openArchifyWorkspace({
+      paseoHome: this.paseoHome,
+      workspaceId: msg.workspaceId,
+    });
+    this.emit({
+      type: "archify.workspace.open.response",
+      payload: {
+        requestId: msg.requestId,
+        workspaceId: msg.workspaceId,
+        artifacts: result.artifacts,
+        autoGenerate: result.autoGenerate,
+      },
+    });
+  }
+
+  private async handleArchifyArtifactReadRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.artifact.read.request" }>,
+  ): Promise<void> {
+    const workspace = await this.workspaceRegistry.get(msg.workspaceId);
+    if (!workspace) throw new Error("Workspace not found");
+    const artifact = await readArchifyArtifact({
+      paseoHome: this.paseoHome,
+      workspaceId: msg.workspaceId,
+      artifactId: msg.artifactId,
+    }).catch(() => null);
+    this.emit({
+      type: "archify.artifact.read.response",
+      payload: {
+        requestId: msg.requestId,
+        workspaceId: msg.workspaceId,
+        artifact,
+        error: artifact ? null : "Archify artifact not found",
+      },
+    });
   }
 
   private dispatchWorkspaceFileMessage(

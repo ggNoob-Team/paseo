@@ -1,4 +1,4 @@
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
+import { nextSidebarGroupMode, type SidebarGroupMode } from "@/stores/sidebar-view-store";
 import type { CommandCenterContribution, CommandCenterIcon } from "./contributions";
 
 export interface GroupingCommandCenterSource {
@@ -7,33 +7,41 @@ export interface GroupingCommandCenterSource {
     section: string;
     groupByProject: string;
     groupByStatus: string;
+    groupByHost: string;
   };
   icons: {
     project?: CommandCenterIcon;
     status?: CommandCenterIcon;
+    host?: CommandCenterIcon;
   };
   setGroupMode(mode: SidebarGroupMode): void;
 }
 
-// One entry that always names the mode you are not in, so it can never read as a no-op.
+const TITLES: Record<SidebarGroupMode, keyof GroupingCommandCenterSource["labels"]> = {
+  project: "groupByProject",
+  status: "groupByStatus",
+  host: "groupByHost",
+};
+
+// One entry that always names the mode you are not in, so it can never read as a no-op. The modes
+// cycle rather than toggle: three grouping modes, one row.
 export function buildGroupingContribution(
   source: GroupingCommandCenterSource,
 ): CommandCenterContribution {
-  // Collapse into nextGroupMode() from sidebar-view-store once #2504 lands.
-  const target: SidebarGroupMode = source.groupMode === "project" ? "status" : "project";
+  const target = nextSidebarGroupMode(source.groupMode);
   return {
     id: "sidebar-grouping",
     group: "actions",
     groupRank: 0,
     rank: 8,
-    keywords: ["group", "grouping", "sort", "sidebar", "project", "status"],
+    keywords: ["group", "grouping", "sort", "sidebar", "project", "status", "host"],
     visibility: "query",
     run: () => source.setGroupMode(target),
     presentation: {
       kind: "action",
-      title: target === "status" ? source.labels.groupByStatus : source.labels.groupByProject,
+      title: source.labels[TITLES[target]],
       sectionTitle: source.labels.section,
-      icon: target === "status" ? source.icons.status : source.icons.project,
+      icon: source.icons[target],
     },
   };
 }

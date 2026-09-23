@@ -12,6 +12,7 @@ import {
   Keyboard,
   PanelLeft,
   Plus,
+  Server,
   Settings,
 } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
@@ -59,6 +60,7 @@ const ThemedFolder = withUnistyles(Folder, (theme) => ({ color: theme.colors.for
 const ThemedCircleDashed = withUnistyles(CircleDashed, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
+const ThemedServer = withUnistyles(Server, (theme) => ({ color: theme.colors.foregroundMuted }));
 const ThemedPanelLeft = withUnistyles(PanelLeft, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
@@ -101,6 +103,10 @@ function FolderIcon({ size }: CommandCenterIconProps) {
 
 function CircleDashedIcon({ size }: CommandCenterIconProps) {
   return <ThemedCircleDashed size={size} strokeWidth={2.2} />;
+}
+
+function ServerIcon({ size }: CommandCenterIconProps) {
+  return <ThemedServer size={size} strokeWidth={2.2} />;
 }
 
 function PanelLeftIcon({ size }: CommandCenterIconProps) {
@@ -323,8 +329,9 @@ export function CommandCenterRootActions() {
           section: t("shell.commandCenter.actions"),
           groupByProject: t("shell.commandCenter.groupByProject"),
           groupByStatus: t("shell.commandCenter.groupByStatus"),
+          groupByHost: t("shell.commandCenter.groupByHost"),
         },
-        icons: { project: FolderIcon, status: CircleDashedIcon },
+        icons: { project: FolderIcon, status: CircleDashedIcon, host: ServerIcon },
         setGroupMode,
       }),
     );

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { test as base } from "../support/fixtures";
+import { expect, test as base } from "../support/fixtures";
 import {
   beginWorkspaceFromProject,
   createWorkspaceWithoutAgent,
@@ -13,6 +13,7 @@ import {
   openProjectDirectory,
   openProjectDirectoryWithHosts,
   renameProject,
+  PROJECT_VISIBILITY_TIMEOUT,
   selectWorkspaceHost,
 } from "../support/helpers/project-grouping";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../support/helpers/isolated-host-daemon";
 import { connectSeedClient, type SeedDaemonClient } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
+import { selectSidebarHostGrouping } from "../support/helpers/sidebar";
 import { createTempGitRepo } from "../support/helpers/workspace";
 
 const PRIMARY_HOST_LABEL = "Primary Host";
@@ -376,6 +378,48 @@ test.describe("Sidebar project grouping", () => {
     });
   });
 
+  /**
+   * The counterpart to every grouping test above: project mode is the one mode that merges hosts,
+   * and choosing host grouping has to hand each machine its own section with its own copy of the
+   * project's rows.
+   */
+  test("splits one project into a section per host when grouping by host", async ({
+    page,
+    crossHostProject,
+  }) => {
+    await openScenario(page, crossHostProject);
+    await expectProjectContainsWorkspaces(page, {
+      projectName: GROUPED_PROJECT_NAME,
+      workspaceNames: ["Primary workspace", "Secondary workspace"],
+    });
+
+    await selectSidebarHostGrouping(page);
+
+    const secondaryHost = crossHostProject.hosts[0];
+    if (!secondaryHost) throw new Error("Expected a secondary host");
+    const primaryRows = page.getByTestId(`sidebar-status-group-rows-host:${getServerId()}`);
+    const secondaryRows = page.getByTestId(
+      `sidebar-status-group-rows-host:${secondaryHost.serverId}`,
+    );
+
+    await expect(primaryRows).toContainText("Primary workspace", {
+      timeout: PROJECT_VISIBILITY_TIMEOUT,
+    });
+    await expect(secondaryRows).toContainText("Secondary workspace", {
+      timeout: PROJECT_VISIBILITY_TIMEOUT,
+    });
+    // The point of the mode: a workspace appears under its own machine and nowhere else.
+    await expect(primaryRows).not.toContainText("Secondary workspace");
+    await expect(secondaryRows).not.toContainText("Primary workspace");
+
+    await expect(page.getByTestId(`sidebar-status-group-host:${getServerId()}`)).toContainText(
+      PRIMARY_HOST_LABEL,
+    );
+    await expect(
+      page.getByTestId(`sidebar-status-group-host:${secondaryHost.serverId}`),
+    ).toContainText(SECONDARY_HOST_LABEL);
+  });
+
   test("keeps two clones of the same repository on one host separate", async ({
     page,
     sameHostClones,
@@ -385,6 +429,30 @@ test.describe("Sidebar project grouping", () => {
       { projectName: "First clone", workspaceName: "First clone workspace" },
       { projectName: "Second clone", workspaceName: "Second clone workspace" },
     ]);
+  });
+
+  /**
+   * Host sections are not the end of the structure: a machine holding several projects still reads
+   * by project, which is the only way to tell whose workspaces a run of rows belongs to.
+   */
+  test("sections one host's projects when grouping by host", async ({ page, sameHostClones }) => {
+    await openScenario(page, sameHostClones);
+    await selectSidebarHostGrouping(page);
+
+    await expect(page.getByTestId(`sidebar-status-group-host:${getServerId()}`)).toBeVisible({
+      timeout: PROJECT_VISIBILITY_TIMEOUT,
+    });
+    await expectProjectContainsWorkspaces(page, {
+      projectName: "First clone",
+      workspaceNames: ["First clone workspace"],
+    });
+    await expectProjectContainsWorkspaces(page, {
+      projectName: "Second clone",
+      workspaceNames: ["Second clone workspace"],
+    });
+    await expect(page.getByRole("group", { name: "First clone", exact: true })).not.toContainText(
+      "Second clone workspace",
+    );
   });
 
   test("renames only the selected host's grouped project", async ({ page, crossHostProject }) => {

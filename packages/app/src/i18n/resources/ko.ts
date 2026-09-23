@@ -2,6 +2,38 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
+  archify: {
+    tabLabel: "Archify",
+    tabSubtitle: "Interactive diagrams",
+    tabTooltip: "Open Archify diagrams",
+    open: "Open Archify",
+    unavailable: "Update this host to use Archify.",
+    providerUnavailable: "No agent provider is ready.",
+    generationFailed: "Archify generation failed.",
+    generating: "Generating diagrams...",
+    ready: "Diagrams ready",
+    refresh: "Refresh diagrams",
+    searchPlaceholder: "Search calls, variables, flows, or steps",
+    noResults: "No matching diagram elements",
+    loadingArtifact: "Loading diagram...",
+    node: "Node",
+    relationship: "Relationship",
+    requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
+    scopePlaceholder: "Optional scope: path, symbol, or feature",
+    generate: "Generate",
+    showGeneration: "Show generation controls",
+    hideGeneration: "Hide generation controls",
+    emptyTitle: "Create your first diagram",
+    emptyDescription:
+      "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",
+    types: {
+      architecture: "Architecture",
+      sequence: "Method calls",
+      dataflow: "Data flow",
+      workflow: "Business flow",
+      lifecycle: "Lifecycle",
+    },
+  },
   paneFind: {
     searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
     searching: "검색 중…",
@@ -97,6 +129,7 @@ export const ko: TranslationResources = {
       home: "홈",
       groupByProject: "프로젝트별 그룹화",
       groupByStatus: "상태별 그룹화",
+      groupByHost: "호스트별 그룹화",
       modelGroupLabel: "모델",
       modelSearchKeywords: "모델 전환 모델 변경 모델 설정 모델 선택",
       thinkingGroupLabel: "추론",
@@ -1098,6 +1131,7 @@ export const ko: TranslationResources = {
         label: "그룹화",
         project: "프로젝트",
         status: "상태",
+        host: "호스트",
         labels: "레이블",
       },
       titleSource: {

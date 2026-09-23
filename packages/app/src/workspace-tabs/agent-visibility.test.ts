@@ -15,6 +15,7 @@ function makeAgent(input: {
   archivedAt?: Date | null;
   createdAt?: Date;
   lastActivityAt?: Date;
+  labels?: Record<string, string>;
 }): Agent {
   const createdAt = input.createdAt ?? new Date("2026-03-04T00:00:00.000Z");
   const lastActivityAt = input.lastActivityAt ?? createdAt;
@@ -50,7 +51,7 @@ function makeAgent(input: {
     model: null,
     thinkingOptionId: null,
     parentAgentId: input.parentAgentId ?? null,
-    labels: {},
+    labels: input.labels ?? {},
     requiresAttention: false,
     attentionReason: null,
     attentionTimestamp: null,
@@ -84,6 +85,21 @@ describe("workspace agent visibility", () => {
 
     expect(result.activeAgentIds).toEqual(new Set(["parent-agent", "child-agent"]));
     expect(result.autoOpenAgentIds).toEqual(new Set(["parent-agent"]));
+  });
+
+  it("keeps background Archify generators out of auto-open", () => {
+    const generator = makeAgent({
+      id: "archify-agent",
+      cwd: "/repo/worktree",
+      workspaceId: WORKSPACE_ID,
+      labels: { "paseo.archify.generator": "true" },
+    });
+    const result = deriveWorkspaceAgentVisibility({
+      sessionAgents: new Map<string, Agent>([[generator.id, generator]]),
+      workspaceId: WORKSPACE_ID,
+    });
+    expect(result.activeAgentIds).toEqual(new Set(["archify-agent"]));
+    expect(result.autoOpenAgentIds).toEqual(new Set<string>());
   });
 
   it("excludes archived subagents from active and auto-open", () => {

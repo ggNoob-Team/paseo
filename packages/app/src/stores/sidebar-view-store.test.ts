@@ -4,6 +4,8 @@ import {
   createSidebarViewStorage,
   hasActiveSidebarLabelFilter,
   migrateSidebarViewState,
+  nextSidebarGroupMode,
+  SIDEBAR_GROUP_MODES,
   SIDEBAR_UNLABELLED_LABEL_KEY,
   useSidebarViewStore,
 } from "./sidebar-view-store";
@@ -244,6 +246,24 @@ describe("sidebar view store", () => {
       projectFilters: [],
       labelFilter: { labels: [] },
     });
+  });
+
+  it("keeps host grouping through the version migration", () => {
+    expect(migrateSidebarViewState({ groupMode: "host", hostFilters: ["host-a"] })).toEqual({
+      groupMode: "host",
+      hostFilters: ["host-a"],
+      projectFilters: [],
+      labelFilter: { labels: [] },
+    });
+  });
+
+  // The regrouping entry walks this list, and the display preferences renders it: a mode that is
+  // missing here is a mode one of the two surfaces cannot reach.
+  it("cycles grouping through every mode and back", () => {
+    expect(nextSidebarGroupMode("project")).toBe("status");
+    expect(nextSidebarGroupMode("status")).toBe("host");
+    expect(nextSidebarGroupMode("host")).toBe("project");
+    expect([...SIDEBAR_GROUP_MODES]).toEqual(["project", "status", "host"]);
   });
 
   it("falls back to the legacy storage key when the new key is empty", async () => {

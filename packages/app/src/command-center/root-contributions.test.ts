@@ -11,6 +11,10 @@ function StatusIcon(_props: CommandCenterIconProps) {
   return null;
 }
 
+function HostIcon(_props: CommandCenterIconProps) {
+  return null;
+}
+
 function source(groupMode: SidebarGroupMode): {
   value: GroupingCommandCenterSource;
   applied: SidebarGroupMode[];
@@ -23,8 +27,9 @@ function source(groupMode: SidebarGroupMode): {
         section: "Actions",
         groupByProject: "Group by project",
         groupByStatus: "Group by status",
+        groupByHost: "Group by host",
       },
-      icons: { project: ProjectIcon, status: StatusIcon },
+      icons: { project: ProjectIcon, status: StatusIcon, host: HostIcon },
       setGroupMode: (mode) => applied.push(mode),
     },
     applied,
@@ -45,8 +50,21 @@ describe("grouping command center contribution", () => {
     expect(fixture.applied).toEqual(["status"]);
   });
 
-  it("offers project while grouped by status", () => {
+  it("offers host while grouped by status", () => {
     const fixture = source("status");
+    const contribution = buildGroupingContribution(fixture.value);
+
+    expect(contribution.presentation).toMatchObject({
+      title: "Group by host",
+      icon: HostIcon,
+    });
+
+    contribution.run();
+    expect(fixture.applied).toEqual(["host"]);
+  });
+
+  it("offers project while grouped by host", () => {
+    const fixture = source("host");
     const contribution = buildGroupingContribution(fixture.value);
 
     expect(contribution.presentation).toMatchObject({
@@ -58,14 +76,17 @@ describe("grouping command center contribution", () => {
     expect(fixture.applied).toEqual(["project"]);
   });
 
-  it("keeps a stable id across both modes so the registry tiebreak never moves", () => {
+  it("keeps a stable id across every mode so the registry tiebreak never moves", () => {
     expect(buildGroupingContribution(source("project").value).id).toBe(
       buildGroupingContribution(source("status").value).id,
+    );
+    expect(buildGroupingContribution(source("status").value).id).toBe(
+      buildGroupingContribution(source("host").value).id,
     );
   });
 
   it("stays out of the default empty-query list", () => {
-    for (const mode of ["project", "status"] as const) {
+    for (const mode of ["project", "status", "host"] as const) {
       const contribution = buildGroupingContribution(source(mode).value);
       expect(contribution.visibility).toBe("query");
       expect(contribution.group).toBe("actions");

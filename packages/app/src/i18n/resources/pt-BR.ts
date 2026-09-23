@@ -2,6 +2,38 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
+  archify: {
+    tabLabel: "Archify",
+    tabSubtitle: "Interactive diagrams",
+    tabTooltip: "Open Archify diagrams",
+    open: "Open Archify",
+    unavailable: "Update this host to use Archify.",
+    providerUnavailable: "No agent provider is ready.",
+    generationFailed: "Archify generation failed.",
+    generating: "Generating diagrams...",
+    ready: "Diagrams ready",
+    refresh: "Refresh diagrams",
+    searchPlaceholder: "Search calls, variables, flows, or steps",
+    noResults: "No matching diagram elements",
+    loadingArtifact: "Loading diagram...",
+    node: "Node",
+    relationship: "Relationship",
+    requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
+    scopePlaceholder: "Optional scope: path, symbol, or feature",
+    generate: "Generate",
+    showGeneration: "Show generation controls",
+    hideGeneration: "Hide generation controls",
+    emptyTitle: "Create your first diagram",
+    emptyDescription:
+      "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",
+    types: {
+      architecture: "Architecture",
+      sequence: "Method calls",
+      dataflow: "Data flow",
+      workflow: "Business flow",
+      lifecycle: "Lifecycle",
+    },
+  },
   paneFind: {
     searchFailed:
       "Não foi possível pesquisar nesta conversa. Verifique a conexão com o host e tente novamente.",
@@ -98,6 +130,7 @@ export const ptBR: TranslationResources = {
       home: "Início",
       groupByProject: "Agrupar por projeto",
       groupByStatus: "Agrupar por status",
+      groupByHost: "Agrupar por host",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "trocar modelo mudar modelo definir modelo selecionar modelo",
       thinkingGroupLabel: "Raciocínio",
@@ -1117,6 +1150,7 @@ export const ptBR: TranslationResources = {
         label: "Agrupamento",
         project: "Projeto",
         status: "Status",
+        host: "Host",
         labels: "Etiquetas",
       },
       titleSource: {

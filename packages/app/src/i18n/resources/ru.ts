@@ -2,6 +2,38 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
+  archify: {
+    tabLabel: "Archify",
+    tabSubtitle: "Interactive diagrams",
+    tabTooltip: "Open Archify diagrams",
+    open: "Open Archify",
+    unavailable: "Update this host to use Archify.",
+    providerUnavailable: "No agent provider is ready.",
+    generationFailed: "Archify generation failed.",
+    generating: "Generating diagrams...",
+    ready: "Diagrams ready",
+    refresh: "Refresh diagrams",
+    searchPlaceholder: "Search calls, variables, flows, or steps",
+    noResults: "No matching diagram elements",
+    loadingArtifact: "Loading diagram...",
+    node: "Node",
+    relationship: "Relationship",
+    requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
+    scopePlaceholder: "Optional scope: path, symbol, or feature",
+    generate: "Generate",
+    showGeneration: "Show generation controls",
+    hideGeneration: "Hide generation controls",
+    emptyTitle: "Create your first diagram",
+    emptyDescription:
+      "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",
+    types: {
+      architecture: "Architecture",
+      sequence: "Method calls",
+      dataflow: "Data flow",
+      workflow: "Business flow",
+      lifecycle: "Lifecycle",
+    },
+  },
   paneFind: {
     searchFailed:
       "Не удалось выполнить поиск в чате. Проверьте подключение к хосту и повторите попытку.",
@@ -98,6 +130,7 @@ export const ru: TranslationResources = {
       home: "Главная",
       groupByProject: "Группировать по проекту",
       groupByStatus: "Группировать по статусу",
+      groupByHost: "Группировать по хосту",
       modelGroupLabel: "Модель",
       modelSearchKeywords: "Сменить, изменить, выбрать или установить модель",
       thinkingGroupLabel: "Мышление",
@@ -1108,6 +1141,7 @@ export const ru: TranslationResources = {
         label: "Группировка",
         project: "Проект",
         status: "Статус",
+        host: "Хост",
         labels: "Метки",
       },
       titleSource: {

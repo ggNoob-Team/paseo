@@ -5,7 +5,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-nativ
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { X } from "lucide-react-native";
+import { Workflow, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { formatPrTabLabel, PullRequestTabIcon } from "@/git/pull-request-panel";
 import {
@@ -47,8 +47,11 @@ import {
 import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import { useHostFeature } from "@/runtime/host-features";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 
 const ThemedX = withUnistyles(X);
+const ThemedWorkflow = withUnistyles(Workflow);
 
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
@@ -329,12 +332,24 @@ function ExplorerSidebarContent({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
+  const archifySupported = useHostFeature(serverId, "archify");
+  const openWorkspaceTab = useWorkspaceLayoutStore((state) => state.openTab);
   const closeButtonLayout = explorerSidebarCloseButtonLayout(isCompact);
   const closeButtonStyle = useMemo(
     () => ({ width: closeButtonLayout.size, height: closeButtonLayout.size }),
     [closeButtonLayout.size],
   );
   // The close glyph shares the trailing rail with the toolbar rows below it.
+  const handleOpenArchify = useCallback(() => {
+    const workspaceKey = buildWorkspaceTabPersistenceKey({
+      serverId,
+      workspaceId: workspaceId ?? "",
+    });
+    if (!workspaceKey) return;
+    openWorkspaceTab({ workspaceKey, target: { kind: "archify" }, intent: "reveal" });
+    if (isCompact) usePanelStore.getState().showMobileAgent();
+  }, [isCompact, openWorkspaceTab, serverId, workspaceId]);
+
   const headerRightSectionStyle = useMemo(
     () => [styles.headerRightSection, { paddingRight: closeButtonLayout.trailingPadding }],
     [closeButtonLayout.trailingPadding],
@@ -403,6 +418,19 @@ function ExplorerSidebarContent({
           )}
         </View>
         <View style={headerRightSectionStyle}>
+          {archifySupported ? (
+            <ToolbarButton
+              compact={isCompact}
+              style={closeButtonStyle}
+              hitSlop={closeButtonLayout.hitSlop}
+              label={t("archify.open")}
+              onPress={handleOpenArchify}
+              testID="explorer-archify"
+              nativeID="explorer-archify"
+            >
+              <ThemedWorkflow size={closeButtonLayout.iconSize} uniProps={mutedIconColorMapping} />
+            </ToolbarButton>
+          ) : null}
           <ToolbarButton
             compact={isCompact}
             style={closeButtonStyle}

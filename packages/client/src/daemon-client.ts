@@ -125,6 +125,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  ArchifyArtifact,
+  ArchifyArtifactSummary,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -974,6 +976,9 @@ function toTimeoutError(error: unknown, label: string, timeoutMs: number): Error
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
+// A download waits for a whole binary file transfer, not for a single
+// response, so it gets twice the default session RPC deadline.
+const FILE_DOWNLOAD_RPC_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS * 2;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -4596,6 +4601,7 @@ export class DaemonClient {
     requestId?: string,
     acceptBinary = false,
     maxBytes?: number,
+    timeout?: number,
   ): Promise<FileExplorerPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -4608,6 +4614,7 @@ export class DaemonClient {
         ...(maxBytes ? { maxBytes } : {}),
       },
       responseType: "file_explorer_response",
+      timeout,
     });
   }
 
@@ -4631,6 +4638,7 @@ export class DaemonClient {
     path: string,
     requestId?: string,
     maxBytes?: number,
+    timeout?: number,
   ): Promise<FileReadResult> {
     const resolvedRequestId = this.createRequestId(requestId);
     this.pendingBinaryFileReads.set(resolvedRequestId, { cwd, path, maxBytes });
@@ -4642,6 +4650,7 @@ export class DaemonClient {
         resolvedRequestId,
         true,
         maxBytes,
+        timeout,
       );
       if (payload.error) {
         throw new Error(payload.error);
@@ -4659,6 +4668,19 @@ export class DaemonClient {
       this.pendingBinaryFileReads.delete(resolvedRequestId);
       this.activeBinaryFileTransfers.delete(resolvedRequestId);
     }
+  }
+
+  /**
+   * Reads a whole file for the file explorer download path. Downloads wait for
+   * the complete binary transfer instead of a single response, so they use a
+   * longer deadline than the default session RPC wait.
+   */
+  async readFileForDownload(
+    cwd: string,
+    path: string,
+    requestId?: string,
+  ): Promise<FileReadResult> {
+    return this.readFile(cwd, path, requestId, undefined, FILE_DOWNLOAD_RPC_TIMEOUT_MS);
   }
 
   observeFile(input: {
@@ -4855,6 +4877,7 @@ export class DaemonClient {
         path,
       },
       responseType: "file_download_token_response",
+      timeout: FILE_DOWNLOAD_RPC_TIMEOUT_MS,
     });
   }
 
@@ -5267,6 +5290,42 @@ export class DaemonClient {
       },
       responseType: "agent.skills.save_selection.response",
     });
+  }
+
+  async openArchifyWorkspace(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<{ artifacts: ArchifyArtifactSummary[]; autoGenerate: boolean }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.workspace.open.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.workspace.open.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+        },
+      });
+    return { artifacts: payload.artifacts, autoGenerate: payload.autoGenerate };
+  }
+
+  async readArchifyArtifact(
+    workspaceId: string,
+    artifactId: string,
+    requestId?: string,
+  ): Promise<{ artifact: ArchifyArtifact | null; error: string | null }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.artifact.read.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.artifact.read.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+          artifactId,
+        },
+      });
+    return { artifact: payload.artifact, error: payload.error };
   }
 
   async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{

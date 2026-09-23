@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native-unistyles";
 import { WebView } from "react-native-webview";
 import { withPreviewCsp } from "./html-preview-csp";
 import { htmlPreviewNavigationKind } from "./html-preview-navigation";
+import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";
+import { usePaneFocus } from "@/panels/pane-context";
 
 // A preview is a viewer, not a browser. Only the document Paseo hands the WebView
 // loads; navigations the page attempts afterwards are refused, so a link, a
@@ -32,9 +34,27 @@ const ORIGIN_WHITELIST = ["*"];
 // would arrive with no injected policy and a clean slate to egress from.
 const BASE_URL = "about:blank";
 
-export function FileHtmlPreview({ html, testID }: { html: string; testID?: string }) {
+export interface FileHtmlPreviewCommand {
+  id: number;
+  source: string;
+}
+
+export function FileHtmlPreview({
+  html,
+  testID,
+  command,
+}: {
+  html: string;
+  testID?: string;
+  command?: FileHtmlPreviewCommand | null;
+  commandBridge?: boolean;
+}) {
   const document = useMemo(() => withPreviewCsp(html), [html]);
   const source = useMemo(() => ({ html: document, baseUrl: BASE_URL }), [document]);
+  const webViewRef = useRef<WebView>(null);
+  const [ready, setReady] = useState(false);
+  const { isInteractive } = usePaneFocus();
+  useBlockMobilePanelOpenGestures(isInteractive);
   // Latched per document rather than once for the lifetime of the WebView: the
   // file pane re-renders with new content on every live-file refresh, and each of
   // those is a fresh initial load that has to be allowed through.
@@ -51,11 +71,24 @@ export function FileHtmlPreview({ html, testID }: { html: string; testID?: strin
     [document],
   );
 
+  useEffect(() => {
+    setReady(false);
+  }, [document]);
+
+  const handleLoadEnd = useCallback(() => setReady(true), []);
+
+  useEffect(() => {
+    if (!ready || !command) return;
+    webViewRef.current?.injectJavaScript(command.source);
+  }, [command, ready]);
+
   return (
     <WebView
+      ref={webViewRef}
       testID={testID}
       style={styles.webview}
       source={source}
+      onLoadEnd={handleLoadEnd}
       originWhitelist={ORIGIN_WHITELIST}
       onShouldStartLoadWithRequest={allowOnlyInitialDocument}
       setSupportMultipleWindows={false}

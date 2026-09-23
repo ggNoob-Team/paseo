@@ -4,7 +4,11 @@ import type { Logger } from "pino";
 
 import type { AgentMode, AgentProvider, AgentSessionConfig } from "../agent-sdk-types.js";
 import type { AgentManager } from "../agent-manager.js";
-import { AgentProfileSchema } from "@getpaseo/protocol/messages";
+import {
+  AgentProfileSchema,
+  ArchifyArtifactSummarySchema,
+  ArchifyDiagramTypeSchema,
+} from "@getpaseo/protocol/messages";
 import type { DaemonConfigStore } from "../../daemon-config-store.js";
 import {
   AgentFeatureSchema,
@@ -84,6 +88,11 @@ import {
   createPaseoWorktreeCommand,
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
+import {
+  ArchifyRenderError,
+  createArchifyArtifactId,
+  renderArchifyArtifact,
+} from "../../archify/service.js";
 import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import type {
   PaseoToolCatalog,
@@ -1204,6 +1213,85 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   if (options.voiceOnly) {
     return toCatalog();
   }
+
+  registerTool(
+    "archify_render",
+    {
+      title: "Render Archify artifact",
+      description:
+        "Validate and render a Paseo Archify JSON specification into an interactive HTML artifact stored under PASEO_HOME/archify/<workspaceId>. Use the paseo-archify skill to author the specification.",
+      inputSchema: {
+        artifactId: z.string().trim().min(1).optional(),
+        diagramType: ArchifyDiagramTypeSchema,
+        title: z.string().trim().min(1).max(200),
+        spec: z.record(z.string(), z.unknown()),
+        request: z.string().trim().max(4000).optional(),
+        scope: z.string().trim().max(1000).optional(),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        artifact: ArchifyArtifactSummarySchema.nullable(),
+        error: z.string().optional(),
+        diagnostics: z.unknown().optional(),
+      },
+    },
+    async ({ artifactId, diagramType, title, spec, request, scope }) => {
+      const callerAgent = resolveCallerAgent();
+      if (!callerAgent) {
+        throw new Error("archify_render is only available to agent-scoped tool sessions");
+      }
+      const workspaceId = callerAgent.workspaceId?.trim();
+      if (!workspaceId) {
+        throw new Error("archify_render requires an agent owned by a Paseo workspace");
+      }
+      if (!options.paseoHome) {
+        throw new Error("archify_render requires the daemon PASEO_HOME");
+      }
+
+      try {
+        const artifact = await renderArchifyArtifact({
+          paseoHome: options.paseoHome,
+          workspaceId,
+          artifactId: createArchifyArtifactId({ diagramType, requestedId: artifactId }),
+          diagramType,
+          title,
+          spec,
+          generatorAgentId: callerAgent.id,
+          request,
+          scope,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Rendered ${artifact.type} artifact "${artifact.title}" as ${artifact.id}.`,
+            },
+          ],
+          structuredContent: ensureValidJson({ ok: true, artifact }),
+        };
+      } catch (error) {
+        if (error instanceof ArchifyRenderError) {
+          const structured = ensureValidJson({
+            ok: false,
+            artifact: null,
+            error: error.message,
+            diagnostics: error.diagnostics,
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Archify delivery failed. Repair the specification from the diagnostics and call archify_render again.\n\n${JSON.stringify(error.diagnostics, null, 2)}`,
+              },
+            ],
+            structuredContent: structured,
+            isError: true,
+          };
+        }
+        throw error;
+      }
+    },
+  );
 
   if (options.browserToolsEnabled && options.browserToolsBroker) {
     registerBrowserTools({

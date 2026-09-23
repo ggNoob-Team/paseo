@@ -2,6 +2,38 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const fr: TranslationResources = {
+  archify: {
+    tabLabel: "Archify",
+    tabSubtitle: "Interactive diagrams",
+    tabTooltip: "Open Archify diagrams",
+    open: "Open Archify",
+    unavailable: "Update this host to use Archify.",
+    providerUnavailable: "No agent provider is ready.",
+    generationFailed: "Archify generation failed.",
+    generating: "Generating diagrams...",
+    ready: "Diagrams ready",
+    refresh: "Refresh diagrams",
+    searchPlaceholder: "Search calls, variables, flows, or steps",
+    noResults: "No matching diagram elements",
+    loadingArtifact: "Loading diagram...",
+    node: "Node",
+    relationship: "Relationship",
+    requestPlaceholder: "Optional: describe the call path, variable, or workflow to inspect",
+    scopePlaceholder: "Optional scope: path, symbol, or feature",
+    generate: "Generate",
+    showGeneration: "Show generation controls",
+    hideGeneration: "Hide generation controls",
+    emptyTitle: "Create your first diagram",
+    emptyDescription:
+      "Archify will inspect this workspace and generate searchable architecture, method-call, and data-flow diagrams.",
+    types: {
+      architecture: "Architecture",
+      sequence: "Method calls",
+      dataflow: "Data flow",
+      workflow: "Business flow",
+      lifecycle: "Lifecycle",
+    },
+  },
   paneFind: {
     searchFailed:
       "Impossible de rechercher dans cette conversation. Vérifiez la connexion à l’hôte et réessayez.",
@@ -99,6 +131,7 @@ export const fr: TranslationResources = {
       home: "Maison",
       groupByProject: "Grouper par projet",
       groupByStatus: "Grouper par statut",
+      groupByHost: "Grouper par hôte",
       modelGroupLabel: "Modèle",
       modelSearchKeywords:
         "changer de modèle modifier le modèle définir le modèle sélectionner le modèle",
@@ -1126,6 +1159,7 @@ export const fr: TranslationResources = {
         label: "Regroupement",
         project: "Projet",
         status: "Statut",
+        host: "Hôte",
         labels: "Libellés",
       },
       titleSource: {
