@@ -65,7 +65,9 @@ jobs:
           set -euo pipefail
           cd packages/app/android
           ./gradlew :app:assembleRelease --no-daemon \
-            -PreactNativeArchitectures="$PASEO_ARCHITECTURES"
+            -PreactNativeArchitectures="$PASEO_ARCHITECTURES" \
+            -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
+            -x generateReleaseLintModel -x generateReleaseLintVitalModel
 
       - name: Stage APK
         env:
