@@ -1,0 +1,98 @@
+name: Publish Daemon NPM
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the @ggnoob-team/paseo package."
+        required: true
+        default: "0.9.0-archify.1"
+        type: string
+      dist_tag:
+        description: "npm dist-tag to publish."
+        required: true
+        default: "archify"
+        type: string
+      publish:
+        description: "Publish the packed tarball to GitHub Packages."
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@ggnoob-team"
+
+      - name: Install JS dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack daemon npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -euo pipefail
+          node scripts/pack-github-daemon-packages.mjs \
+            --version "${{ inputs.version }}" \
+            --output "$RUNNER_TEMP/paseo-npm"
+
+      - name: Upload package artifact
+        if: inputs.publish != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: paseo-github-package
+          path: ${{ runner.temp }}/paseo-npm/*.tgz
+          retention-days: 7
+
+      - name: Publish to GitHub Packages
+        if: inputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tarball; do
+            npm publish "$tarball" \
+              --tag "${{ inputs.dist_tag }}" \
+              --registry https://npm.pkg.github.com
+          done < "$RUNNER_TEMP/paseo-npm/publish-manifest.txt"
+
+      - name: Smoke test GitHub Packages install
+        if: inputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            install_prefix="$RUNNER_TEMP/paseo-install-$attempt"
+            if npm install --global --prefix "$install_prefix" \
+              "@ggnoob-team/paseo@${{ inputs.dist_tag }}" \
+              --registry https://npm.pkg.github.com; then
+              "$install_prefix/bin/paseo" daemon --help
+              break
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              exit 1
+            fi
+            sleep 10
+          done
