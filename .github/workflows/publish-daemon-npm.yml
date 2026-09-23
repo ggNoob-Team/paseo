@@ -87,7 +87,8 @@ jobs:
             install_prefix="$RUNNER_TEMP/paseo-install-$attempt"
             if npm install --global --prefix "$install_prefix" \
               "@ggnoob-team/paseo@${{ inputs.dist_tag }}" \
-              --registry https://npm.pkg.github.com; then
+              --registry=https://registry.npmjs.org \
+              --@ggnoob-team:registry=https://npm.pkg.github.com; then
               "$install_prefix/bin/paseo" daemon --help
               break
             fi
