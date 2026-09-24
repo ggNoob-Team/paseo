@@ -16,5 +16,8 @@ export default defineConfig({
         command: "npm run dev -- --host 127.0.0.1 --port 8187 --strictPort",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
+        timeout: 180_000,
+        stdout: "pipe",
+        stderr: "pipe",
       },
 });
