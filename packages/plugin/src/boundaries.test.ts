@@ -68,6 +68,13 @@ describe("plugin SDK import boundaries", () => {
     expect(Object.keys(manifest.exports).sort()).toEqual(Object.keys(entries).sort());
   });
 
+  it("keeps React peers compatible with React Native and optional for daemon installs", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(manifest.peerDependencies.react).toBe("^19.1.0");
+    expect(manifest.peerDependenciesMeta.react?.optional).toBe(true);
+    expect(manifest.peerDependenciesMeta["react-native"]?.optional).toBe(true);
+  });
+
   it.each(Object.entries(entries))(
     "%s respects its %s boundary, including type dependencies",
     (specifier, runtime) => {

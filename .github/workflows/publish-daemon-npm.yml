@@ -8,11 +8,6 @@ on:
         required: true
         default: ""
         type: string
-      dist_tag:
-        description: "npm dist-tag to publish."
-        required: true
-        default: "archify"
-        type: string
       publish:
         description: "Publish the packed tarball to GitHub Packages."
         required: true
@@ -73,7 +68,7 @@ jobs:
           set -euo pipefail
           while IFS= read -r tarball; do
             npm publish "$tarball" \
-              --tag "${{ inputs.dist_tag }}" \
+              --tag archify \
               --registry https://npm.pkg.github.com
           done < "$RUNNER_TEMP/paseo-npm/publish-manifest.txt"
 
