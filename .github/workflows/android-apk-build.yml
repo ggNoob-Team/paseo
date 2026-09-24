@@ -14,6 +14,10 @@ on:
         default: "arm64-v8a"
         type: string
 
+concurrency:
+  group: android-apk-build
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -40,6 +44,16 @@ jobs:
         with:
           packages: platform-tools
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json', 'packages/app/package.json', 'packages/app/app.config.js') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Install JS dependencies
         run: node scripts/npm-retry.mjs ci
         env:
@@ -57,14 +71,16 @@ jobs:
           cd packages/app
           npx expo prebuild --platform android --clean --no-install
 
-      - name: Build release APK
+      - name: Build release APK (first run can take 20-30 minutes; do not cancel)
+        timeout-minutes: 45
         env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false -Dorg.gradle.caching=true
           PASEO_ARCHITECTURES: ${{ inputs.architectures }}
         run: |
           set -euo pipefail
           cd packages/app/android
           ./gradlew :app:assembleRelease --no-daemon \
+            --build-cache \
             -PreactNativeArchitectures="$PASEO_ARCHITECTURES" \
             -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
             -x generateReleaseLintModel -x generateReleaseLintVitalModel
