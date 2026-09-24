@@ -109,6 +109,61 @@ gh workflow run android-apk-build.yml \
   -f architectures=arm64-v8a
 ```
 
+### Local WSL build
+
+Use this path when the GitHub runner is unavailable or repeatedly canceled. The local build needs JDK 17 and an Android SDK with platform 36, build-tools 36, NDK 27.1, and CMake 3.22.1.
+
+```bash
+export JAVA_HOME="$HOME/.sdkman/candidates/java/17.0.20-tem"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+npm run build:app-deps
+
+cd packages/app
+APP_VARIANT=production CI=1 npx expo prebuild --platform android --clean --no-install
+printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+```
+
+If the Gradle distribution download times out, place it in `/tmp` and point the generated wrapper at the local file:
+
+```bash
+curl -fL --retry 8 --retry-all-errors -C - \
+  -o /tmp/gradle-8.14.3-bin.zip \
+  https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("packages/app/android/gradle/wrapper/gradle-wrapper.properties")
+path.write_text(
+    path.read_text().replace(
+        "https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
+        "file\\:/tmp/gradle-8.14.3-bin.zip",
+    )
+)
+PY
+```
+
+Then build the APK:
+
+```bash
+cd packages/app/android
+./gradlew :app:assembleRelease --no-daemon --max-workers=4 \
+  -PreactNativeArchitectures=arm64-v8a \
+  -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
+  -x generateReleaseLintModel -x generateReleaseLintVitalModel
+```
+
+The APK is written to:
+
+```text
+packages/app/android/app/build/outputs/apk/release/app-release.apk
+```
+
+The first build can take 30-40 minutes. Later builds reuse `~/.gradle` and are faster.
+
 ## Web
 
 Use **Deploy App** for the browser app. It deploys the current `packages/app` web export to the fork's Cloudflare Pages project `paseo-app`.
