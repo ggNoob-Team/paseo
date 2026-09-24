@@ -113,6 +113,8 @@ gh workflow run android-apk-build.yml \
 
 Use this path when the GitHub runner is unavailable or repeatedly canceled. The local build needs JDK 17 and an Android SDK with platform 36, build-tools 36, NDK 27.1, and CMake 3.22.1.
 
+Gradle may auto-install additional NDK or build-tools versions required by individual native modules. Keep the accepted SDK licenses under `$ANDROID_HOME/licenses`.
+
 ```bash
 export JAVA_HOME="$HOME/.sdkman/candidates/java/17.0.20-tem"
 export ANDROID_HOME="$HOME/Android/Sdk"
