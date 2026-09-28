@@ -122,6 +122,7 @@ async function main(): Promise<void> {
     dictationStt: { provider: "local", explicit: true },
     voiceStt: { provider: "local", explicit: true },
     // Not used here, but required by the shared runtime config shape.
+    voiceTurnDetection: { provider: "local", enabled: false, explicit: false },
     voiceTts: { provider: "openai", explicit: false },
   };
 

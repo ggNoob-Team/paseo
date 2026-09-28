@@ -2,14 +2,13 @@ import { EventEmitter } from "node:events";
 import { v4 as uuidv4 } from "uuid";
 
 import type { StreamingTranscriptionSession } from "../../../speech-provider.js";
-import { pcm16lePeakAbs, pcm16leToFloat32 } from "../../../audio.js";
-import { SherpaOfflineRecognizerEngine } from "./sherpa-offline-recognizer.js";
+import type { SherpaSttDecoder } from "./sherpa-stt-decoder.js";
 
-export class SherpaParakeetRealtimeTranscriptionSession
+export class SherpaOfflineRealtimeTranscriptionSession
   extends EventEmitter
   implements StreamingTranscriptionSession
 {
-  private readonly engine: SherpaOfflineRecognizerEngine;
+  private readonly decoder: Pick<SherpaSttDecoder, "sampleRate" | "decode">;
   private connected = false;
 
   public readonly requiredSampleRate: number;
@@ -23,10 +22,13 @@ export class SherpaParakeetRealtimeTranscriptionSession
   private pendingDecode = false;
   private readonly minDecodeIntervalMs: number;
 
-  constructor(params: { engine: SherpaOfflineRecognizerEngine; minDecodeIntervalMs?: number }) {
+  constructor(params: {
+    decoder: Pick<SherpaSttDecoder, "sampleRate" | "decode">;
+    minDecodeIntervalMs?: number;
+  }) {
     super();
-    this.engine = params.engine;
-    this.requiredSampleRate = this.engine.sampleRate;
+    this.decoder = params.decoder;
+    this.requiredSampleRate = this.decoder.sampleRate;
     this.minDecodeIntervalMs = params.minDecodeIntervalMs ?? 350;
   }
 
@@ -40,7 +42,7 @@ export class SherpaParakeetRealtimeTranscriptionSession
 
   appendPcm16(chunk: Buffer): void {
     if (!this.connected || !this.currentSegmentId) {
-      this.emit("error", new Error("Parakeet realtime session not connected"));
+      this.emit("error", new Error("Realtime transcription session not connected"));
       return;
     }
 
@@ -54,7 +56,7 @@ export class SherpaParakeetRealtimeTranscriptionSession
 
   commit(): void {
     if (!this.connected || !this.currentSegmentId) {
-      this.emit("error", new Error("Parakeet realtime session not connected"));
+      this.emit("error", new Error("Realtime transcription session not connected"));
       return;
     }
 
@@ -133,31 +135,6 @@ export class SherpaParakeetRealtimeTranscriptionSession
     if (this.pcm16.length === 0) {
       return "";
     }
-
-    const peak = pcm16lePeakAbs(this.pcm16);
-    const peakFloat = peak / 32768.0;
-    const targetPeak = 0.6;
-    const maxGain = 50;
-    const gain =
-      peakFloat > 0 && peakFloat < targetPeak ? Math.min(maxGain, targetPeak / peakFloat) : 1;
-
-    const stream = this.engine.createStream();
-    try {
-      const floatSamples = pcm16leToFloat32(this.pcm16, gain);
-      this.engine.acceptWaveform(stream, this.engine.sampleRate, floatSamples);
-      this.engine.recognizer.decode(stream);
-      const result = this.engine.recognizer.getResult(stream);
-      return String(
-        (typeof result === "object" && result && "text" in result ? result.text : undefined) ??
-          result ??
-          "",
-      ).trim();
-    } finally {
-      try {
-        stream.free?.();
-      } catch {
-        // ignore
-      }
-    }
+    return this.decoder.decode(this.pcm16, this.decoder.sampleRate).text;
   }
 }

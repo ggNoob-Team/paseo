@@ -1,21 +1,32 @@
 import { z } from "zod";
 
 export type SherpaOnnxModelKind = "stt-offline" | "tts";
+export type SherpaOnnxSttFamily = "nemo_transducer" | "sense_voice";
 
-type DefaultModelRole = "stt" | "tts";
-
-interface SherpaOnnxCatalogEntry {
-  kind: SherpaOnnxModelKind;
+interface SherpaOnnxCatalogEntryBase {
   archiveUrl: string;
   extractedDir: string;
   requiredFiles: string[];
   description: string;
-  defaultFor?: DefaultModelRole;
 }
+
+export interface SherpaOnnxSttCatalogEntry extends SherpaOnnxCatalogEntryBase {
+  kind: "stt-offline";
+  family: SherpaOnnxSttFamily;
+  defaultFor?: "stt";
+}
+
+export interface SherpaOnnxTtsCatalogEntry extends SherpaOnnxCatalogEntryBase {
+  kind: "tts";
+  defaultFor?: "tts";
+}
+
+export type SherpaOnnxCatalogEntry = SherpaOnnxSttCatalogEntry | SherpaOnnxTtsCatalogEntry;
 
 export const SHERPA_ONNX_MODEL_CATALOG = {
   "parakeet-tdt-0.6b-v2-int8": {
     kind: "stt-offline",
+    family: "nemo_transducer",
     archiveUrl:
       "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
     extractedDir: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
@@ -25,12 +36,23 @@ export const SHERPA_ONNX_MODEL_CATALOG = {
   },
   "parakeet-tdt-0.6b-v3-int8": {
     kind: "stt-offline",
+    family: "nemo_transducer",
     archiveUrl:
       "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
     extractedDir: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
     requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
     description:
       "NVIDIA Parakeet TDT v3 (offline NeMo transducer, 25 European languages, auto-detected).",
+  },
+  "sense-voice-zh-en-ja-ko-yue-int8": {
+    kind: "stt-offline",
+    family: "sense_voice",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+    extractedDir: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    requiredFiles: ["model.int8.onnx", "tokens.txt"],
+    description:
+      "SenseVoice Small (offline CTC, Chinese/Cantonese/English/Japanese/Korean, auto-detected).",
   },
   "kokoro-en-v0_19": {
     kind: "tts",
@@ -71,7 +93,7 @@ export const LOCAL_TTS_MODEL_IDS: LocalTtsModelId[] = ALL_MODEL_IDS.filter(isLoc
 
 function resolveDefaultModelId(role: "stt"): LocalSttModelId;
 function resolveDefaultModelId(role: "tts"): LocalTtsModelId;
-function resolveDefaultModelId(role: DefaultModelRole): SherpaOnnxModelId {
+function resolveDefaultModelId(role: "stt" | "tts"): SherpaOnnxModelId {
   const match = ALL_MODEL_IDS.find((id) => {
     const entry: SherpaOnnxCatalogEntry = SHERPA_ONNX_MODEL_CATALOG[id];
     return entry.defaultFor === role;
@@ -104,6 +126,10 @@ export type SherpaOnnxModelSpec = SherpaOnnxCatalogEntry & {
   id: SherpaOnnxModelId;
 };
 
+export type SherpaOnnxSttModelSpec = SherpaOnnxSttCatalogEntry & {
+  id: LocalSttModelId;
+};
+
 export function listSherpaOnnxModels(): SherpaOnnxModelSpec[] {
   return ALL_MODEL_IDS.map((id) => Object.assign({ id }, SHERPA_ONNX_MODEL_CATALOG[id]));
 }
@@ -116,5 +142,12 @@ export function getSherpaOnnxModelSpec(id: SherpaOnnxModelId): SherpaOnnxModelSp
   return {
     id,
     ...spec,
+  };
+}
+
+export function getSherpaSttModelSpec(id: LocalSttModelId): SherpaOnnxSttModelSpec {
+  return {
+    id,
+    ...SHERPA_ONNX_MODEL_CATALOG[id],
   };
 }
