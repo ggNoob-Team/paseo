@@ -9,7 +9,11 @@ import { createDaemonTestContext } from "../../../../test-utils/index.js";
 import { parsePcm16MonoWav, wordSimilarity } from "../../../../test-utils/dictation-e2e.js";
 import { SherpaOnnxTTS } from "./sherpa-tts.js";
 import { SherpaOfflineRecognizerEngine } from "./sherpa-offline-recognizer.js";
-import { SherpaOnnxParakeetSTT } from "./sherpa-parakeet-stt.js";
+import { SherpaOnnxStt } from "./sherpa-stt.js";
+import { SherpaSttDecoder } from "./sherpa-stt-decoder.js";
+import { SherpaVadSegmenter } from "./sherpa-vad-segmenter.js";
+import { resolveSherpaSttModel } from "./stt-model.js";
+import { ensureSileroVadModel } from "./silero-vad-provider.js";
 
 const RUN = process.env.PASEO_SPEECH_E2E_DOWNLOAD === "1";
 const downloadTest = RUN ? test : test.skip;
@@ -204,26 +208,77 @@ downloadTest(
       expect(combined.byteLength).toBeGreaterThan(2000);
 
       const sttModelDir = getSherpaOnnxModelDir(modelsDir, "parakeet-tdt-0.6b-v2-int8");
+      const sttModel = resolveSherpaSttModel({
+        modelId: "parakeet-tdt-0.6b-v2-int8",
+        modelDir: sttModelDir,
+      });
       const engine = new SherpaOfflineRecognizerEngine(
-        {
-          model: {
-            kind: "nemo_transducer",
-            encoder: `${sttModelDir}/encoder.int8.onnx`,
-            decoder: `${sttModelDir}/decoder.int8.onnx`,
-            joiner: `${sttModelDir}/joiner.int8.onnx`,
-            tokens: `${sttModelDir}/tokens.txt`,
-          },
-          numThreads: 2,
-          debug: 0,
-        },
+        { model: sttModel.engine, numThreads: 2, debug: 0 },
         logger,
       );
-      const stt = new SherpaOnnxParakeetSTT({ engine }, logger);
+      const stt = new SherpaOnnxStt({ decoder: new SherpaSttDecoder({ engine }, logger) }, logger);
       const rt = await stt.transcribeAudio(combined, toAudioPcmFormat(ttsFormat));
       engine.free();
       expect(wordSimilarity(rt.text, ttsText)).toBeGreaterThan(0.25);
     } finally {
       await ctx.cleanup();
+    }
+  },
+  15 * 60_000,
+);
+
+downloadTest(
+  "transcribes Chinese speech with SenseVoice and gates non-speech audio",
+  async () => {
+    const logger = pino({ level: "silent" });
+    const modelsDir = mkdtempSync(path.join(tmpdir(), "paseo-sense-voice-"));
+
+    try {
+      await ensureSherpaOnnxModels({
+        modelsDir,
+        modelIds: ["sense-voice-zh-en-ja-ko-yue-int8"],
+        logger,
+      });
+
+      const modelDir = getSherpaOnnxModelDir(modelsDir, "sense-voice-zh-en-ja-ko-yue-int8");
+      const model = resolveSherpaSttModel({
+        modelId: "sense-voice-zh-en-ja-ko-yue-int8",
+        modelDir,
+      });
+      expect(model.usesVad).toBe(true);
+
+      const engine = new SherpaOfflineRecognizerEngine(
+        { model: model.engine, numThreads: 2, debug: 0 },
+        logger,
+      );
+      const decoder = new SherpaSttDecoder(
+        {
+          engine,
+          vad: {
+            segmenter: new SherpaVadSegmenter(
+              { modelPath: await ensureSileroVadModel(modelsDir, logger) },
+              logger,
+            ),
+          },
+        },
+        logger,
+      );
+      const stt = new SherpaOnnxStt({ decoder }, logger);
+
+      try {
+        const speech = await readFile(path.join(modelDir, "test_wavs", "zh.wav"));
+        const transcript = await stt.transcribeAudio(speech, "audio/wav");
+        expect(transcript.text).toContain("开放时间");
+
+        const silence = Buffer.alloc(16000 * 2 * 3);
+        const silentResult = await stt.transcribeAudio(silence, "audio/pcm;rate=16000");
+        expect(silentResult.text).toBe("");
+        expect(silentResult.isLowConfidence).toBe(true);
+      } finally {
+        engine.free();
+      }
+    } finally {
+      rmSync(modelsDir, { recursive: true, force: true });
     }
   },
   15 * 60_000,

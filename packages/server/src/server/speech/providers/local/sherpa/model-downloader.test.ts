@@ -19,6 +19,9 @@ describe("sherpa model downloader", () => {
       "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
     );
     expect(getSherpaOnnxModelDir(modelsDir, "kokoro-en-v0_19")).toContain("kokoro-en-v0_19");
+    expect(getSherpaOnnxModelDir(modelsDir, "sense-voice-zh-en-ja-ko-yue-int8")).toContain(
+      "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    );
   });
 
   test("ensureSherpaOnnxModel succeeds without downloading when files exist", async () => {
