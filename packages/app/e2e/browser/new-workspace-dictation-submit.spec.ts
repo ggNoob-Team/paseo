@@ -10,6 +10,7 @@ import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
 type WebSocketMessage = string | Buffer;
 
+const PARTIAL_TRANSCRIPT = "Keep this spoken prompt";
 const TRANSCRIPT = "Keep this spoken prompt visible while creating the workspace";
 const CREATE_FAILURE = "Synthetic workspace creation failure";
 
@@ -86,6 +87,7 @@ async function installDictationFailureHarness(page: Page) {
   });
   let failCreate: (() => void) | null = null;
 
+  let sentPartial = false;
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
 
@@ -103,6 +105,13 @@ async function installDictationFailureHarness(page: Page) {
       }
       if (type === "dictation_stream_chunk" && dictationId) {
         const seq = typeof request?.seq === "number" ? request.seq : 0;
+        if (!sentPartial) {
+          sentPartial = true;
+          sendSessionMessage(ws, {
+            type: "dictation_stream_partial",
+            payload: { dictationId, text: PARTIAL_TRANSCRIPT },
+          });
+        }
         sendSessionMessage(ws, {
           type: "dictation_stream_ack",
           payload: { dictationId, ackSeq: seq },
@@ -156,9 +165,12 @@ async function installDictationFailureHarness(page: Page) {
   };
 }
 
-async function dictateAndSend(page: Page, waitForAudio: () => Promise<void>): Promise<void> {
+async function startDictation(page: Page, waitForAudio: () => Promise<void>): Promise<void> {
   await page.getByRole("button", { name: "Start dictation" }).click();
   await waitForAudio();
+}
+
+async function insertTranscriptAndSend(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Insert transcription and send" }).click();
 }
 
@@ -179,7 +191,9 @@ test.describe("New Workspace dictation submit", () => {
       });
       await selectWorkspaceIsolation(page, "local");
 
-      await dictateAndSend(page, harness.waitForAudio);
+      await startDictation(page, harness.waitForAudio);
+      await expect(page.getByText(PARTIAL_TRANSCRIPT, { exact: true })).toBeVisible();
+      await insertTranscriptAndSend(page);
       await harness.waitForCreateRequest();
 
       const composer = page.getByRole("textbox", { name: "Message agent..." });
