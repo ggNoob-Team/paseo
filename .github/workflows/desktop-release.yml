@@ -164,8 +164,12 @@ jobs:
           set -euo pipefail
           if [[ -z "${CSC_LINK:-}" ]]; then
             unset CSC_LINK CSC_KEY_PASSWORD
+            echo "::warning title=Unsigned macOS build::APPLE_CERTIFICATE is not configured, so signing falls back to ad-hoc and notarization is skipped. macOS blocks such builds until the quarantine flag is cleared."
           fi
           build_args=(-- --publish never --mac --${{ matrix.electron_arch }})
+          if [[ -z "${CSC_LINK:-}" ]]; then
+            build_args+=("-c.mac.notarize=false")
+          fi
           build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
           npm run build:desktop "${build_args[@]}"
