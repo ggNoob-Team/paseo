@@ -541,6 +541,7 @@ function MessageInputOverlay({
   showDictationOverlay,
   showRealtimeOverlay,
   voice,
+  dictationPartialTranscript,
   dictationVolume,
   dictationDuration,
   isDictating,
@@ -564,6 +565,7 @@ function MessageInputOverlay({
       }
     | null
     | undefined;
+  dictationPartialTranscript: string;
   dictationVolume: number;
   dictationDuration: number;
   isDictating: boolean;
@@ -582,6 +584,7 @@ function MessageInputOverlay({
       <DictationOverlay
         volume={dictationVolume}
         duration={dictationDuration}
+        transcript={dictationPartialTranscript}
         isRecording={isDictating}
         isProcessing={isDictationProcessing}
         status={dictationStatus}
@@ -1365,7 +1368,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isRecording: isDictating,
       isRecordingActive: isDictationActive,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
+      partialTranscript: dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1889,6 +1892,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             showDictationOverlay={showDictationOverlay}
             showRealtimeOverlay={showRealtimeOverlay}
             voice={voice}
+            dictationPartialTranscript={dictationPartialTranscript}
             dictationVolume={dictationVolume}
             dictationDuration={dictationDuration}
             isDictating={isDictating}

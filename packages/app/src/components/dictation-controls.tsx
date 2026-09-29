@@ -141,6 +141,7 @@ export function DictationControls({
 export function DictationOverlay({
   volume,
   duration,
+  transcript,
   isRecording,
   isProcessing,
   status,
@@ -150,7 +151,7 @@ export function DictationOverlay({
   onAcceptAndSend,
   onRetry,
   onDiscard,
-}: Omit<DictationControlsProps, "onStart" | "disabled" | "transcript"> & { errorText?: string }) {
+}: Omit<DictationControlsProps, "onStart" | "disabled"> & { errorText?: string }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isFailed = status === "failed";
@@ -182,6 +183,12 @@ export function DictationOverlay({
     [theme.colors.accentForeground],
   );
   const overlayConfirmButtonStyle = overlayRetryButtonStyle;
+  let displayText = transcript?.trim() ?? "";
+  if (isFailed) {
+    displayText = errorText
+      ? t("message.dictation.failed", { error: errorText })
+      : t("message.dictation.failedRetry");
+  }
 
   if (!showActiveState) {
     return null;
@@ -210,11 +217,9 @@ export function DictationOverlay({
           />
           <Text style={overlayTimerTextStyle}>{formatDuration(duration)}</Text>
         </View>
-        {isFailed ? (
+        {displayText.length > 0 ? (
           <Text numberOfLines={2} style={overlayTranscriptTextStyle}>
-            {errorText
-              ? t("message.dictation.failed", { error: errorText })
-              : t("message.dictation.failedRetry")}
+            {displayText}
           </Text>
         ) : null}
       </View>
