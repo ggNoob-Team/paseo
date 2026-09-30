@@ -66,11 +66,17 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          registry=https://npm.pkg.github.com
           while IFS= read -r tarball; do
             npm publish "$tarball" \
               --tag archify \
-              --registry https://npm.pkg.github.com
+              --registry "$registry"
           done < "$RUNNER_TEMP/paseo-npm/publish-manifest.txt"
+          # `start-daemon.sh` installs @archify; plain `npm install -g @ggnoob-team/paseo`
+          # resolves `latest`. Keep both on stable releases; prereleases stay archify-only.
+          if [[ "${{ inputs.version }}" != *-* ]]; then
+            npm dist-tag add "@ggnoob-team/paseo@${{ inputs.version }}" latest --registry "$registry"
+          fi
 
       - name: Verify GitHub Packages publication
         if: inputs.publish == 'true'
