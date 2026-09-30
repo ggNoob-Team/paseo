@@ -1357,6 +1357,10 @@ function DesktopFeatureItem({
   if (feature.type === "select") {
     const FeatureIcon = getAgentFeatureIcon(feature.icon);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
+    const iconOnly = feature.desktopTrigger === "icon";
+    const tooltip = iconOnly
+      ? `${feature.label}: ${selectedOption?.label ?? feature.label}`
+      : getFeatureTooltip(feature);
     return (
       <>
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -1367,15 +1371,16 @@ function DesktopFeatureItem({
               surface="toolbar"
               label={feature.label}
               value={selectedOption?.label ?? feature.label}
+              showToolbarLabel={!iconOnly}
               open={openSelector === featureSelector}
               disabled={disabled}
               onPress={handleSelectPress}
-              accessibilityLabel={getFeatureTooltip(feature)}
+              accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
             />
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
+            <Text style={styles.tooltipText}>{tooltip}</Text>
           </TooltipContent>
         </Tooltip>
         <Combobox
@@ -1788,7 +1793,7 @@ export const AgentControls = memo(function AgentControls({
         onEditAgentProfiles={handleEditAgentProfiles}
         onCreateAgentProfile={profileActions.create}
         onEditAgentProfile={profileActions.edit}
-        thinkingOptions={thinkingOptions.length > 1 ? thinkingOptions : undefined}
+        thinkingOptions={thinkingOptions.length > 0 ? thinkingOptions : undefined}
         selectedThinkingOptionId={modelSelection.selectedThinkingId ?? undefined}
         onSelectThinkingOption={handleSelectThinkingOption}
         features={agent.features}

@@ -436,6 +436,10 @@ export function buildNotesRoute() {
   return "/notes" as const;
 }
 
+export function buildUsageRoute() {
+  return "/usage" as const;
+}
+
 export function buildOpenProjectRoute() {
   return "/open-project" as const;
 }
@@ -500,7 +504,10 @@ export function resolveKnownHostRoute(input: {
 export const SETTINGS_SECTION_SLUGS = [
   "general",
   "appearance",
-  "layout",
+  "sidebar",
+  "chat",
+  "terminal",
+  "browser",
   "editor",
   "shortcuts",
   "integrations",

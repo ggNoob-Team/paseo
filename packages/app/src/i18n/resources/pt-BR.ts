@@ -35,13 +35,14 @@ export const ptBR: TranslationResources = {
     },
   },
   paneFind: {
-    searchFailed:
+    connectionFailure:
       "Não foi possível pesquisar nesta conversa. Verifique a conexão com o host e tente novamente.",
+    historyChangedFailure: "A conversa mudou durante a busca. Busque novamente.",
+    revealFailure: "Não foi possível mostrar esta correspondência. Tente novamente.",
     searching: "Buscando…",
     loading: "Carregando…",
     failed: "Falhou",
     retry: "Tentar novamente",
-    chatPosition: "{{current}} de {{total}} na mensagem",
 
     title: "Buscar",
     placeholder: "Buscar no painel",
@@ -509,7 +510,9 @@ export const ptBR: TranslationResources = {
       recovery: {
         archivedTitle: "Workspace arquivado",
         restoreDescription:
-          "{{workspaceName}} foi arquivado e sua worktree foi removida. Restaure a branch {{branch}} para abri-lo novamente.",
+          "Restaure {{workspaceName}} para voltar aos seus agentes. A worktree usará a branch {{branch}}.",
+        restoreWithoutBranchDescription:
+          "Restaure {{workspaceName}} para voltar aos seus agentes. Uma nova branch partirá da base salva ou da branch padrão do repositório.",
         unarchiveDescription:
           "{{workspaceName}} está arquivado. Desarquive-o para abri-lo novamente.",
         restoreAction: "Restaurar",
@@ -1622,6 +1625,8 @@ export const ptBR: TranslationResources = {
     noFiles: "Nenhum arquivo ou diretório encontrado",
     noCommands: "Nenhum comando encontrado",
     failedToLoad: "Falha ao carregar",
+    chooseProjectForCommands: "Escolha um projeto para ver os comandos",
+    chooseModelForCommands: "Selecione um modelo para ver os comandos",
   },
   loadOlderHistory: {
     failed: "Não foi possível carregar o histórico mais antigo",
@@ -1713,6 +1718,10 @@ export const ptBR: TranslationResources = {
     },
   },
   pairing: {
+    hostPassword: {
+      title: "Senha de {{host}}",
+      label: "Senha do host",
+    },
     connectionMethods: {
       title: "Adicionar conexão",
       direct: {
@@ -2051,8 +2060,11 @@ export const ptBR: TranslationResources = {
     groupInfo: "Sobre {{title}}",
     sections: {
       general: "Geral",
+      chat: "Chat",
       appearance: "Aparência",
-      layout: en.settings.sections.layout,
+      sidebar: "Barra lateral",
+      terminal: "Terminal",
+      browser: "Navegador",
       editor: "Editor",
       shortcuts: "Atalhos",
       integrations: "Integrações",
@@ -2111,6 +2123,7 @@ export const ptBR: TranslationResources = {
     },
     general: {
       title: "Geral",
+      sending: "Envio",
       browserData: {
         title: "Dados do navegador",
         siteData: "Cookies e dados de sites",
@@ -2139,8 +2152,6 @@ export const ptBR: TranslationResources = {
         },
       },
       serviceUrls: {
-        label: "URLs de serviço",
-        description: "Onde abrir URLs de scripts em execução",
         options: {
           ask: "Perguntar",
           inApp: "No Paseo",
@@ -2160,7 +2171,6 @@ export const ptBR: TranslationResources = {
       toolCallDetail: {
         label: "Exibição de chamadas de ferramentas",
         description: "Como as chamadas de ferramentas aparecem na linha do tempo",
-        accessibilityLabel: "Selecionar exibição de chamadas de ferramentas ({{value}})",
         options: {
           overview: "Resumo",
           detailed: "Detalhes completos",
@@ -2288,6 +2298,14 @@ export const ptBR: TranslationResources = {
         codeSizeHint: "Usado em código, diffs e saída do terminal",
         codeSizeAccessibility: "Tamanho da fonte de código",
       },
+      layout: {
+        title: "Layout",
+        contentWidth: "Largura do conteúdo",
+        contentWidthHint: "Largura máxima do chat e dos arquivos Markdown em telas largas",
+        contentWidthAccessibility: "Largura do conteúdo em pixels",
+        reset: "Redefinir",
+        resetAccessibility: "Redefinir a largura do conteúdo",
+      },
       syntax: {
         title: "Sintaxe",
         highlightTheme: "Tema de destaque",
@@ -2399,6 +2417,9 @@ export const ptBR: TranslationResources = {
       },
     },
     host: {
+      password: {
+        guidance: "Remova este host e adicione-o novamente com a senha que este daemon pede.",
+      },
       appearance: {
         title: "Aparência",
         name: {

@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useNoteUpdatesSubscription, useProjectNotesList } from "@/notes/use-notes";
 import type { HostProjectNoteSummary } from "@/notes/notes-model";
 import type { Theme } from "@/styles/theme";

@@ -9,7 +9,7 @@ import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useToast } from "@/contexts/toast-context";
 import { resolveNoteGenerationState } from "@/notes/notes-model";
 import { useProjectNote, type ProjectNoteResult } from "@/notes/use-notes";

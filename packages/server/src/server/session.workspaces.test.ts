@@ -3627,7 +3627,9 @@ test("subdirectory agents contribute to their owning workspace descriptor", asyn
   expect(result.entries[0]).toMatchObject({
     id: "ws-repo-subdir",
     status: "running",
-    activityAt: null,
+    // Fork: entries carry workspace recency, so the subdir agent's updatedAt is
+    // the workspace's activityAt (upstream leaves it null here).
+    activityAt: "2026-03-01T12:03:00.000Z",
   });
 });
 
