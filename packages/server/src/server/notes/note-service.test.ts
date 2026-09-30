@@ -17,6 +17,18 @@ afterEach(async () => {
 async function createService(options?: {
   generate?: (options: unknown) => Promise<{ body: string }>;
   providers?: Array<{ provider: string; model?: string }>;
+  /** What the provider snapshot reports, for the no-preferred-model fallback. */
+  snapshotProviders?: Array<{
+    provider: string;
+    enabled: boolean;
+    models: Array<{
+      id: string;
+      label: string;
+      provider: string;
+      isSelectable?: boolean;
+      isDefault?: boolean;
+    }>;
+  }>;
   onNoteUpdated?: (note: NoteProjectPayload) => void;
 }) {
   const paseoHome = await mkdtemp(path.join(tmpdir(), "paseo-notes-service-"));
@@ -56,7 +68,9 @@ async function createService(options?: {
           : null,
     },
     agentManager: {} as never,
-    providerSnapshotManager: { listProviders: async () => [] } as never,
+    providerSnapshotManager: {
+      listProviders: async () => options?.snapshotProviders ?? [],
+    } as never,
     readDaemonConfig: () => null,
     logger: createTestLogger(),
     onNoteUpdated: options?.onNoteUpdated,
@@ -169,6 +183,36 @@ describe("NoteService", () => {
     expect(summaries[0]?.entryCount).toBe(1);
     expect(summaries[0]?.pendingEntryCount).toBe(0);
     expect(summaries[0]?.hasBody).toBe(true);
+  });
+});
+
+describe("NoteService provider fallback", () => {
+  test("organizes with an enabled provider when no fast model is configured", async () => {
+    const service = await createService({
+      providers: [],
+      snapshotProviders: [
+        {
+          provider: "opencode",
+          enabled: false,
+          models: [{ id: "ignored", label: "Off", provider: "opencode" }],
+        },
+        {
+          provider: "opencode",
+          enabled: true,
+          models: [
+            { id: "other", label: "Other", provider: "opencode" },
+            { id: "deepseek-v4", label: "DeepSeek", provider: "opencode", isDefault: true },
+          ],
+        },
+      ],
+    });
+
+    await service.appendEntry({ projectId: "prj_a", text: "captured" });
+    await service.waitForGeneration("prj_a");
+
+    const note = await service.get("prj_a");
+    expect(note?.lastError).toBeNull();
+    expect(note?.entries[0]?.organizedAt).not.toBeNull();
   });
 });
 

@@ -14,6 +14,7 @@ import {
   resolveStructuredGenerationProviders,
   type StructuredGenerationDaemonConfig,
 } from "../agent/structured-generation-providers.js";
+import type { StructuredGenerationProvider } from "../agent/agent-response-loop.js";
 import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager.js";
 import { resolveProjectDisplayName, type ProjectRegistry } from "../workspace-registry.js";
 import { NoteStore, toNoteProjectPayload, type PersistedNote } from "./note-store.js";
@@ -39,6 +40,9 @@ export interface NoteServiceOptions {
 const NoteBodySchema = z.object({
   body: z.string(),
 });
+
+/** Backoff for retrying a failed organizer run; the last value repeats. */
+const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000] as const;
 
 interface NoteGenerationInput {
   projectName: string;
@@ -94,6 +98,9 @@ export class NoteService {
   private readonly generateStructuredResponse: typeof generateStructuredAgentResponseWithFallback;
   private readonly generationByProjectId = new Map<string, Promise<void>>();
   private readonly queuedProjectIds = new Set<string>();
+  /** Attempt count per project, for the retry backoff after a failed run. */
+  private readonly failedAttemptsByProjectId = new Map<string, number>();
+  private readonly retryTimersByProjectId = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly paseoHome: string;
 
   constructor(options: NoteServiceOptions) {
@@ -166,6 +173,11 @@ export class NoteService {
   }
 
   private scheduleGeneration(projectId: string): void {
+    const retryTimer = this.retryTimersByProjectId.get(projectId);
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      this.retryTimersByProjectId.delete(projectId);
+    }
     if (this.generationByProjectId.has(projectId)) {
       this.queuedProjectIds.add(projectId);
       return;
@@ -210,25 +222,52 @@ export class NoteService {
         organizedEntryIds: pending.map((entry) => entry.entryId),
         generatedAt: new Date().toISOString(),
       });
+      this.failedAttemptsByProjectId.delete(projectId);
       if (updated) {
         this.publish(updated);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Note generation failed";
-      const updated = await this.store.recordGenerationError({ projectId, error: message });
-      if (updated) {
-        this.publish(updated);
+      // Only the first failure is worth persisting: a retry that fails the same
+      // way is not news, and rewriting it would keep bumping `updatedAt`.
+      if (note.lastError !== message) {
+        const updated = await this.store.recordGenerationError({ projectId, error: message });
+        if (updated) {
+          this.publish(updated);
+        }
       }
       this.logger.warn({ err: error, projectId }, "Note generation failed");
+      this.scheduleRetry(projectId);
     }
   }
 
+  /**
+   * A note that failed once must not wait for the user to append again: the
+   * usual cause is a model that was not available yet, and that changes on its
+   * own. Retries back off so a permanently misconfigured daemon is quiet.
+   */
+  private scheduleRetry(projectId: string): void {
+    if (this.retryTimersByProjectId.has(projectId)) return;
+    const attempt = (this.failedAttemptsByProjectId.get(projectId) ?? 0) + 1;
+    this.failedAttemptsByProjectId.set(projectId, attempt);
+    const delayMs = RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)] ?? 60_000;
+    const timer = setTimeout(() => {
+      this.retryTimersByProjectId.delete(projectId);
+      this.scheduleGeneration(projectId);
+    }, delayMs);
+    // Never hold the process open for a retry.
+    timer.unref?.();
+    this.retryTimersByProjectId.set(projectId, timer);
+  }
+
   private async generateBody(input: NoteGenerationInput & { cwd: string }): Promise<string> {
-    const providers = await resolveStructuredGenerationProviders({
+    const preferred = await resolveStructuredGenerationProviders({
       cwd: input.cwd,
       providerSnapshotManager: this.providerSnapshotManager,
       daemonConfig: this.readDaemonConfig() ?? null,
     });
+    const providers =
+      preferred.length > 0 ? preferred : await this.resolveFallbackProviders(input.cwd);
     if (providers.length === 0) {
       throw new Error("No provider is available to organize notes");
     }
@@ -250,6 +289,31 @@ export class NoteService {
     };
     const result = await this.generateStructuredResponse(options);
     return result.body;
+  }
+
+  /**
+   * The metadata-generation list only knows a few fast models (`haiku` and
+   * friends). A host running one of the other providers — which is the normal
+   * case for a custom setup — would otherwise never organize a note at all, so
+   * notes fall back to the first enabled provider that has a model.
+   */
+  private async resolveFallbackProviders(cwd: string): Promise<StructuredGenerationProvider[]> {
+    const entries = await this.providerSnapshotManager.listProviders({ cwd, wait: true });
+    for (const entry of entries) {
+      if (!entry.enabled) continue;
+      const selectable =
+        entry.models?.filter((candidate) => candidate.isSelectable !== false) ?? [];
+      const model = selectable.find((candidate) => candidate.isDefault) ?? selectable[0];
+      if (!model) continue;
+      return [
+        {
+          provider: entry.provider,
+          model: model.id,
+          thinkingOptionId: model.defaultThinkingOptionId,
+        },
+      ];
+    }
+    return [];
   }
 
   private publish(note: PersistedNote): void {
