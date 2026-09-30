@@ -97,6 +97,19 @@ function HostUpgradeNotices({ labels }: { labels: readonly string[] }): ReactEle
   );
 }
 
+/**
+ * One suffix for the row's meta line: a failed run is the most important thing
+ * to say, then a run that is still queued, then nothing.
+ */
+function resolveRowStatusLabel(
+  row: HostProjectNoteSummary,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (row.lastError !== null) return ` · ${t("notes.failedShort")}`;
+  if (row.pendingEntryCount > 0) return ` · ${t("notes.pending")}`;
+  return "";
+}
+
 function noteSummaryKey(row: HostProjectNoteSummary): string {
   return `${row.serverId}:${row.projectId}`;
 }
@@ -108,7 +121,7 @@ function noteRowStyle({ hovered, pressed }: PressableStateCallbackType): StylePr
 function NoteSummaryRow({ row }: { row: HostProjectNoteSummary }): ReactElement {
   const { t } = useTranslation();
   const timeLabel = useCompactTimeAgo(new Date(row.updatedAt));
-  const pendingLabel = row.pendingEntryCount > 0 ? ` · ${t("notes.pending")}` : "";
+  const statusLabel = resolveRowStatusLabel(row, t);
 
   const handlePress = useCallback(() => {
     router.push({
@@ -130,7 +143,7 @@ function NoteSummaryRow({ row }: { row: HostProjectNoteSummary }): ReactElement 
         </Text>
         <Text numberOfLines={1} style={styles.rowMeta}>
           {row.hostLabel} · {t("notes.entryCount", { count: row.entryCount })}
-          {pendingLabel}
+          {statusLabel}
         </Text>
       </View>
       <Text style={styles.time}>{timeLabel}</Text>

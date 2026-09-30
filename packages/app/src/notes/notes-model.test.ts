@@ -68,7 +68,7 @@ describe("resolveNoteGenerationState", () => {
     expect(countPendingNoteEntries(note({ entries: [entry] }))).toBe(1);
   });
 
-  test("reports a failure only once nothing is left to organize", () => {
+  test("reports a failure even while entries are still pending", () => {
     expect(resolveNoteGenerationState(note({ lastError: "no provider" }))).toBe("failed");
     expect(
       resolveNoteGenerationState(
@@ -86,7 +86,7 @@ describe("resolveNoteGenerationState", () => {
           ],
         }),
       ),
-    ).toBe("organizing");
+    ).toBe("failed");
   });
 
   test("is idle for a clean note", () => {

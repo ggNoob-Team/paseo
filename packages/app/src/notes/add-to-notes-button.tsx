@@ -11,17 +11,20 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 const hoveredColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 /**
- * "Add to notes" for one block of chat content. Renders nothing when the
- * surrounding chat has no notes context (a host without the capability, or a
- * message rendered outside an agent), which keeps every caller a plain <... />
- * with no capability check of its own.
+ * "Add to notes" for one block of chat content. Markdown content opens the
+ * block picker; plain content (a code fence) goes straight to the editor.
+ *
+ * Renders nothing outside an agent chat, which keeps every caller a plain
+ * <... /> with no capability check of its own.
  */
 export const AddToNotesButton = memo(function AddToNotesButton({
   getContent,
+  contentKind = "markdown",
   containerStyle,
   accessibilityLabel,
 }: {
   getContent: () => string;
+  contentKind?: "markdown" | "text";
   containerStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }): ReactElement | null {
@@ -31,9 +34,10 @@ export const AddToNotesButton = memo(function AddToNotesButton({
   const handlePress = useCallback(() => {
     if (!capture) return;
     const content = getContent();
-    if (!content.trim()) return;
-    capture.addText(content);
-  }, [capture, getContent]);
+    if (content.trim().length === 0) return;
+    if (contentKind === "text") capture.addText(content);
+    else capture.addMarkdown(content);
+  }, [capture, contentKind, getContent]);
 
   if (!capture) return null;
 

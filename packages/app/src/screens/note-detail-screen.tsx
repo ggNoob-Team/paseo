@@ -168,7 +168,14 @@ function NoteStatusLine({
   return (
     <View style={styles.statusRow}>
       <ThemedNotebookPen size={16} uniProps={mutedColorMapping} />
-      <Text style={styles.statusText}>{label}</Text>
+      <View style={styles.statusTextGroup}>
+        <Text style={styles.statusText}>{label}</Text>
+        {state === "failed" && lastError ? (
+          <Text style={styles.statusDetail} testID="note-status-detail">
+            {lastError}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -297,10 +304,20 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  statusTextGroup: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[0.5],
+  },
   statusText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     flexShrink: 1,
+  },
+  statusDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    opacity: 0.8,
   },
   emptyBody: {
     color: theme.colors.foregroundMuted,

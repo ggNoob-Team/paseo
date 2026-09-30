@@ -35,14 +35,15 @@ export function countPendingNoteEntries(note: NoteProjectPayload | null | undefi
 export type NoteGenerationState = "idle" | "organizing" | "failed";
 
 /**
- * A note is "organizing" while any entry has not been folded into the body yet.
- * `lastError` only owns the state once there is nothing left to fold in: an
- * error recorded by an older run must not mask work that is still queued.
+ * A recorded failure wins over "still organizing". Entries stay pending after a
+ * failed run — that is what makes them retryable — so reading only the pending
+ * count would show an endless spinner instead of saying what went wrong.
  */
 export function resolveNoteGenerationState(
   note: NoteProjectPayload | null | undefined,
 ): NoteGenerationState {
   if (!note) return "idle";
+  if (note.lastError) return "failed";
   if (countPendingNoteEntries(note) > 0) return "organizing";
-  return note.lastError ? "failed" : "idle";
+  return "idle";
 }
