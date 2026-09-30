@@ -96,6 +96,10 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
+import {
+  useSidebarScrollRestore,
+  type SidebarScrollView,
+} from "@/components/sidebar/use-sidebar-scroll-restore";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -1922,6 +1926,21 @@ export function SidebarWorkspaceList({
   const hasActiveLabelFilter = useSidebarViewStore((state) =>
     hasActiveSidebarLabelFilter(state.labelFilter),
   );
+  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
+  const projectFilters = useSidebarViewStore((state) => state.projectFilters);
+  const labelFilter = useSidebarViewStore((state) => state.labelFilter);
+  // Filtering or regrouping replaces what the list is showing, so the previous
+  // scroll offset must not survive into the new list.
+  const scrollScopeKey = useMemo(
+    () =>
+      [
+        groupMode,
+        [...hostFilters].sort().join(","),
+        [...projectFilters].sort().join(","),
+        [...labelFilter.labels].sort().join(","),
+      ].join("|"),
+    [groupMode, hostFilters, labelFilter, projectFilters],
+  );
   const handlePinnedWorkspaceReorder = useCallback(
     (reorderedWorkspaces: SidebarWorkspacePlacement[]) => {
       const reorderedWorkspaceKeys = reorderedWorkspaces.map((workspace) => workspace.workspaceKey);
@@ -1977,6 +1996,7 @@ export function SidebarWorkspaceList({
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
         listHeaderComponent={listHeaderComponent}
         sidebarFilterEmpty={sidebarFilterEmpty}
+        scrollScopeKey={scrollScopeKey}
         parentGestureRef={parentGestureRef}
         dragGestureHostActive={dragGestureHostActive}
       />
@@ -1996,6 +2016,7 @@ export function SidebarWorkspaceList({
         listHeaderComponent={listHeaderComponent}
         sidebarFilterEmpty={sidebarFilterEmpty}
         hasActiveProjectFilter={hasActiveProjectFilter}
+        scrollScopeKey={scrollScopeKey}
         parentGestureRef={parentGestureRef}
         dragGestureHostActive={dragGestureHostActive}
         pathname={pathname}
@@ -2029,6 +2050,7 @@ function SidebarGroupedModeList({
   onPinnedWorkspaceReorder,
   listHeaderComponent,
   sidebarFilterEmpty,
+  scrollScopeKey,
   parentGestureRef,
   dragGestureHostActive,
 }: {
@@ -2044,6 +2066,8 @@ function SidebarGroupedModeList({
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
   listHeaderComponent?: ReactElement | null;
   sidebarFilterEmpty: boolean;
+  /** Grouping mode plus filters: a different scope is a different list, so no offset carries over. */
+  scrollScopeKey: string;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   dragGestureHostActive?: boolean;
 }) {
@@ -2071,6 +2095,7 @@ function SidebarGroupedModeList({
       onPinnedWorkspaceReorder={onPinnedWorkspaceReorder}
       listHeaderComponent={listHeaderComponent}
       sidebarFilterEmpty={sidebarFilterEmpty}
+      scrollScopeKey={scrollScopeKey}
       parentGestureRef={parentGestureRef}
       dragGestureHostActive={dragGestureHostActive}
     />
@@ -2092,6 +2117,7 @@ function ProjectModeList({
   listHeaderComponent,
   sidebarFilterEmpty,
   hasActiveProjectFilter,
+  scrollScopeKey,
   parentGestureRef,
   dragGestureHostActive,
   pathname,
@@ -2111,6 +2137,8 @@ function ProjectModeList({
 > & {
   /** Swaps the list body for the label filter's empty state. Never the header above it. */
   sidebarFilterEmpty: boolean;
+  /** Grouping mode plus filters: a different scope is a different list, so no offset carries over. */
+  scrollScopeKey: string;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   pathname: string;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
@@ -2120,6 +2148,7 @@ function ProjectModeList({
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
 }) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
+  const scrollRestore = useSidebarScrollRestore<SidebarScrollView>(scrollScopeKey);
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
   const creatingWorkspaceTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
@@ -2468,19 +2497,29 @@ function ProjectModeList({
       {platformIsNative ? (
         <NestableScrollContainer
           {...nativeScrollGestureProps}
+          ref={scrollRestore.scrollRef}
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           testID="sidebar-project-workspace-list-scroll"
+          onScroll={scrollRestore.onScroll}
+          onContentSizeChange={scrollRestore.onContentSizeChange}
+          onLayout={scrollRestore.onLayout}
+          scrollEventThrottle={scrollRestore.scrollEventThrottle}
         >
           {content}
         </NestableScrollContainer>
       ) : (
         <ScrollView
+          ref={scrollRestore.scrollRef}
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           testID="sidebar-project-workspace-list-scroll"
+          onScroll={scrollRestore.onScroll}
+          onContentSizeChange={scrollRestore.onContentSizeChange}
+          onLayout={scrollRestore.onLayout}
+          scrollEventThrottle={scrollRestore.scrollEventThrottle}
         >
           {content}
         </ScrollView>

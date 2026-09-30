@@ -752,6 +752,15 @@ export type WorkspaceLabelDeleteInspectPayload = Extract<
   SessionOutboundMessage,
   { type: "workspace.label.delete.inspect.response" }
 >["payload"];
+export type NoteProjectPayload = Extract<
+  SessionOutboundMessage,
+  { type: "notes.project.get.response" }
+>["payload"]["note"];
+export type NoteProjectSummaryPayload = Extract<
+  SessionOutboundMessage,
+  { type: "notes.project.list.response" }
+>["payload"]["projects"][number];
+export type NoteEntryPayload = NonNullable<NoteProjectPayload>["entries"][number];
 export type ProjectListPayload = Extract<
   SessionOutboundMessage,
   { type: "project.list.response" }
@@ -2415,6 +2424,83 @@ export class DaemonClient {
         ...(options.sync ? { sync: options.sync } : {}),
       },
     });
+  }
+
+  listProjectNotes(options: { requestId?: string } = {}): Promise<NoteProjectSummaryPayload[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"notes.project.list.response">({
+      requestId: options.requestId,
+      message: { type: "notes.project.list.request" },
+    }).then((payload) => payload.projects);
+  }
+
+  getProjectNote(options: {
+    projectId: string;
+    requestId?: string;
+  }): Promise<NoteProjectPayload | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<"notes.project.get.response">({
+      requestId: options.requestId,
+      message: { type: "notes.project.get.request", projectId: options.projectId },
+    }).then((payload) => payload.note);
+  }
+
+  appendNoteEntry(options: {
+    projectId: string;
+    text: string;
+    comment?: string | null;
+    source?: { workspaceId: string | null; agentId: string | null };
+    requestId?: string;
+  }): Promise<NoteProjectPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"notes.entry.append.response">({
+      requestId: options.requestId,
+      message: {
+        type: "notes.entry.append.request",
+        projectId: options.projectId,
+        text: options.text,
+        ...(options.comment === undefined ? {} : { comment: options.comment }),
+        ...(options.source === undefined ? {} : { source: options.source }),
+      },
+    }).then((payload) => payload.note);
+  }
+
+  updateProjectNote(options: {
+    projectId: string;
+    body: string;
+    requestId?: string;
+  }): Promise<NoteProjectPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"notes.project.update.response">({
+      requestId: options.requestId,
+      message: {
+        type: "notes.project.update.request",
+        projectId: options.projectId,
+        body: options.body,
+      },
+    }).then((payload) => payload.note);
+  }
+
+  deleteNoteEntry(options: {
+    projectId: string;
+    entryId: string;
+    requestId?: string;
+  }): Promise<NoteProjectPayload | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<"notes.entry.delete.response">({
+      requestId: options.requestId,
+      message: {
+        type: "notes.entry.delete.request",
+        projectId: options.projectId,
+        entryId: options.entryId,
+      },
+    }).then((payload) => payload.note);
+  }
+
+  /**
+   * Note bodies change in the background, after the append that caused them has
+   * already been answered. Subscribing to the event is what lets an open notes
+   * screen show the organized body without polling.
+   */
+  observeProjectNotes(options?: {
+    signal?: AbortSignal;
+  }): OwnedSubscription<CorrelatedResponsePayload<"session.events.set_subscription.response">> {
+    return this.observeEvents(["notes.project.updated"], options);
   }
 
   observeWorkspaceLabels(options?: {

@@ -1,5 +1,5 @@
 import { router, usePathname } from "expo-router";
-import { CalendarClock, History, Plus, Search } from "lucide-react-native";
+import { CalendarClock, Clock3, History, NotebookPen, Plus, Search } from "lucide-react-native";
 import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -19,6 +19,8 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { useWorkspace } from "@/stores/session-store-hooks";
 import {
   buildNewWorkspaceRoute,
+  buildNotesRoute,
+  buildRecentRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
 } from "@/utils/host-routes";
@@ -170,9 +172,51 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
   );
 }
 
+function SidebarRecentRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    router.push(buildRecentRoute());
+  }, [onBeforeNavigate]);
+
+  return (
+    <SidebarHeaderRow
+      icon={Clock3}
+      label={t(builtinSidebarNavLabelKey("recent"))}
+      onPress={handlePress}
+      isActive={pathname.includes("/recent")}
+      testID="sidebar-recent"
+      variant="compact"
+    />
+  );
+}
+
+function SidebarNotesRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    router.push(buildNotesRoute());
+  }, [onBeforeNavigate]);
+
+  return (
+    <SidebarHeaderRow
+      icon={NotebookPen}
+      label={t(builtinSidebarNavLabelKey("notes"))}
+      onPress={handlePress}
+      isActive={pathname.includes("/notes")}
+      testID="sidebar-notes"
+      variant="compact"
+    />
+  );
+}
+
 const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps>> = {
   "new-workspace": SidebarNewWorkspaceRow,
   history: SidebarHistoryRow,
   search: SidebarSearchRow,
   schedules: SidebarSchedulesRow,
+  recent: SidebarRecentRow,
+  notes: SidebarNotesRow,
 };

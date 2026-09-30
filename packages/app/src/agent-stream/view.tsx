@@ -87,6 +87,7 @@ import {
 } from "./bottom-anchor-controller";
 import { createAssistantImageOccurrenceKey } from "@/assistant-image/acquisition-cache";
 import { AssistantSelectionCopySurface } from "@/assistant-selection-copy/surface";
+import { NotesCaptureProvider } from "@/notes/capture-context";
 import {
   AssistantFileLinkResolverProvider,
   normalizeInlinePathTarget,
@@ -1102,57 +1103,95 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         visibleItemIds={visibleHistoryItemIds}
       >
         <ToolCallSheetProvider>
-          <AssistantSelectionCopySurface style={stylesheet.container}>
-            <MessageOuterSpacingProvider disableOuterSpacing>
-              {streamRenderStrategy.render({
-                agentId,
-                segments: renderModel.segments,
-                historyRowRevision,
-                liveHeadRowRevision: expandedToolCallGroupIds,
-                boundary,
-                renderers,
-                listEmptyComponent,
-                viewportRef,
-                routeBottomAnchorRequest,
-                isAuthoritativeHistoryReady,
-                onNearBottomChange: setIsNearBottom,
-                onReadingPositionChange: handleReadingPositionChange,
-                onNearHistoryStart: loadOlder,
-                isLoadingOlderHistory: isLoadingOlder,
-                hasOlderHistory: hasOlder,
-                olderHistoryProgressKey: progressKey,
-                scrollEnabled: streamScrollEnabled,
-                listStyle: stylesheet.list,
-                baseListContentContainerStyle: stylesheet.listContentContainer,
-                forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
-              })}
-            </MessageOuterSpacingProvider>
-            <ChatOutlineRail
-              prompts={chatOutline.prompts}
-              activePrompt={chatOutline.activePrompt}
-              onJumpToPrompt={chatOutline.jumpToPrompt}
-            />
-            {(!isNearBottom || isTimelineDetached) && (
-              <View style={scrollToBottomContainerStyle} pointerEvents="box-none">
-                <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
-                  <Pressable
-                    style={stylesheet.scrollToBottomButton}
-                    onPress={scrollToBottom}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("agentStream.scrollToBottom")}
-                    testID="scroll-to-bottom-button"
-                  >
-                    <ChevronDown size={24} color={stylesheet.scrollToBottomIcon.color} />
-                  </Pressable>
-                </Animated.View>
-              </View>
-            )}
-          </AssistantSelectionCopySurface>
+          <NotesCaptureProvider
+            serverId={resolvedServerId}
+            workspaceId={context.workspaceId}
+            agentId={agentId}
+          >
+            <AssistantSelectionCopySurface style={stylesheet.container}>
+              <MessageOuterSpacingProvider disableOuterSpacing>
+                {streamRenderStrategy.render({
+                  agentId,
+                  segments: renderModel.segments,
+                  historyRowRevision,
+                  liveHeadRowRevision: expandedToolCallGroupIds,
+                  boundary,
+                  renderers,
+                  listEmptyComponent,
+                  viewportRef,
+                  routeBottomAnchorRequest,
+                  isAuthoritativeHistoryReady,
+                  onNearBottomChange: setIsNearBottom,
+                  onReadingPositionChange: handleReadingPositionChange,
+                  onNearHistoryStart: loadOlder,
+                  isLoadingOlderHistory: isLoadingOlder,
+                  hasOlderHistory: hasOlder,
+                  olderHistoryProgressKey: progressKey,
+                  scrollEnabled: streamScrollEnabled,
+                  listStyle: stylesheet.list,
+                  baseListContentContainerStyle: stylesheet.listContentContainer,
+                  forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+                })}
+              </MessageOuterSpacingProvider>
+              <ChatOutlineRail
+                prompts={chatOutline.prompts}
+                activePrompt={chatOutline.activePrompt}
+                onJumpToPrompt={chatOutline.jumpToPrompt}
+              />
+              {(!isNearBottom || isTimelineDetached) && (
+                <ScrollToBottomIndicator
+                  containerStyle={scrollToBottomContainerStyle}
+                  buttonStyle={stylesheet.scrollToBottomButton}
+                  iconColor={stylesheet.scrollToBottomIcon.color}
+                  entering={scrollIndicatorFadeIn}
+                  exiting={scrollIndicatorFadeOut}
+                  onPress={scrollToBottom}
+                />
+              )}
+            </AssistantSelectionCopySurface>
+          </NotesCaptureProvider>
         </ToolCallSheetProvider>
       </ChatFind>
     );
   },
 );
+
+/**
+ * The floating "jump to newest" control. Kept as its own component so the
+ * transcript's JSX does not nest past the depth the codebase allows.
+ */
+const ScrollToBottomIndicator = memo(function ScrollToBottomIndicator({
+  containerStyle,
+  buttonStyle,
+  iconColor,
+  entering,
+  exiting,
+  onPress,
+}: {
+  containerStyle: StyleProp<ViewStyle>;
+  buttonStyle: StyleProp<ViewStyle>;
+  iconColor?: string;
+  entering?: ComponentProps<typeof Animated.View>["entering"];
+  exiting?: ComponentProps<typeof Animated.View>["exiting"];
+  onPress: () => void;
+}): ReactNode {
+  const { t } = useTranslation();
+  return (
+    <View style={containerStyle} pointerEvents="box-none">
+      <Animated.View entering={entering} exiting={exiting}>
+        <Pressable
+          style={buttonStyle}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={t("agentStream.scrollToBottom")}
+          testID="scroll-to-bottom-button"
+        >
+          <ChevronDown size={24} color={iconColor} />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+});
 
 function agentCapabilityFlagsEqual(
   left: AgentCapabilityFlags | undefined,

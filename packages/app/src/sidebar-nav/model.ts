@@ -1,6 +1,13 @@
 import type { PluginSidebarGroup } from "@/plugins/sidebar-groups";
 
-export const BUILTIN_SIDEBAR_NAV_IDS = ["new-workspace", "history", "search", "schedules"] as const;
+export const BUILTIN_SIDEBAR_NAV_IDS = [
+  "new-workspace",
+  "history",
+  "search",
+  "schedules",
+  "recent",
+  "notes",
+] as const;
 export type BuiltinSidebarNavId = (typeof BUILTIN_SIDEBAR_NAV_IDS)[number];
 
 /** Persisted shape. Array order is the display order. */
@@ -30,6 +37,8 @@ const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   history: "sidebar.sections.sessions",
   search: "sidebar.sections.search",
   schedules: "sidebar.sections.schedules",
+  recent: "sidebar.sections.recent",
+  notes: "sidebar.sections.notes",
 };
 
 export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
@@ -46,6 +55,8 @@ const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   history: null,
   search: "toggle-command-center",
   schedules: null,
+  recent: null,
+  notes: null,
 };
 
 export function builtinSidebarNavShortcutAction(id: BuiltinSidebarNavId): string | null {

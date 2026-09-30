@@ -3148,6 +3148,7 @@ export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlReque
 // These connection event streams have no directory bootstrap or timeline membership.
 export const SessionEventSubscriptionSchema = z.enum([
   "project.update",
+  "notes.project.updated",
   "providers_snapshot_update",
   "agent_attention_required",
   "agent_permission_request",
@@ -3198,6 +3199,139 @@ export const SubscriptionReleaseResponseSchema = z.object({
   payload: z.object({ requestId: z.string(), subscriptionId: z.string() }),
 });
 
+// ============================================================================
+// Project notes
+// ============================================================================
+
+/**
+ * One project has one note. The body is the organized, editable markdown; the
+ * entries are the raw snippets the user captured, each folded into the body by
+ * a background generation run. Entries keep their own timestamps so the UI can
+ * show what was added and when, independent of what the agent wrote.
+ */
+export const NoteEntrySourcePayloadSchema = z.object({
+  workspaceId: z.string().nullable(),
+  agentId: z.string().nullable(),
+});
+
+export const NoteEntryPayloadSchema = z.object({
+  entryId: z.string(),
+  createdAt: z.string(),
+  text: z.string(),
+  comment: z.string().nullable(),
+  source: NoteEntrySourcePayloadSchema,
+  /** Null until a generation run has folded this entry into the body. */
+  organizedAt: z.string().nullable(),
+});
+
+export const NoteProjectPayloadSchema = z.object({
+  projectId: z.string(),
+  projectName: z.string(),
+  body: z.string(),
+  bodyUpdatedAt: z.string().nullable(),
+  entries: z.array(NoteEntryPayloadSchema),
+  /** Last background generation failure, cleared by the next success. */
+  lastError: z.string().nullable(),
+  updatedAt: z.string(),
+});
+
+export const NoteProjectSummaryPayloadSchema = z.object({
+  projectId: z.string(),
+  projectName: z.string(),
+  entryCount: z.number().int().nonnegative(),
+  pendingEntryCount: z.number().int().nonnegative(),
+  hasBody: z.boolean(),
+  lastError: z.string().nullable(),
+  updatedAt: z.string(),
+});
+
+export const NoteProjectListRequestSchema = z.object({
+  type: z.literal("notes.project.list.request"),
+  requestId: z.string(),
+});
+
+export const NoteProjectListResponseSchema = z.object({
+  type: z.literal("notes.project.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    projects: z.array(NoteProjectSummaryPayloadSchema),
+  }),
+});
+
+export const NoteProjectGetRequestSchema = z.object({
+  type: z.literal("notes.project.get.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+});
+
+export const NoteProjectGetResponseSchema = z.object({
+  type: z.literal("notes.project.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteProjectPayloadSchema.nullable(),
+  }),
+});
+
+export const NoteEntryAppendRequestSchema = z.object({
+  type: z.literal("notes.entry.append.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  text: z.string(),
+  comment: z.string().nullable().optional(),
+  source: NoteEntrySourcePayloadSchema.optional(),
+});
+
+export const NoteEntryAppendResponseSchema = z.object({
+  type: z.literal("notes.entry.append.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteProjectPayloadSchema,
+  }),
+});
+
+export const NoteProjectUpdateRequestSchema = z.object({
+  type: z.literal("notes.project.update.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  body: z.string(),
+});
+
+export const NoteProjectUpdateResponseSchema = z.object({
+  type: z.literal("notes.project.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteProjectPayloadSchema,
+  }),
+});
+
+export const NoteEntryDeleteRequestSchema = z.object({
+  type: z.literal("notes.entry.delete.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  entryId: z.string(),
+});
+
+export const NoteEntryDeleteResponseSchema = z.object({
+  type: z.literal("notes.entry.delete.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteProjectPayloadSchema.nullable(),
+  }),
+});
+
+/** Pushed after a background generation run changes a note. */
+export const NoteProjectUpdatedSchema = z.object({
+  type: z.literal("notes.project.updated"),
+  payload: z.object({
+    note: NoteProjectPayloadSchema,
+  }),
+});
+
+export type NoteEntrySourcePayload = z.infer<typeof NoteEntrySourcePayloadSchema>;
+export type NoteEntryPayload = z.infer<typeof NoteEntryPayloadSchema>;
+export type NoteProjectPayload = z.infer<typeof NoteProjectPayloadSchema>;
+export type NoteProjectSummaryPayload = z.infer<typeof NoteProjectSummaryPayloadSchema>;
+
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterRequestSchema,
   SubscriptionReleaseRequestSchema,
@@ -3229,6 +3363,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceLabelUpdateRequestSchema,
   WorkspaceLabelDeleteRequestSchema,
   WorkspaceLabelDeleteInspectRequestSchema,
+  NoteProjectListRequestSchema,
+  NoteProjectGetRequestSchema,
+  NoteEntryAppendRequestSchema,
+  NoteProjectUpdateRequestSchema,
+  NoteEntryDeleteRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
   SetVoiceModeMessageSchema,
@@ -3589,6 +3728,9 @@ export const ServerInfoStatusPayloadSchema = z
         directorySync: z.boolean().optional(),
         // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.
         workspaceLabels: z.boolean().optional(),
+        // COMPAT(projectNotes): added in v0.9.0, remove gate after 2028-01-15 once
+        // the supported daemon floor understands notes.
+        notes: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.8.0, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
@@ -6843,6 +6985,12 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceLabelUpdateResponseSchema,
   WorkspaceLabelDeleteResponseSchema,
   WorkspaceLabelDeleteInspectResponseSchema,
+  NoteProjectListResponseSchema,
+  NoteProjectGetResponseSchema,
+  NoteEntryAppendResponseSchema,
+  NoteProjectUpdateResponseSchema,
+  NoteEntryDeleteResponseSchema,
+  NoteProjectUpdatedSchema,
   ProjectUpdateMessageSchema,
   ProjectListResponseMessageSchema,
   ScriptStatusUpdateMessageSchema,

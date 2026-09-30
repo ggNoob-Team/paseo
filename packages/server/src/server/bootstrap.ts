@@ -120,6 +120,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
+import { NoteService } from "./notes/note-service.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -1073,6 +1074,21 @@ export async function createPaseoDaemon(
   const emitExternalSessionMessage = (message: SessionOutboundMessage) => {
     wsServer?.broadcast(wrapSessionMessage(message));
   };
+  // Note updates originate in the daemon-scoped organizer, so they fan out through
+  // the sessions rather than through whichever connection triggered the append.
+  const noteService = new NoteService({
+    paseoHome: config.paseoHome,
+    projectRegistry,
+    agentManager,
+    providerSnapshotManager,
+    readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
+    logger,
+    onNoteUpdated: (note) => {
+      for (const session of wsServer?.listSessions() ?? []) {
+        session.emitNoteUpdated(note);
+      }
+    },
+  });
   const workspaceAutoName = new WorkspaceAutoName({
     agentManager,
     workspaceRegistry,
@@ -1720,6 +1736,7 @@ export async function createPaseoDaemon(
               pluginRuntime,
               orchestrationSkills,
               workspaceLabelService,
+              noteService,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

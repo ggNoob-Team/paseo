@@ -244,6 +244,7 @@ interface AgentState {
   pendingPermissionCount?: number;
   requiresAttention?: boolean;
   attentionReason?: AgentSnapshotPayload["attentionReason"];
+  updatedAt?: string;
 }
 
 function createAgent(
@@ -259,7 +260,7 @@ function createAgent(
     thinkingOptionId: null,
     effectiveThinkingOptionId: null,
     createdAt: NOW,
-    updatedAt: NOW,
+    updatedAt: input.updatedAt ?? NOW,
     lastUserMessageAt: null,
     status: input.status,
     capabilities: {
@@ -310,6 +311,31 @@ describe("WorkspaceDirectory", () => {
     });
 
     await expect(workspace.workspaceStatus()).resolves.toBe("running");
+  });
+
+  test("stamps the workspace with its newest agent activity", async () => {
+    const workspace = new WorkspaceStatus();
+
+    workspace.hasRootAgent({
+      id: "older-agent",
+      status: "idle",
+      updatedAt: "2026-03-01T12:00:00.000Z",
+    });
+    workspace.hasRootAgent({
+      id: "newer-agent",
+      status: "idle",
+      updatedAt: "2026-03-02T09:30:00.000Z",
+    });
+
+    await expect(workspace.workspaceDescriptor()).resolves.toMatchObject({
+      activityAt: "2026-03-02T09:30:00.000Z",
+    });
+  });
+
+  test("a workspace nothing has run in reports no activity", async () => {
+    const workspace = new WorkspaceStatus();
+
+    await expect(workspace.workspaceDescriptor()).resolves.toMatchObject({ activityAt: null });
   });
 
   test("same-cwd workspaces attribute agent status only to the owner", async () => {

@@ -287,6 +287,13 @@ export class WorkspaceDirectory {
       activeWorkspaceIds,
     );
 
+    // Workspace recency: the last moment any of the workspace's agents did
+    // something. The sidebar's "Recent" list orders on this, and the bootstrap
+    // dedupe already compares it to decide whether a replayed update is newer.
+    // Agents are the only producer; terminals and scripts carry their own
+    // status buckets without moving recency.
+    const activityAtByWorkspaceId = resolveWorkspaceActivityAt(activeAgents, activeWorkspaceIds);
+
     // Resolve the workspace-level `statusEnteredAt` (see aggregate semantics
     // on `resolveStatusEnteredAt`).
     const nowIso = new Date().toISOString();
@@ -303,6 +310,7 @@ export class WorkspaceDirectory {
         nowIso,
       });
       descriptor.statusEnteredAt = result.statusEnteredAt;
+      descriptor.activityAt = activityAtByWorkspaceId.get(workspaceId) ?? null;
       if (result.recordUpdate) {
         this.bucketHistoryByWorkspaceId.set(workspaceId, result.recordUpdate);
       } else if (result.recordDelete) {
@@ -695,6 +703,36 @@ export class WorkspaceDirectory {
       },
     };
   }
+}
+
+/**
+ * Newest agent `updatedAt` per workspace, as the ISO string the wire carries.
+ * Archiving the last agent drops the workspace back to "no activity" on
+ * purpose: nothing has run there since.
+ */
+function resolveWorkspaceActivityAt(
+  agents: readonly AgentSnapshotPayload[],
+  activeWorkspaceIds: ReadonlySet<string>,
+): Map<string, string> {
+  const latestByWorkspaceId = new Map<string, { ms: number; iso: string }>();
+  for (const agent of agents) {
+    const workspaceId = agent.workspaceId;
+    if (!workspaceId || !activeWorkspaceIds.has(workspaceId)) {
+      continue;
+    }
+    const ms = Date.parse(agent.updatedAt);
+    if (Number.isNaN(ms)) {
+      continue;
+    }
+    const latest = latestByWorkspaceId.get(workspaceId);
+    if (latest && latest.ms >= ms) {
+      continue;
+    }
+    latestByWorkspaceId.set(workspaceId, { ms, iso: agent.updatedAt });
+  }
+  return new Map(
+    Array.from(latestByWorkspaceId, ([workspaceId, latest]) => [workspaceId, latest.iso]),
+  );
 }
 
 function groupAgentsByWorkspaceId(

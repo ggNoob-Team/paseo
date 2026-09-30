@@ -315,7 +315,8 @@ const StoredWorkspaceSchema = z.strictObject({
   labels: z.array(z.string()).optional(),
   status: z.enum(["needs_input", "failed", "running", "attention", "done"]),
   statusEnteredAt: IsoDateSchema.nullable(),
-  activityAt: z.null(),
+  // Optional so entries written before the Recent list existed still parse.
+  activityAt: IsoDateSchema.nullable().optional().default(null),
   archivingAt: z.string().nullable(),
   diffStat: z.strictObject({ additions: z.number(), deletions: z.number() }).nullable(),
   scripts: z.array(WorkspaceScriptSchema),
@@ -687,7 +688,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     labels: workspace.labels,
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
-    activityAt: null,
+    activityAt: workspace.activityAt?.toISOString() ?? null,
     archivingAt: workspace.archivingAt,
     diffStat: workspace.diffStat,
     scripts: workspace.scripts.map((script) => ({

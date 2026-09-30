@@ -38,6 +38,8 @@ export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlaceme
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   workspaceDirectory: string;
   workspaceDirectoryLabel: string;
+  /** Last agent activity in this workspace; null sorts last in the Recent list. */
+  activityAt?: Date | null;
   // Raw user-set title (null when the name is derived from branch/directory).
   // Prefills the rename input and signals whether a reset is available.
   title: string | null;
@@ -171,6 +173,7 @@ export function createSidebarWorkspaceEntry(input: {
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
+    activityAt: input.workspace.activityAt ?? null,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(

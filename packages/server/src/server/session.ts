@@ -34,6 +34,7 @@ import {
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
 } from "./messages.js";
+import type { NoteProjectPayload } from "@getpaseo/protocol/messages";
 import type {
   TerminalManager,
   TerminalWorkspaceContributionChangedEvent,
@@ -94,6 +95,7 @@ import {
   WorkspaceLabelStorageUncertainError,
   type WorkspaceLabelService,
 } from "./workspace-labels/index.js";
+import type { NoteService } from "./notes/note-service.js";
 
 import { AgentManager, AgentRunCancellationError } from "./agent/agent-manager.js";
 import { buildTimelinePromptIndex } from "./agent/timeline-prompt-index.js";
@@ -460,6 +462,7 @@ export interface SessionOptions {
   workspaceRegistry: WorkspaceRegistry;
   directorySync?: DirectorySyncService;
   workspaceLabelService?: WorkspaceLabelService;
+  noteService?: NoteService;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
   checkoutDiffManager: CheckoutDiffManager;
@@ -625,6 +628,10 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
  * It owns all state management, orchestration logic, and message processing.
  * Session has no knowledge of WebSockets - it only emits and receives messages.
  */
+function resolveNoteService(service: NoteService | undefined): NoteService | null {
+  return service ?? null;
+}
+
 function resolveWorkspaceLabelService(
   service: WorkspaceLabelService | undefined,
 ): WorkspaceLabelService | null {
@@ -755,6 +762,7 @@ export class Session {
     WorkspaceUpdatesSubscriptionState
   >();
   private readonly workspaceLabelService: WorkspaceLabelService | null;
+  private readonly noteService: NoteService | null;
   private readonly eventSubscriptions = new Map<
     string,
     { owner: OwnedSubscription; events: Set<SessionEventSubscription>; notifications: boolean }
@@ -813,6 +821,7 @@ export class Session {
       workspaceRegistry,
       directorySync,
       workspaceLabelService,
+      noteService,
       filesystem,
       scheduleService,
       checkoutDiffManager,
@@ -888,6 +897,7 @@ export class Session {
     this.workspaceRegistry = workspaceRegistry;
     this.directorySync = resolveDirectorySync(directorySync);
     this.workspaceLabelService = resolveWorkspaceLabelService(workspaceLabelService);
+    this.noteService = resolveNoteService(noteService);
     this.filesystem = filesystem ?? nodeSessionFileSystem;
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
@@ -2283,6 +2293,7 @@ export class Session {
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceLifecycleMessage(msg) ??
+      this.dispatchNotesMessage(msg) ??
       this.dispatchArchifyMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
@@ -2899,6 +2910,23 @@ export class Session {
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchNotesMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "notes.project.list.request":
+        return this.handleNoteProjectList(msg);
+      case "notes.project.get.request":
+        return this.handleNoteProjectGet(msg);
+      case "notes.entry.append.request":
+        return this.handleNoteEntryAppend(msg);
+      case "notes.project.update.request":
+        return this.handleNoteProjectUpdate(msg);
+      case "notes.entry.delete.request":
+        return this.handleNoteEntryDelete(msg);
       default:
         return undefined;
     }
@@ -6405,6 +6433,122 @@ export class Session {
     }
   }
 
+  /**
+   * Notes are daemon-scoped: the background organizer lives outside any one
+   * session, so it asks each connected session to forward the result. Sessions
+   * that never subscribed to the event (every older client) are skipped rather
+   * than sent a message they cannot parse.
+   */
+  emitNoteUpdated(note: NoteProjectPayload): void {
+    this.emitSubscribedEvent({ type: "notes.project.updated", payload: { note } });
+  }
+
+  private requireNoteService(): NoteService {
+    if (!this.noteService) {
+      throw new SessionRequestError("notes_unavailable", "Notes unavailable");
+    }
+    return this.noteService;
+  }
+
+  private async handleNoteProjectList(
+    request: Extract<SessionInboundMessage, { type: "notes.project.list.request" }>,
+  ): Promise<void> {
+    try {
+      const projects = await this.requireNoteService().list();
+      this.emit({
+        type: "notes.project.list.response",
+        payload: { requestId: request.requestId, projects },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteProjectGet(
+    request: Extract<SessionInboundMessage, { type: "notes.project.get.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().get(request.projectId);
+      this.emit({
+        type: "notes.project.get.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteEntryAppend(
+    request: Extract<SessionInboundMessage, { type: "notes.entry.append.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().appendEntry({
+        projectId: request.projectId,
+        text: request.text,
+        comment: request.comment ?? null,
+        source: request.source ?? { workspaceId: null, agentId: null },
+      });
+      this.emit({
+        type: "notes.entry.append.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteProjectUpdate(
+    request: Extract<SessionInboundMessage, { type: "notes.project.update.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().updateBody({
+        projectId: request.projectId,
+        body: request.body,
+      });
+      if (!note) {
+        throw new SessionRequestError("note_not_found", "Note not found");
+      }
+      this.emit({
+        type: "notes.project.update.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteEntryDelete(
+    request: Extract<SessionInboundMessage, { type: "notes.entry.delete.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().deleteEntry({
+        projectId: request.projectId,
+        entryId: request.entryId,
+      });
+      this.emit({
+        type: "notes.entry.delete.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private emitNoteRequestError(
+    request: { requestId: string; type: SessionInboundMessage["type"] },
+    error: unknown,
+  ): void {
+    this.emit({
+      type: "rpc_error",
+      payload: {
+        requestId: request.requestId,
+        requestType: request.type,
+        code: error instanceof SessionRequestError ? error.code : "notes_failed",
+        error: error instanceof Error ? error.message : "Note operation failed",
+      },
+    });
+  }
+
   private requireWorkspaceLabels(): WorkspaceLabelService {
     if (!this.workspaceLabelService) {
       throw new SessionRequestError("workspace_labels_unavailable", "Workspace labels unavailable");
@@ -8544,6 +8688,7 @@ function isValidGitHubRepoSegment(value: string): boolean {
 function sessionEventCategory(message: SessionOutboundMessage): SessionEventSubscription | null {
   switch (message.type) {
     case "project.update":
+    case "notes.project.updated":
     case "providers_snapshot_update":
     case "agent_attention_required":
     case "agent_permission_request":
@@ -8590,6 +8735,10 @@ function legacyWantsEvent(
       return !capabilities.has(CLIENT_CAPS.explicitEventSubscriptions);
     case "agent.provider_subagents.update":
       return capabilities.has(CLIENT_CAPS.providerSubagents);
+    // Notes are gated on `server_info.features.notes`; a client old enough to be
+    // on the implicit event path never asked for this and cannot parse it.
+    case "notes.project.updated":
+      return false;
     default:
       return true;
   }

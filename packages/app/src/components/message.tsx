@@ -44,6 +44,7 @@ import {
   FileSymlink,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { AddToNotesButton } from "@/notes/add-to-notes-button";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import Animated, {
@@ -569,6 +570,10 @@ export const UserMessage = memo(function UserMessage({
               containerStyle={userMessageStylesheet.copyButton}
               accessibilityLabel={t("message.actions.copyMessage")}
             />
+            <AddToNotesButton
+              getContent={getMessageContent}
+              containerStyle={userMessageStylesheet.copyButton}
+            />
           </View>
         ) : null}
       </View>
@@ -680,6 +685,10 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   return (
     <View style={assistantTurnFooterStylesheet.container}>
       <TurnCopyButton
+        getContent={getContent}
+        containerStyle={assistantTurnFooterStylesheet.copyButton}
+      />
+      <AddToNotesButton
         getContent={getContent}
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />

@@ -54,6 +54,8 @@ $PASEO_HOME/
 │       └── {agentId}.json               # One file per agent
 ├── schedules/
 │   └── {scheduleId}.json                # One file per schedule
+├── notes/
+│   └── {projectId}.json                 # One note per project (body + captured entries)
 ├── projects/
 │   ├── projects.json                    # Project registry
 │   ├── workspaces.json                  # Workspace registry
@@ -534,7 +536,22 @@ than treating it as valid.
 
 ---
 
-## 6. Push Token Store
+## 6. Project Notes
+
+**Path:** `$PASEO_HOME/notes/{projectId}.json`
+
+One file per project, keyed by the stable host-local `projectId`: the note survives renaming,
+re-rooting, archiving and removal of its project, and two devices appending at once read-modify-write
+behind a per-project chain before the atomic write.
+
+A note holds the organized markdown `body` plus the raw `entries` the user captured from agent
+chats. Appending is durable on its own: the entry lands with `organizedAt: null`, and a background
+run folds every pending entry into the body with a small structured-generation model — no tools, no
+repository reads. Manual body edits are input to the next run rather than something to protect with
+a separate flag; a failed run records `lastError` and leaves the entries pending for the next append.
+Deleting an entry removes only the raw record — the body keeps whatever the agent already wrote.
+
+## 7. Push Token Store
 
 **Path:** `$PASEO_HOME/push-tokens.json`
 
@@ -548,7 +565,7 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 ---
 
-## 7. Daemon meta files
+## 8. Daemon meta files
 
 These small files are not validated as full Zod schemas but are persisted under `$PASEO_HOME` for daemon identity and runtime coordination.
 

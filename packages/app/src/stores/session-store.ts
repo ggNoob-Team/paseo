@@ -119,6 +119,13 @@ export interface WorkspaceDescriptor {
   labels?: string[];
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
+  /**
+   * Last agent activity in this workspace, as the daemon reports it. Drives the
+   * "Recent" ordering; null means nothing has run there (or its agents were
+   * archived), which sorts last. Optional so fixtures and cached records written
+   * before the field existed still type-check.
+   */
+  activityAt?: Date | null;
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   scripts: WorkspaceDescriptorPayload["scripts"];
@@ -126,6 +133,15 @@ export interface WorkspaceDescriptor {
   githubRuntime?: WorkspaceDescriptorPayload["githubRuntime"];
   forge?: WorkspaceDescriptorPayload["forge"];
   project?: ProjectPlacementPayload;
+}
+
+/** Wire timestamps are nullable ISO strings; an unparseable one is treated as absent. */
+function parseOptionalDate(value: string | null | undefined): Date | null {
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function normalizeWorkspaceDescriptor(
@@ -136,6 +152,7 @@ export function normalizeWorkspaceDescriptor(
     typeof statusEnteredAtRaw === "string" && statusEnteredAtRaw.length > 0
       ? new Date(statusEnteredAtRaw)
       : null;
+  const activityAt = parseOptionalDate(payload.activityAt);
   return {
     id: normalizeWorkspaceOpaqueId(payload.id) ?? payload.id,
     projectId: payload.projectId,
@@ -157,6 +174,7 @@ export function normalizeWorkspaceDescriptor(
     labels: payload.labels ?? [],
     status: payload.status,
     statusEnteredAt,
+    activityAt,
     archivingAt: payload.archivingAt ?? null,
     diffStat: payload.diffStat ?? null,
     scripts: (payload.scripts ?? []).map((s) => Object.assign({}, s)),

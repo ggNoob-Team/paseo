@@ -3,7 +3,7 @@ import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from 
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import * as Clipboard from "expo-clipboard";
-import { Check, Copy } from "lucide-react-native";
+import { Check, Copy, NotebookPen } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { HighlightToken } from "@getpaseo/highlight";
 import { isNative, isWeb } from "@/constants/platform";
@@ -11,6 +11,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { highlightToKeyedLines, type KeyedLine } from "@/utils/highlight-cache";
+import { useNotesCaptureOptional } from "@/notes/capture-context";
 import {
   markdownCopyCodeBlockDataSet,
   markdownCopyDataSet,
@@ -105,6 +106,7 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
         </MarkdownTextSpan>
       )}
       <CopyButton getCode={getCode} visible={controlsVisible} />
+      <CodeBlockNotesButton code={code} visible={controlsVisible} />
     </View>
   );
 });
@@ -227,6 +229,55 @@ const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButt
   );
 });
 
+/**
+ * Code fences keep their own "add to notes" affordance: a fence is the block
+ * most likely to be worth keeping, and unlike prose it has no per-message
+ * action of its own. Renders nothing outside an agent chat.
+ */
+const CodeBlockNotesButton = React.memo(function CodeBlockNotesButton({
+  code,
+  visible,
+}: {
+  code: string;
+  visible: boolean;
+}) {
+  const { t } = useTranslation();
+  const capture = useNotesCaptureOptional();
+  const handlePress = useCallback(() => {
+    if (!capture) return;
+    const content = stripTerminalFenceNewline(code);
+    if (!content.trim()) return;
+    capture.addText(content);
+  }, [capture, code]);
+
+  if (!capture) return null;
+
+  const visibilityStyle = visible
+    ? copyButtonStyles.containerVisible
+    : copyButtonStyles.containerHidden;
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={[copyButtonStyles.container, copyButtonStyles.notesContainer, visibilityStyle]}
+      pointerEvents={visible ? "auto" : "none"}
+      accessibilityRole="button"
+      accessibilityLabel={t("notes.addEntryAction")}
+      hitSlop={8}
+      dataSet={markdownCopyDataSet.ignore}
+      testID="code-block-add-to-notes"
+    >
+      {({ hovered }) => (
+        <NotebookPen
+          size={14}
+          color={
+            hovered ? copyButtonStyles.iconHoveredColor.color : copyButtonStyles.iconColor.color
+          }
+        />
+      )}
+    </Pressable>
+  );
+});
+
 const copyButtonStyles = StyleSheet.create((theme) => ({
   container: {
     position: "absolute",
@@ -239,6 +290,10 @@ const copyButtonStyles = StyleSheet.create((theme) => ({
   },
   containerHidden: {
     opacity: 0,
+  },
+  notesContainer: {
+    // Sits to the left of the copy button, on the same inset rail.
+    right: theme.spacing[2] + 22,
   },
   iconColor: {
     color: theme.colors.foregroundMuted,
