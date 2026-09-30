@@ -102,6 +102,21 @@ function rewriteDependencyField(manifest, field, version) {
   }
 }
 
+// GitHub Packages' registry metadata drops `peerDependenciesMeta`, so npm reads every
+// declared peer as required. `@getpaseo/plugin` marks react and react-native optional
+// because they are peers of plugin UIs, not of the daemon; without the meta a global CLI
+// install resolves the whole React Native/Metro toolchain and appears to hang. Drop the
+// optional peers from the published manifest so installs only pull what the CLI needs.
+function dropOptionalPeers(manifest) {
+  const meta = manifest.peerDependenciesMeta;
+  if (!meta) return;
+
+  for (const [name, value] of Object.entries(meta)) {
+    if (value && value.optional) delete manifest.peerDependencies?.[name];
+  }
+  delete manifest.peerDependenciesMeta;
+}
+
 function transformManifest(packageDir, spec, version) {
   const manifestPath = path.join(packageDir, "package.json");
   const manifest = readJson(manifestPath);
@@ -111,6 +126,7 @@ function transformManifest(packageDir, spec, version) {
   manifest.name = target;
   manifest.version = version;
   for (const field of dependencyFields) rewriteDependencyField(manifest, field, version);
+  dropOptionalPeers(manifest);
   delete manifest.devDependencies;
   manifest.repository = {
     type: "git",
