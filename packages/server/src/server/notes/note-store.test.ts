@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -19,94 +19,145 @@ async function createStore(): Promise<{ store: NoteStore; paseoHome: string }> {
 }
 
 describe("NoteStore", () => {
-  test("creates one file per project and appends entries in order", async () => {
+  test("stores one note per capture, newest first", async () => {
     const { store, paseoHome } = await createStore();
 
-    const first = await store.appendEntry({ projectId: "prj_a", text: "first" });
-    const second = await store.appendEntry({
+    const first = await store.create({ projectId: "prj_a", text: "first" });
+    const second = await store.create({
       projectId: "prj_a",
       text: "second",
+      title: "  A title  ",
       comment: "  why it matters  ",
       source: { workspaceId: "ws_1", agentId: "agent_1" },
     });
 
-    expect(first.body).toBe("");
-    expect(second.entries.map((entry) => entry.text)).toEqual(["first", "second"]);
-    expect(second.entries[1]?.comment).toBe("why it matters");
-    expect(second.entries[1]?.source).toEqual({ workspaceId: "ws_1", agentId: "agent_1" });
-    expect(second.entries.every((entry) => entry.organizedAt === null)).toBe(true);
+    expect(first.noteId).not.toBe(second.noteId);
+    expect(first.title).toBeNull();
+    expect(second.title).toBe("A title");
+    expect(second.comment).toBe("why it matters");
+    expect(second.source).toEqual({ workspaceId: "ws_1", agentId: "agent_1" });
 
-    const raw = await readFile(path.join(paseoHome, "notes", "prj_a.json"), "utf8");
-    expect(JSON.parse(raw).projectId).toBe("prj_a");
+    const notes = await store.list();
+    expect(notes.map((note) => note.text)).toEqual(["second", "first"]);
 
-    // A different project is a different note.
-    expect(await store.get("prj_b")).toBeNull();
+    const raw = JSON.parse(await readFile(path.join(paseoHome, "notes", "prj_a.json"), "utf8"));
+    expect(raw.projectId).toBe("prj_a");
+    expect(raw.notes).toHaveLength(2);
+
+    // A different project is a different file.
+    expect(await store.listForProject("prj_b")).toEqual([]);
   });
 
-  test("reads nothing for an unknown or malformed note", async () => {
+  test("edits keep the note's identity and clear a title when asked", async () => {
     const { store } = await createStore();
-    expect(await store.get("prj_missing")).toBeNull();
-    expect(await store.list()).toEqual([]);
-  });
+    const created = await store.create({ projectId: "prj_a", text: "text", title: "Title" });
 
-  test("applies a generation run to the body and only the entries it folded in", async () => {
-    const { store } = await createStore();
-    const appended = await store.appendEntry({ projectId: "prj_a", text: "one" });
-    await store.appendEntry({ projectId: "prj_a", text: "two" });
-    const firstEntryId = appended.entries[0]!.entryId;
-
-    const updated = await store.applyGeneration({
+    const renamed = await store.update({
       projectId: "prj_a",
-      body: "# Note\n\none",
-      organizedEntryIds: [firstEntryId],
-      generatedAt: "2026-05-01T00:00:00.000Z",
+      noteId: created.noteId,
+      title: "   ",
+      text: "edited",
     });
 
-    expect(updated?.body).toBe("# Note\n\none");
-    expect(updated?.bodyUpdatedAt).toBe("2026-05-01T00:00:00.000Z");
-    expect(updated?.entries[0]?.organizedAt).toBe("2026-05-01T00:00:00.000Z");
-    expect(updated?.entries[1]?.organizedAt).toBeNull();
+    expect(renamed?.noteId).toBe(created.noteId);
+    expect(renamed?.title).toBeNull();
+    expect(renamed?.text).toBe("edited");
+    expect(renamed?.createdAt).toBe(created.createdAt);
+    expect(renamed?.updatedAt >= created.updatedAt).toBe(true);
   });
 
-  test("keeps a manual body edit and clears the last generation error", async () => {
-    const { store } = await createStore();
-    await store.appendEntry({ projectId: "prj_a", text: "one" });
-    await store.recordGenerationError({ projectId: "prj_a", error: "no provider" });
-    expect((await store.get("prj_a"))?.lastError).toBe("no provider");
+  test("deletes one note and drops the project file with the last one", async () => {
+    const { store, paseoHome } = await createStore();
+    const first = await store.create({ projectId: "prj_a", text: "first" });
+    await store.create({ projectId: "prj_a", text: "second" });
 
-    const edited = await store.setBody({ projectId: "prj_a", body: "hand written" });
-    expect(edited?.body).toBe("hand written");
+    expect(await store.delete({ projectId: "prj_a", noteId: first.noteId })).toBe(true);
+    expect((await store.listForProject("prj_a")).map((note) => note.text)).toEqual(["second"]);
+    expect(await store.delete({ projectId: "prj_a", noteId: "missing" })).toBe(false);
+
+    const second = await store.listForProject("prj_a");
+    expect(await store.delete({ projectId: "prj_a", noteId: second[0]!.noteId })).toBe(true);
+    await expect(readFile(path.join(paseoHome, "notes", "prj_a.json"), "utf8")).rejects.toThrow();
   });
 
-  test("deleting an entry leaves the body alone", async () => {
-    const { store } = await createStore();
-    const appended = await store.appendEntry({ projectId: "prj_a", text: "one" });
-    await store.appendEntry({ projectId: "prj_a", text: "two" });
-    await store.applyGeneration({
-      projectId: "prj_a",
-      body: "organized",
-      organizedEntryIds: appended.entries.map((entry) => entry.entryId),
-      generatedAt: "2026-05-01T00:00:00.000Z",
-    });
+  test("reads a legacy one-note-per-project file as one note per entry", async () => {
+    const { store, paseoHome } = await createStore();
+    const notesDirectory = path.join(paseoHome, "notes");
+    await rm(notesDirectory, { recursive: true, force: true });
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(notesDirectory, { recursive: true }),
+    );
+    await writeFile(
+      path.join(notesDirectory, "prj_legacy.json"),
+      JSON.stringify({
+        projectId: "prj_legacy",
+        body: "# Organized\n\n- one\n- two",
+        bodyUpdatedAt: "2026-05-02T00:00:00.000Z",
+        entries: [
+          {
+            entryId: "note_entry_1",
+            createdAt: "2026-05-01T00:00:00.000Z",
+            text: "one",
+            comment: null,
+            source: { workspaceId: null, agentId: null },
+            organizedAt: "2026-05-02T00:00:00.000Z",
+          },
+          {
+            entryId: "note_entry_2",
+            createdAt: "2026-05-01T01:00:00.000Z",
+            text: "two",
+            comment: "kept",
+            source: { workspaceId: "ws_1", agentId: null },
+            organizedAt: null,
+          },
+        ],
+        lastError: null,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-02T00:00:00.000Z",
+      }),
+    );
 
-    const updated = await store.deleteEntry({
-      projectId: "prj_a",
-      entryId: appended.entries[0]!.entryId,
-    });
-
-    expect(updated?.entries.map((entry) => entry.text)).toEqual(["two"]);
-    expect(updated?.body).toBe("organized");
+    const notes = await store.listForProject("prj_legacy");
+    expect(notes.map((note) => note.text)).toEqual(["one", "two"]);
+    expect(notes[0]?.noteId).toBe("note_entry_1");
+    expect(notes[0]?.updatedAt).toBe("2026-05-02T00:00:00.000Z");
+    expect(notes[1]?.comment).toBe("kept");
+    expect(notes[1]?.updatedAt).toBe("2026-05-01T01:00:00.000Z");
   });
 
-  test("appends racing from two callers keep both entries", async () => {
+  test("keeps a legacy body that had no entries", async () => {
+    const { store, paseoHome } = await createStore();
+    const notesDirectory = path.join(paseoHome, "notes");
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(notesDirectory, { recursive: true }),
+    );
+    await writeFile(
+      path.join(notesDirectory, "prj_body.json"),
+      JSON.stringify({
+        projectId: "prj_body",
+        body: "only the organized document",
+        bodyUpdatedAt: "2026-05-02T00:00:00.000Z",
+        entries: [],
+        lastError: null,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-02T00:00:00.000Z",
+      }),
+    );
+
+    const notes = await store.listForProject("prj_body");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.text).toBe("only the organized document");
+  });
+
+  test("concurrent captures all survive", async () => {
     const { store } = await createStore();
     await Promise.all([
-      store.appendEntry({ projectId: "prj_a", text: "one" }),
-      store.appendEntry({ projectId: "prj_a", text: "two" }),
-      store.appendEntry({ projectId: "prj_a", text: "three" }),
+      store.create({ projectId: "prj_a", text: "one" }),
+      store.create({ projectId: "prj_a", text: "two" }),
+      store.create({ projectId: "prj_a", text: "three" }),
     ]);
 
-    const note = await store.get("prj_a");
-    expect(note?.entries.map((entry) => entry.text).sort()).toEqual(["one", "three", "two"]);
+    const notes = await store.listForProject("prj_a");
+    expect(notes.map((note) => note.text).sort()).toEqual(["one", "three", "two"]);
   });
 });

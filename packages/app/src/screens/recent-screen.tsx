@@ -11,7 +11,7 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { MenuHeader } from "@/components/headers/menu-header";
+import { StackScreenHeader } from "@/components/headers/stack-screen-header";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useSidebarWorkspaceEntries } from "@/hooks/use-sidebar-workspace-entries";
@@ -100,7 +100,7 @@ function RecentScreenContent(): ReactElement {
 
   return (
     <View style={styles.container} testID="recent-screen">
-      <MenuHeader title={t("recent.title")} />
+      <StackScreenHeader title={t("recent.title")} />
       {body}
     </View>
   );

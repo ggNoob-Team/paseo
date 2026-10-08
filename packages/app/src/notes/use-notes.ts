@@ -1,28 +1,20 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useFetchQueries, useFetchQuery } from "@/data/query";
-import type { NoteProjectPayload } from "@getpaseo/protocol/messages";
+import type { NoteRecordPayload } from "@getpaseo/protocol/messages";
+import { useFetchQueries } from "@/data/query";
 import { i18n } from "@/i18n/i18next";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
-import {
-  mergeProjectNoteSummaries,
-  type HostProjectNoteSummary,
-  type ProjectNoteView,
-} from "./notes-model";
+import { mergeNotes, type HostNote } from "./notes-model";
 
 /**
- * Notes change on the user's own actions and on a background push, so the cache
- * only has to survive incidental remounts — not wait out a TTL to see new work.
+ * Notes change when the user acts, and every response carries the note it
+ * wrote, so the cache only has to survive incidental remounts.
  */
 const NOTES_STALE_TIME_MS = 15_000;
 
 export function notesListQueryKey(serverId: string) {
   return ["notes", serverId, "list"] as const;
-}
-
-export function noteQueryKey(serverId: string, projectId: string) {
-  return ["notes", serverId, "project", projectId] as const;
 }
 
 export interface NotesHost {
@@ -39,7 +31,7 @@ export interface NotesHost {
 export function useNotesHosts(): NotesHost[] {
   const hosts = useHosts();
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
-  const supportsByServerId = useHostFeatureMap(serverIds, "notes");
+  const supportsByServerId = useHostFeatureMap(serverIds, "notesPerEntry");
   return useMemo(
     () =>
       hosts.map((host) => ({
@@ -51,14 +43,14 @@ export function useNotesHosts(): NotesHost[] {
   );
 }
 
-export interface ProjectNotesListResult {
-  notes: HostProjectNoteSummary[];
+export interface NotesListResult {
+  notes: HostNote[];
   isLoading: boolean;
   unsupportedHostLabels: string[];
   refresh: () => void;
 }
 
-export function useProjectNotesList(): ProjectNotesListResult {
+export function useNotesList(): NotesListResult {
   const hosts = useNotesHosts();
   const supportedHosts = useMemo(() => hosts.filter((host) => host.supportsNotes), [hosts]);
   const queries = useFetchQueries(
@@ -69,7 +61,7 @@ export function useProjectNotesList(): ProjectNotesListResult {
       queryFn: async () => {
         const client = getHostRuntimeStore().getClient(host.serverId);
         if (!client) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-        return client.listProjectNotes();
+        return client.listNotes();
       },
     })),
   );
@@ -80,23 +72,23 @@ export function useProjectNotesList(): ProjectNotesListResult {
   );
 
   const notes = useMemo(() => {
-    const rows: HostProjectNoteSummary[] = [];
+    const rows: HostNote[] = [];
     supportedHosts.forEach((host, index) => {
       const data = queries[index]?.data;
       if (!data) return;
-      for (const summary of data) {
-        rows.push({ ...summary, serverId: host.serverId, hostLabel: host.hostLabel });
+      for (const note of data) {
+        rows.push({ ...note, serverId: host.serverId, hostLabel: host.hostLabel });
       }
     });
-    return mergeProjectNoteSummaries(rows);
+    return mergeNotes(rows);
   }, [queries, supportedHosts]);
 
-  const client = useQueryClient();
+  const queryClient = useQueryClient();
   const refresh = useCallback(() => {
     for (const host of supportedHosts) {
-      void client.invalidateQueries({ queryKey: notesListQueryKey(host.serverId) });
+      void queryClient.invalidateQueries({ queryKey: notesListQueryKey(host.serverId) });
     }
-  }, [client, supportedHosts]);
+  }, [queryClient, supportedHosts]);
 
   return {
     notes,
@@ -106,138 +98,90 @@ export function useProjectNotesList(): ProjectNotesListResult {
   };
 }
 
-export interface ProjectNoteResult {
-  note: ProjectNoteView | null;
-  isLoading: boolean;
-  error: string | null;
-  appendEntry: (input: {
+export interface NoteActions {
+  createNote: (input: {
+    projectId: string;
     text: string;
+    title?: string | null;
     comment?: string | null;
-    agentId?: string | null;
-  }) => Promise<void>;
-  updateBody: (body: string) => Promise<void>;
-  deleteEntry: (entryId: string) => Promise<void>;
+    source?: { workspaceId: string | null; agentId: string | null };
+  }) => Promise<NoteRecordPayload>;
+  updateNote: (
+    note: HostNote,
+    input: { title?: string | null; text?: string; comment?: string | null },
+  ) => Promise<NoteRecordPayload | null>;
+  deleteNote: (note: HostNote) => Promise<void>;
 }
 
-export function useProjectNote(input: {
-  serverId: string | null;
-  projectId: string | null;
-}): ProjectNoteResult {
-  const { serverId, projectId } = input;
+/** Writes go through the list cache the screens read, so they land immediately. */
+export function useNoteActions(serverId: string | null): NoteActions {
   const queryClient = useQueryClient();
-  const hostLabel = useHosts().find((host) => host.serverId === serverId)?.label ?? "";
-  const enabled = Boolean(serverId && projectId);
-
-  const query = useFetchQuery({
-    queryKey: noteQueryKey(serverId ?? "", projectId ?? ""),
-    enabled,
-    dataShape: "value",
-    staleTimeMs: NOTES_STALE_TIME_MS,
-    queryFn: async (): Promise<NoteProjectPayload | null> => {
-      const client = serverId ? getHostRuntimeStore().getClient(serverId) : null;
-      if (!client || !projectId) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-      return client.getProjectNote({ projectId });
-    },
-  });
 
   const applyNote = useCallback(
-    (note: NoteProjectPayload | null) => {
-      if (!serverId || !projectId) return;
-      queryClient.setQueryData(noteQueryKey(serverId, projectId), note);
-      void queryClient.invalidateQueries({ queryKey: notesListQueryKey(serverId) });
-    },
-    [projectId, queryClient, serverId],
-  );
-
-  const appendMutation = useMutation({
-    mutationFn: async (entry: {
-      text: string;
-      comment?: string | null;
-      agentId?: string | null;
-    }) => {
-      const client = serverId ? getHostRuntimeStore().getClient(serverId) : null;
-      if (!client || !projectId) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-      return client.appendNoteEntry({
-        projectId,
-        text: entry.text,
-        comment: entry.comment ?? null,
-        source: { workspaceId: null, agentId: entry.agentId ?? null },
+    (note: NoteRecordPayload) => {
+      if (!serverId) return;
+      queryClient.setQueryData<NoteRecordPayload[]>(notesListQueryKey(serverId), (current) => {
+        const existing = current ?? [];
+        const index = existing.findIndex((entry) => entry.noteId === note.noteId);
+        if (index < 0) return [note, ...existing];
+        return existing.map((entry) => (entry.noteId === note.noteId ? note : entry));
       });
     },
-    onSuccess: applyNote,
-  });
-  const updateMutation = useMutation({
-    mutationFn: async (body: string) => {
-      const client = serverId ? getHostRuntimeStore().getClient(serverId) : null;
-      if (!client || !projectId) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-      return client.updateProjectNote({ projectId, body });
-    },
-    onSuccess: applyNote,
-  });
-  const deleteMutation = useMutation({
-    mutationFn: async (entryId: string) => {
-      const client = serverId ? getHostRuntimeStore().getClient(serverId) : null;
-      if (!client || !projectId) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-      return client.deleteNoteEntry({ projectId, entryId });
-    },
-    onSuccess: applyNote,
-  });
-
-  useNoteUpdatesSubscription(serverId ? [serverId] : []);
-
-  const note = useMemo<ProjectNoteView | null>(
-    () => (query.data ? { ...query.data, serverId: serverId ?? "", hostLabel } : null),
-    [hostLabel, query.data, serverId],
+    [queryClient, serverId],
   );
+
+  const requireClient = useCallback(() => {
+    const client = serverId ? getHostRuntimeStore().getClient(serverId) : null;
+    if (!client) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
+    return client;
+  }, [serverId]);
+
+  const createMutation = useMutation({
+    mutationFn: async (input: {
+      projectId: string;
+      text: string;
+      title?: string | null;
+      comment?: string | null;
+      source?: { workspaceId: string | null; agentId: string | null };
+    }) => requireClient().createNote(input),
+    onSuccess: applyNote,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (input: {
+      note: HostNote;
+      title?: string | null;
+      text?: string;
+      comment?: string | null;
+    }) =>
+      requireClient().updateNote({
+        noteId: input.note.noteId,
+        projectId: input.note.projectId,
+        title: input.title,
+        text: input.text,
+        comment: input.comment,
+      }),
+    onSuccess: (note) => {
+      if (note) applyNote(note);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (note: HostNote) =>
+      requireClient().deleteNote({ noteId: note.noteId, projectId: note.projectId }),
+    onSuccess: (deleted, note) => {
+      if (!serverId || !deleted) return;
+      queryClient.setQueryData<NoteRecordPayload[]>(notesListQueryKey(serverId), (current) =>
+        (current ?? []).filter((entry) => entry.noteId !== note.noteId),
+      );
+    },
+  });
 
   return {
-    note,
-    isLoading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
-    appendEntry: async (entry) => {
-      await appendMutation.mutateAsync(entry);
-    },
-    updateBody: async (body) => {
-      await updateMutation.mutateAsync(body);
-    },
-    deleteEntry: async (entryId) => {
-      await deleteMutation.mutateAsync(entryId);
+    createNote: (input) => createMutation.mutateAsync(input),
+    updateNote: (note, input) => updateMutation.mutateAsync({ note, ...input }),
+    deleteNote: async (note) => {
+      await deleteMutation.mutateAsync(note);
     },
   };
-}
-
-/**
- * Background runs finish long after the append they belong to, so the daemon
- * pushes the new note. Writing it straight into the query cache keeps the open
- * note and the list in step without polling.
- */
-export function useNoteUpdatesSubscription(serverIds: readonly string[]): void {
-  const queryClient = useQueryClient();
-  const key = serverIds.join(",");
-
-  useEffect(() => {
-    const ids = key.length > 0 ? key.split(",") : [];
-    const releases: Array<() => void> = [];
-    for (const serverId of ids) {
-      const client = getHostRuntimeStore().getClient(serverId);
-      if (!client) continue;
-      const subscription = client.observeProjectNotes();
-      const unsubscribe = subscription.subscribe({
-        snapshot: () => {},
-        update: (message) => {
-          if (message.type !== "notes.project.updated") return;
-          const note = message.payload.note;
-          queryClient.setQueryData(noteQueryKey(serverId, note.projectId), note);
-          void queryClient.invalidateQueries({ queryKey: notesListQueryKey(serverId) });
-        },
-      });
-      releases.push(() => {
-        unsubscribe();
-        void subscription.release().catch(() => undefined);
-      });
-    }
-    return () => {
-      for (const release of releases) release();
-    };
-  }, [key, queryClient]);
 }

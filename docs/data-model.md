@@ -537,20 +537,22 @@ than treating it as valid.
 
 ---
 
-## 6. Project Notes
+## 6. Notes
 
 **Path:** `$PASEO_HOME/notes/{projectId}.json`
 
-One file per project, keyed by the stable host-local `projectId`: the note survives renaming,
-re-rooting, archiving and removal of its project, and two devices appending at once read-modify-write
-behind a per-project chain before the atomic write.
+One file per project, one record per capture. A note is what the user kept — an
+optional title, the text, an optional remark, and the workspace/agent it came
+from — with its own timestamps. Listing, editing and deleting all work per note;
+nothing merges captures into a per-project document. The file is keyed by the
+stable host-local `projectId`, so notes survive renaming, archiving and removal
+of their project.
 
-A note holds the organized markdown `body` plus the raw `entries` the user captured from agent
-chats. Appending is durable on its own: the entry lands with `organizedAt: null`, and a background
-run folds every pending entry into the body with a small structured-generation model — no tools, no
-repository reads. Manual body edits are input to the next run rather than something to protect with
-a separate flag; a failed run records `lastError` and leaves the entries pending for the next append.
-Deleting an entry removes only the raw record — the body keeps whatever the agent already wrote.
+The file previously held one note per project: an organized `body` plus the
+`entries` folded into it. `NoteStore` still reads that shape and turns each
+entry into a note (the body is dropped when it was derived from those entries,
+kept when it was the only record); the next write stores the new shape. There is
+no migration step to run.
 
 ## 7. Push Token Store
 

@@ -1,282 +1,205 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { NotebookPen, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { MenuHeader } from "@/components/headers/menu-header";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
+import { StackScreenHeader } from "@/components/headers/stack-screen-header";
 import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
+import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useToast } from "@/contexts/toast-context";
-import { resolveNoteGenerationState } from "@/notes/notes-model";
-import { useProjectNote, type ProjectNoteResult } from "@/notes/use-notes";
+import { findNoteById, noteDisplayTitle, type HostNote } from "@/notes/notes-model";
+import { useNoteActions, useNotesList } from "@/notes/use-notes";
 import type { Theme } from "@/styles/theme";
-import type { NoteEntryPayload } from "@getpaseo/protocol/messages";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedNotebookPen = withUnistyles(NotebookPen);
 const ThemedTrash = withUnistyles(Trash2);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 export function NoteDetailScreen(): ReactElement {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ projectId?: string; server?: string }>();
-  const projectId = typeof params.projectId === "string" ? params.projectId : null;
-  const serverId = typeof params.server === "string" ? params.server : null;
-  const noteState = useProjectNote({ serverId, projectId });
-  const [isEditing, setIsEditing] = useState(false);
-  const title = noteState.note?.projectName ?? t("notes.title");
-  const handleStartEditing = useCallback(() => setIsEditing(true), []);
-  const handleFinishEditing = useCallback(() => setIsEditing(false), []);
-  const headerActions = useMemo(
-    () =>
-      noteState.note && !isEditing ? (
-        <Button variant="secondary" size="sm" onPress={handleStartEditing} testID="note-edit">
-          {t("notes.editBody")}
-        </Button>
-      ) : null,
-    [handleStartEditing, isEditing, noteState.note, t],
-  );
+  const params = useLocalSearchParams<{ noteId?: string }>();
+  const noteId = typeof params.noteId === "string" ? params.noteId : null;
+  const { notes, isLoading } = useNotesList();
+  const note = findNoteById(notes, noteId);
 
   let body: ReactElement;
-  if (noteState.isLoading) {
+  if (isLoading) {
     body = (
       <View style={styles.centered}>
         <ThemedLoadingSpinner size="large" uniProps={mutedColorMapping} />
       </View>
     );
-  } else if (noteState.error) {
+  } else if (!note) {
     body = (
       <View style={styles.centered}>
-        <Text style={styles.emptyDescription}>{noteState.error}</Text>
+        <Text style={styles.mutedText}>{t("notes.missing")}</Text>
       </View>
     );
   } else {
-    body = (
-      <NoteDetailContent
-        noteState={noteState}
-        isEditing={isEditing}
-        onFinishEditing={handleFinishEditing}
-      />
-    );
+    body = <NoteDetailBody key={note.noteId} note={note} />;
   }
 
   return (
     <View style={styles.container} testID="note-detail-screen">
-      <MenuHeader title={title} rightContent={headerActions} />
+      <StackScreenHeader title={note ? noteDisplayTitle(note) : t("notes.title")} />
       {body}
     </View>
   );
 }
 
-function NoteDetailContent({
-  noteState,
-  isEditing,
-  onFinishEditing,
-}: {
-  noteState: ProjectNoteResult;
-  isEditing: boolean;
-  onFinishEditing: () => void;
-}): ReactElement {
+function NoteDetailBody({ note }: { note: HostNote }): ReactElement {
   const { t } = useTranslation();
   const toast = useToast();
-  const note = noteState.note;
-  const [draft, setDraft] = useState("");
+  const actions = useNoteActions(note.serverId);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(note.title ?? "");
+  const [draftText, setDraftText] = useState(note.text);
+  const [draftComment, setDraftComment] = useState(note.comment ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [editorSeed, setEditorSeed] = useState(0);
 
   useEffect(() => {
-    if (!isEditing) {
-      setDraft(note?.body ?? "");
-    }
-  }, [isEditing, note?.body]);
+    if (isEditing) return;
+    setDraftTitle(note.title ?? "");
+    setDraftText(note.text);
+    setDraftComment(note.comment ?? "");
+  }, [isEditing, note.comment, note.text, note.title]);
 
-  const handleChangeDraft = useCallback((value: string) => setDraft(value), []);
+  const handleStartEditing = useCallback(() => {
+    setDraftTitle(note.title ?? "");
+    setDraftText(note.text);
+    setDraftComment(note.comment ?? "");
+    setEditorSeed((seed) => seed + 1);
+    setIsEditing(true);
+  }, [note.comment, note.text, note.title]);
 
   const handleSave = useCallback(async () => {
     try {
       setIsSaving(true);
-      await noteState.updateBody(draft);
+      await actions.updateNote(note, {
+        title: draftTitle.trim().length > 0 ? draftTitle.trim() : null,
+        text: draftText,
+        comment: draftComment.trim().length > 0 ? draftComment.trim() : null,
+      });
       toast.show(t("notes.bodySaved"), { variant: "success" });
-      onFinishEditing();
+      setIsEditing(false);
     } catch {
       toast.error(t("notes.bodySaveFailed"));
     } finally {
       setIsSaving(false);
     }
-  }, [draft, noteState, onFinishEditing, t, toast]);
+  }, [actions, draftComment, draftText, draftTitle, note, t, toast]);
 
-  const handleDeleteEntry = useCallback(
-    async (entryId: string) => {
-      try {
-        await noteState.deleteEntry(entryId);
-      } catch {
-        toast.error(t("notes.deleteEntryFailed"));
-      }
-    },
-    [noteState, t, toast],
+  const handleDelete = useCallback(() => {
+    Alert.alert(t("notes.deleteNote"), t("notes.deleteNoteConfirm"), [
+      { text: t("common.actions.cancel"), style: "cancel" },
+      {
+        text: t("notes.deleteNote"),
+        style: "destructive",
+        onPress: () => {
+          void actions
+            .deleteNote(note)
+            .then(() => router.back())
+            .catch(() => toast.error(t("notes.deleteNoteFailed")));
+        },
+      },
+    ]);
+  }, [actions, note, t, toast]);
+
+  const handleDeletePress = useCallback(() => handleDelete(), [handleDelete]);
+  const handleCancelEditing = useCallback(() => setIsEditing(false), []);
+  const handleSavePress = useCallback(() => {
+    void handleSave();
+  }, [handleSave]);
+
+  const headerActions = (
+    <View style={styles.headerActions}>
+      {isEditing ? (
+        <Button variant="secondary" size="sm" onPress={handleCancelEditing} disabled={isSaving}>
+          {t("common.actions.cancel")}
+        </Button>
+      ) : null}
+      <Button
+        variant="default"
+        size="sm"
+        onPress={isEditing ? handleSavePress : handleStartEditing}
+        disabled={isSaving}
+        testID={isEditing ? "note-save" : "note-edit"}
+      >
+        {isEditing ? t("notes.saveBody") : t("notes.editBody")}
+      </Button>
+    </View>
   );
-
-  const entries = note?.entries ?? [];
-  const generationState = resolveNoteGenerationState(note);
 
   return (
     <ScrollView contentContainerStyle={styles.content} testID="note-detail-scroll">
-      <NoteStatusLine state={generationState} lastError={note?.lastError ?? null} />
       {isEditing ? (
-        <NoteBodyEditor
-          initialBody={note?.body ?? ""}
-          isSaving={isSaving}
-          onChangeText={handleChangeDraft}
-          onCancel={onFinishEditing}
-          onSave={handleSave}
-        />
+        <View style={styles.editor}>
+          <AdaptiveTextInput
+            initialValue={draftTitle}
+            resetKey={`title-${editorSeed}`}
+            onChangeText={setDraftTitle}
+            placeholder={t("notes.titlePlaceholder")}
+            editable={!isSaving}
+            style={styles.titleInput}
+            testID="note-title-input"
+          />
+          <AdaptiveTextInput
+            initialValue={draftText}
+            resetKey={`text-${editorSeed}`}
+            onChangeText={setDraftText}
+            multiline
+            editable={!isSaving}
+            style={styles.textInput}
+            testID="note-text-input"
+          />
+          <AdaptiveTextInput
+            initialValue={draftComment}
+            resetKey={`comment-${editorSeed}`}
+            onChangeText={setDraftComment}
+            placeholder={t("notes.addEntryPlaceholder")}
+            multiline
+            editable={!isSaving}
+            style={styles.commentInput}
+            testID="note-comment-input"
+          />
+        </View>
       ) : (
-        <NoteBodyView body={note?.body ?? ""} />
+        <View style={styles.viewer}>
+          {note.title ? <Text style={styles.title}>{note.title}</Text> : null}
+          <MarkdownRenderer text={note.text} />
+          {note.comment ? <Text style={styles.comment}>{note.comment}</Text> : null}
+          <NoteMetadata note={note} />
+        </View>
       )}
-      <Text style={styles.sectionTitle}>{t("notes.entriesTitle")}</Text>
-      {entries.length === 0 ? (
-        <Text style={styles.emptyBody}>{t("notes.entriesEmpty")}</Text>
-      ) : (
-        entries.map((entry) => (
-          <NoteEntryRow key={entry.entryId} entry={entry} onDelete={handleDeleteEntry} />
-        ))
+      {isEditing ? null : (
+        <Pressable
+          onPress={handleDeletePress}
+          style={styles.deleteRow}
+          accessibilityRole="button"
+          accessibilityLabel={t("notes.deleteNote")}
+          testID="note-delete"
+        >
+          <ThemedTrash size={16} uniProps={mutedColorMapping} />
+          <Text style={styles.deleteLabel}>{t("notes.deleteNote")}</Text>
+        </Pressable>
       )}
+      {isEditing ? headerActions : null}
     </ScrollView>
   );
 }
 
-function NoteStatusLine({
-  state,
-  lastError,
-}: {
-  state: ReturnType<typeof resolveNoteGenerationState>;
-  lastError: string | null;
-}): ReactElement {
-  const { t } = useTranslation();
-  let label: string;
-  if (state === "organizing") {
-    label = t("notes.organizing");
-  } else if (state === "failed") {
-    label = lastError ?? t("notes.failed");
-  } else {
-    label = t("notes.organizedHint");
-  }
-
+function NoteMetadata({ note }: { note: HostNote }): ReactElement {
+  const createdLabel = useCompactTimeAgo(new Date(note.createdAt));
+  const updatedLabel = useCompactTimeAgo(new Date(note.updatedAt));
   return (
-    <View style={styles.statusRow}>
-      <ThemedNotebookPen size={16} uniProps={mutedColorMapping} />
-      <View style={styles.statusTextGroup}>
-        <Text style={styles.statusText}>{label}</Text>
-        {state === "failed" && lastError ? (
-          <Text style={styles.statusDetail} testID="note-status-detail">
-            {lastError}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function NoteBodyView({ body }: { body: string }): ReactElement {
-  const { t } = useTranslation();
-  if (body.trim().length === 0) {
-    return <Text style={styles.emptyBody}>{t("notes.bodyEmpty")}</Text>;
-  }
-  return <MarkdownRenderer text={body} />;
-}
-
-function NoteBodyEditor({
-  initialBody,
-  isSaving,
-  onChangeText,
-  onCancel,
-  onSave,
-}: {
-  initialBody: string;
-  isSaving: boolean;
-  onChangeText: (value: string) => void;
-  onCancel: () => void;
-  onSave: () => void;
-}): ReactElement {
-  const { t } = useTranslation();
-  const [resetKey] = useState(() => Date.now());
-
-  return (
-    <View style={styles.editor}>
-      <AdaptiveTextInput
-        initialValue={initialBody}
-        resetKey={resetKey}
-        onChangeText={onChangeText}
-        multiline
-        editable={!isSaving}
-        style={styles.editorInput}
-        testID="note-body-input"
-      />
-      <View style={styles.editorActions}>
-        <Button
-          variant="secondary"
-          size="sm"
-          style={styles.editorButton}
-          onPress={onCancel}
-          disabled={isSaving}
-        >
-          {t("common.actions.cancel")}
-        </Button>
-        <Button
-          variant="default"
-          size="sm"
-          style={styles.editorButton}
-          onPress={onSave}
-          disabled={isSaving}
-          testID="note-body-save"
-        >
-          {t("notes.saveBody")}
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-function NoteEntryRow({
-  entry,
-  onDelete,
-}: {
-  entry: NoteEntryPayload;
-  onDelete: (entryId: string) => void;
-}): ReactElement {
-  const { t } = useTranslation();
-  const timeLabel = useCompactTimeAgo(new Date(entry.createdAt));
-  const [expanded, setExpanded] = useState(false);
-  const preview = expanded ? entry.text : entry.text.slice(0, 240);
-  const organizedMark = entry.organizedAt ? "✓" : "…";
-
-  const handleDelete = useCallback(() => onDelete(entry.entryId), [entry.entryId, onDelete]);
-  const handleToggleExpanded = useCallback(() => setExpanded((value) => !value), []);
-
-  return (
-    <View style={styles.entry} testID={`note-entry-${entry.entryId}`}>
-      <View style={styles.entryHeader}>
-        <Text style={styles.entryTime}>
-          {timeLabel} · {organizedMark}
-        </Text>
-        <Pressable
-          onPress={handleDelete}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t("notes.deleteEntry")}
-          testID={`note-entry-delete-${entry.entryId}`}
-        >
-          <ThemedTrash size={16} uniProps={mutedColorMapping} />
-        </Pressable>
-      </View>
-      <Pressable onPress={handleToggleExpanded}>
-        <Text style={styles.entryText}>{preview}</Text>
-      </Pressable>
-      {entry.comment ? <Text style={styles.entryComment}>{entry.comment}</Text> : null}
-    </View>
+    <Text style={styles.metadata}>
+      {note.projectName} · {note.hostLabel} · {createdLabel} → {updatedLabel}
+    </Text>
   );
 }
 
@@ -291,6 +214,11 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     padding: theme.spacing[6],
   },
+  mutedText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+    textAlign: "center",
+  },
   content: {
     paddingHorizontal: {
       xs: theme.spacing[4],
@@ -299,84 +227,77 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[8],
     gap: theme.spacing[3],
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  statusTextGroup: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[0.5],
-  },
-  statusText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    flexShrink: 1,
-  },
-  statusDetail: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    opacity: 0.8,
-  },
-  emptyBody: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-  },
-  emptyDescription: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    textAlign: "center",
+  viewer: {
+    gap: theme.spacing[3],
   },
   editor: {
     gap: theme.spacing[2],
   },
-  editorInput: {
-    minHeight: 200,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  title: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xl,
+    fontWeight: "600",
+  },
+  comment: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+    fontStyle: "italic",
+  },
+  metadata: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    opacity: 0.85,
+    marginTop: theme.spacing[2],
+  },
+  titleInput: {
     backgroundColor: theme.colors.surface0,
     color: theme.colors.foreground,
-    padding: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     fontSize: theme.fontSize.base,
   },
-  editorActions: {
-    flexDirection: "row",
-    gap: theme.spacing[2],
-  },
-  editorButton: {
-    flex: 1,
-  },
-  sectionTitle: {
+  textInput: {
+    minHeight: 220,
+    backgroundColor: theme.colors.surface0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: "600",
-    marginTop: theme.spacing[4],
-  },
-  entry: {
-    gap: theme.spacing[1],
-    padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
-  },
-  entryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  entryTime: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  entryText: {
-    color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
   },
-  entryComment: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontStyle: "italic",
+  commentInput: {
+    minHeight: 72,
+    backgroundColor: theme.colors.surface0,
+    color: theme.colors.foreground,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: theme.fontSize.base,
+  },
+  deleteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    alignSelf: "flex-start",
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    marginTop: theme.spacing[4],
+  },
+  deleteLabel: {
+    color: theme.colors.palette.red[300],
+    fontSize: theme.fontSize.base,
   },
 }));

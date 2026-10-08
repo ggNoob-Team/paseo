@@ -41,7 +41,11 @@ export interface AddNoteSheetProps {
    */
   resetKey: number;
   onClose: () => void;
-  onSubmit: (input: { text: string; comment: string | null }) => Promise<void> | void;
+  onSubmit: (input: {
+    title: string | null;
+    text: string;
+    comment: string | null;
+  }) => Promise<void> | void;
 }
 
 /**
@@ -65,6 +69,7 @@ export function AddNoteSheet({
   // The text input is uncontrolled; this is the value it is reseeded with when
   // the block selection changes. Typing never reseeds, so the caret stays put.
   const [inputSeed, setInputSeed] = useState({ text: "", revision: 0 });
+  const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -76,6 +81,7 @@ export function AddNoteSheet({
     setSelectedIds(nextBlocks.length > 1 ? selectAllBlockIds(nextBlocks) : new Set());
     setCapturedText(nextText);
     setInputSeed((previous) => ({ text: nextText, revision: previous.revision + 1 }));
+    setTitle("");
     setComment("");
     setError(null);
     setIsPending(false);
@@ -110,6 +116,11 @@ export function AddNoteSheet({
     applySelection(new Set());
   }, [applySelection]);
 
+  const handleChangeTitle = useCallback((value: string) => {
+    setTitle(value);
+    setError(null);
+  }, []);
+
   const handleChangeCapturedText = useCallback((value: string) => {
     setCapturedText(value);
     setError(null);
@@ -129,7 +140,11 @@ export function AddNoteSheet({
     }
     try {
       setIsPending(true);
-      await onSubmit({ text, comment: comment.trim().length > 0 ? comment.trim() : null });
+      await onSubmit({
+        title: title.trim().length > 0 ? title.trim() : null,
+        text,
+        comment: comment.trim().length > 0 ? comment.trim() : null,
+      });
       setIsPending(false);
       onClose();
     } catch (submitError) {
@@ -140,7 +155,7 @@ export function AddNoteSheet({
           : t("notes.addEntryFailed"),
       );
     }
-  }, [capturedText, comment, isPending, onClose, onSubmit, t]);
+  }, [capturedText, comment, isPending, onClose, onSubmit, t, title]);
 
   const handleSubmitVoid = useCallback(() => {
     void handleSubmit();
@@ -160,6 +175,15 @@ export function AddNoteSheet({
       testID="add-note-sheet"
     >
       <View style={styles.body}>
+        <AdaptiveTextInput
+          initialValue=""
+          resetKey={`title-${resetKey}`}
+          onChangeText={handleChangeTitle}
+          placeholder={t("notes.titlePlaceholder")}
+          editable={!isPending}
+          style={styles.titleInput}
+          testID="add-note-title"
+        />
         {showsPicker ? (
           <View style={styles.picker} testID="add-note-blocks">
             <View style={styles.pickerHeader}>
@@ -317,6 +341,16 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     paddingHorizontal: theme.spacing[2],
+  },
+  titleInput: {
+    backgroundColor: theme.colors.surface0,
+    color: theme.colors.foreground,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: theme.fontSize.base,
   },
   fieldLabel: {
     color: theme.colors.foregroundMuted,

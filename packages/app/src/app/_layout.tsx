@@ -895,7 +895,8 @@ function RootStack() {
         <Stack.Screen name="schedules" />
         <Stack.Screen name="recent" />
         <Stack.Screen name="notes" />
-        <Stack.Screen name="notes/[projectId]" />
+        <Stack.Screen name="notes/[noteId]" />
+        <Stack.Screen name="notes/project/[projectId]" />
         <Stack.Screen name="usage" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>

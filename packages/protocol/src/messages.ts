@@ -3340,10 +3340,93 @@ export const NoteProjectUpdatedSchema = z.object({
   }),
 });
 
+/**
+ * One note is one capture: the text the user kept, plus an optional title and
+ * remark. Notes are not merged per project — several captures in one project
+ * are several notes, each with its own life.
+ */
+export const NoteRecordPayloadSchema = z.object({
+  noteId: z.string(),
+  projectId: z.string(),
+  projectName: z.string(),
+  title: z.string().nullable(),
+  text: z.string(),
+  comment: z.string().nullable(),
+  source: NoteEntrySourcePayloadSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const NoteListRequestSchema = z.object({
+  type: z.literal("notes.list.request"),
+  requestId: z.string(),
+});
+
+export const NoteListResponseSchema = z.object({
+  type: z.literal("notes.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    notes: z.array(NoteRecordPayloadSchema),
+  }),
+});
+
+export const NoteCreateRequestSchema = z.object({
+  type: z.literal("notes.note.create.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  text: z.string(),
+  title: z.string().nullable().optional(),
+  comment: z.string().nullable().optional(),
+  source: NoteEntrySourcePayloadSchema.optional(),
+});
+
+export const NoteCreateResponseSchema = z.object({
+  type: z.literal("notes.note.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteRecordPayloadSchema,
+  }),
+});
+
+export const NoteUpdateRequestSchema = z.object({
+  type: z.literal("notes.note.update.request"),
+  requestId: z.string(),
+  noteId: z.string(),
+  projectId: z.string(),
+  title: z.string().nullable().optional(),
+  text: z.string().optional(),
+  comment: z.string().nullable().optional(),
+});
+
+export const NoteUpdateResponseSchema = z.object({
+  type: z.literal("notes.note.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    note: NoteRecordPayloadSchema.nullable(),
+  }),
+});
+
+export const NoteDeleteRequestSchema = z.object({
+  type: z.literal("notes.note.delete.request"),
+  requestId: z.string(),
+  noteId: z.string(),
+  projectId: z.string(),
+});
+
+export const NoteDeleteResponseSchema = z.object({
+  type: z.literal("notes.note.delete.response"),
+  payload: z.object({
+    requestId: z.string(),
+    noteId: z.string(),
+    deleted: z.boolean(),
+  }),
+});
+
 export type NoteEntrySourcePayload = z.infer<typeof NoteEntrySourcePayloadSchema>;
 export type NoteEntryPayload = z.infer<typeof NoteEntryPayloadSchema>;
 export type NoteProjectPayload = z.infer<typeof NoteProjectPayloadSchema>;
 export type NoteProjectSummaryPayload = z.infer<typeof NoteProjectSummaryPayloadSchema>;
+export type NoteRecordPayload = z.infer<typeof NoteRecordPayloadSchema>;
 
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterRequestSchema,
@@ -3381,6 +3464,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   NoteEntryAppendRequestSchema,
   NoteProjectUpdateRequestSchema,
   NoteEntryDeleteRequestSchema,
+  NoteListRequestSchema,
+  NoteCreateRequestSchema,
+  NoteUpdateRequestSchema,
+  NoteDeleteRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
   SetVoiceModeMessageSchema,
@@ -3748,6 +3835,9 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(projectNotes): added in v0.9.0, remove gate after 2028-01-15 once
         // the supported daemon floor understands notes.
         notes: z.boolean().optional(),
+        // COMPAT(notesPerEntry): notes became one record per capture in v0.10.3;
+        // remove gate after 2028-04-08 once the daemon floor understands it.
+        notesPerEntry: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.8.0, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
@@ -7040,6 +7130,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   NoteProjectUpdateResponseSchema,
   NoteEntryDeleteResponseSchema,
   NoteProjectUpdatedSchema,
+  NoteListResponseSchema,
+  NoteCreateResponseSchema,
+  NoteUpdateResponseSchema,
+  NoteDeleteResponseSchema,
   ProjectUpdateMessageSchema,
   ProjectListResponseMessageSchema,
   ScriptStatusUpdateMessageSchema,

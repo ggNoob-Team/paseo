@@ -38,7 +38,6 @@ import {
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
 } from "./messages.js";
-import type { NoteProjectPayload } from "@getpaseo/protocol/messages";
 import type {
   TerminalManager,
   TerminalWorkspaceContributionChangedEvent,
@@ -2935,6 +2934,14 @@ export class Session {
 
   private dispatchNotesMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
+      case "notes.list.request":
+        return this.handleNoteList(msg);
+      case "notes.note.create.request":
+        return this.handleNoteCreate(msg);
+      case "notes.note.update.request":
+        return this.handleNoteUpdate(msg);
+      case "notes.note.delete.request":
+        return this.handleNoteDelete(msg);
       case "notes.project.list.request":
         return this.handleNoteProjectList(msg);
       case "notes.project.get.request":
@@ -6455,16 +6462,6 @@ export class Session {
     }
   }
 
-  /**
-   * Notes are daemon-scoped: the background organizer lives outside any one
-   * session, so it asks each connected session to forward the result. Sessions
-   * that never subscribed to the event (every older client) are skipped rather
-   * than sent a message they cannot parse.
-   */
-  emitNoteUpdated(note: NoteProjectPayload): void {
-    this.emitSubscribedEvent({ type: "notes.project.updated", payload: { note } });
-  }
-
   private requireNoteService(): NoteService {
     if (!this.noteService) {
       throw new SessionRequestError("notes_unavailable", "Notes unavailable");
@@ -6472,11 +6469,85 @@ export class Session {
     return this.noteService;
   }
 
+  private async handleNoteList(
+    request: Extract<SessionInboundMessage, { type: "notes.list.request" }>,
+  ): Promise<void> {
+    try {
+      const notes = await this.requireNoteService().list();
+      this.emit({
+        type: "notes.list.response",
+        payload: { requestId: request.requestId, notes },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteCreate(
+    request: Extract<SessionInboundMessage, { type: "notes.note.create.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().create({
+        projectId: request.projectId,
+        text: request.text,
+        title: request.title ?? null,
+        comment: request.comment ?? null,
+        source: request.source ?? { workspaceId: null, agentId: null },
+      });
+      this.emit({
+        type: "notes.note.create.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteUpdate(
+    request: Extract<SessionInboundMessage, { type: "notes.note.update.request" }>,
+  ): Promise<void> {
+    try {
+      const note = await this.requireNoteService().update({
+        projectId: request.projectId,
+        noteId: request.noteId,
+        ...(request.title === undefined ? {} : { title: request.title }),
+        ...(request.text === undefined ? {} : { text: request.text }),
+        ...(request.comment === undefined ? {} : { comment: request.comment }),
+      });
+      this.emit({
+        type: "notes.note.update.response",
+        payload: { requestId: request.requestId, note },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  private async handleNoteDelete(
+    request: Extract<SessionInboundMessage, { type: "notes.note.delete.request" }>,
+  ): Promise<void> {
+    try {
+      const deleted = await this.requireNoteService().delete({
+        projectId: request.projectId,
+        noteId: request.noteId,
+      });
+      this.emit({
+        type: "notes.note.delete.response",
+        payload: { requestId: request.requestId, noteId: request.noteId, deleted },
+      });
+    } catch (error) {
+      this.emitNoteRequestError(request, error);
+    }
+  }
+
+  // COMPAT(notesPerEntry): the per-project note RPCs, added in v0.10.2 and
+  // replaced by `notes.note.*`. They answer from the new records so a client
+  // that predates the split keeps working; remove after 2028-04-08.
   private async handleNoteProjectList(
     request: Extract<SessionInboundMessage, { type: "notes.project.list.request" }>,
   ): Promise<void> {
     try {
-      const projects = await this.requireNoteService().list();
+      const projects = await this.requireNoteService().listProjects();
       this.emit({
         type: "notes.project.list.response",
         payload: { requestId: request.requestId, projects },
@@ -6490,10 +6561,10 @@ export class Session {
     request: Extract<SessionInboundMessage, { type: "notes.project.get.request" }>,
   ): Promise<void> {
     try {
-      const note = await this.requireNoteService().get(request.projectId);
+      const notes = await this.requireNoteService().getProjectNotes(request.projectId);
       this.emit({
         type: "notes.project.get.response",
-        payload: { requestId: request.requestId, note },
+        payload: { requestId: request.requestId, note: notes.entries.length > 0 ? notes : null },
       });
     } catch (error) {
       this.emitNoteRequestError(request, error);
@@ -6504,7 +6575,7 @@ export class Session {
     request: Extract<SessionInboundMessage, { type: "notes.entry.append.request" }>,
   ): Promise<void> {
     try {
-      const note = await this.requireNoteService().appendEntry({
+      const note = await this.requireNoteService().createForLegacyAppend({
         projectId: request.projectId,
         text: request.text,
         comment: request.comment ?? null,
@@ -6522,28 +6593,23 @@ export class Session {
   private async handleNoteProjectUpdate(
     request: Extract<SessionInboundMessage, { type: "notes.project.update.request" }>,
   ): Promise<void> {
-    try {
-      const note = await this.requireNoteService().updateBody({
-        projectId: request.projectId,
-        body: request.body,
-      });
-      if (!note) {
-        throw new SessionRequestError("note_not_found", "Note not found");
-      }
-      this.emit({
-        type: "notes.project.update.response",
-        payload: { requestId: request.requestId, note },
-      });
-    } catch (error) {
-      this.emitNoteRequestError(request, error);
-    }
+    // The organized body this wrote is gone: each capture is its own note now.
+    this.emit({
+      type: "rpc_error",
+      payload: {
+        requestId: request.requestId,
+        requestType: request.type,
+        code: "notes_model_changed",
+        error: "Update this app: notes are stored one per entry now.",
+      },
+    });
   }
 
   private async handleNoteEntryDelete(
     request: Extract<SessionInboundMessage, { type: "notes.entry.delete.request" }>,
   ): Promise<void> {
     try {
-      const note = await this.requireNoteService().deleteEntry({
+      const note = await this.requireNoteService().deleteForLegacyEntry({
         projectId: request.projectId,
         entryId: request.entryId,
       });

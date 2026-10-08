@@ -82,6 +82,57 @@ describe("project note protocol", () => {
     }
   });
 
+  it("parses the per-note requests and responses", () => {
+    const noteRecord = {
+      noteId: "note_1",
+      projectId: "prj_1234",
+      projectName: "Alpha",
+      title: "Kept snippet",
+      text: "captured text",
+      comment: null,
+      source: { workspaceId: "ws_1", agentId: "agent_1" },
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    };
+    for (const message of [
+      { type: "notes.list.request", requestId: "r1" },
+      {
+        type: "notes.note.create.request",
+        requestId: "r2",
+        projectId: "prj_1234",
+        text: "captured text",
+        title: "Kept snippet",
+      },
+      {
+        type: "notes.note.update.request",
+        requestId: "r3",
+        noteId: "note_1",
+        projectId: "prj_1234",
+        title: null,
+      },
+      {
+        type: "notes.note.delete.request",
+        requestId: "r4",
+        noteId: "note_1",
+        projectId: "prj_1234",
+      },
+    ]) {
+      expect(SessionInboundMessageSchema.parse(message)).toEqual(message);
+    }
+
+    for (const message of [
+      { type: "notes.list.response", payload: { requestId: "r1", notes: [noteRecord] } },
+      { type: "notes.note.create.response", payload: { requestId: "r2", note: noteRecord } },
+      { type: "notes.note.update.response", payload: { requestId: "r3", note: null } },
+      {
+        type: "notes.note.delete.response",
+        payload: { requestId: "r4", noteId: "note_1", deleted: true },
+      },
+    ]) {
+      expect(SessionOutboundMessageSchema.parse(message)).toEqual(message);
+    }
+  });
+
   it("answers a get for a project with no note", () => {
     const message = {
       type: "notes.project.get.response",

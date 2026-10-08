@@ -1801,6 +1801,8 @@ export class VoiceAssistantWebSocketServer {
         ...(this.workspaceLabelService ? { workspaceLabels: true } : {}),
         // COMPAT(projectNotes): added in v0.9.0, remove gate after 2028-01-15.
         ...(this.noteService ? { notes: true } : {}),
+        // COMPAT(notesPerEntry): added in v0.10.3, remove gate after 2028-04-08.
+        ...(this.noteService ? { notesPerEntry: true } : {}),
         // COMPAT(workspaceSetupRun): added in v0.7.3, remove gate after 2027-09-02.
         workspaceSetupRun: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.

@@ -48,20 +48,23 @@ export function useNotesCaptureOptional(): NotesCapture | null {
 export function NotesCaptureProvider({
   serverId,
   workspaceId,
+  projectId: knownProjectId,
   agentId,
   children,
 }: {
   serverId: string;
   workspaceId?: string;
+  /** Set when the screen already knows the project, as a project's notes do. */
+  projectId?: string;
   agentId?: string;
   children: ReactNode;
 }): ReactNode {
   const { t } = useTranslation();
   const toast = useToast();
-  const supportsNotes = useHostFeature(serverId, "notes");
+  const supportsNotes = useHostFeature(serverId, "notesPerEntry");
   const hosts = useHosts();
   const workspace = useWorkspace(serverId || null, workspaceId ?? null);
-  const projectId = workspace?.projectId ?? null;
+  const projectId = knownProjectId ?? workspace?.projectId ?? null;
   const [draft, setDraft] = useState<AddNoteDraft | null>(null);
   const [visible, setVisible] = useState(false);
   const [captureCount, setCaptureCount] = useState(0);
@@ -71,25 +74,27 @@ export function NotesCaptureProvider({
     [hosts, serverId],
   );
 
-  const appendMutation = useMutation({
-    mutationFn: async (input: { text: string; comment: string | null }) => {
+  const createMutation = useMutation({
+    mutationFn: async (input: { title: string | null; text: string; comment: string | null }) => {
       const client = getHostRuntimeStore().getClient(serverId);
       // Resolved again at submit time: the button must not wait for the
       // workspace descriptor, and an agent opened before the directory synced
       // still has to be able to add a note.
-      const targetProjectId = projectId ?? resolveWorkspaceProjectId(serverId, workspaceId);
+      const targetProjectId =
+        projectId ?? (workspaceId ? resolveWorkspaceProjectId(serverId, workspaceId) : null);
       if (!client || !targetProjectId) {
         throw new Error(t("notes.addEntryFailed"));
       }
-      return client.appendNoteEntry({
+      return client.createNote({
         projectId: targetProjectId,
+        title: input.title,
         text: input.text,
         comment: input.comment,
         source: { workspaceId: workspaceId ?? null, agentId: agentId ?? null },
       });
     },
   });
-  const appendAsync = appendMutation.mutateAsync;
+  const createAsync = createMutation.mutateAsync;
 
   const openDraft = useCallback(
     (next: { text: string; blocks?: AddNoteDraft["blocks"] }) => {
@@ -132,16 +137,16 @@ export function NotesCaptureProvider({
   const handleClose = useCallback(() => setVisible(false), []);
 
   const handleSubmit = useCallback(
-    async (input: { text: string; comment: string | null }) => {
-      await appendAsync({ text: input.text, comment: input.comment });
+    async (input: { title: string | null; text: string; comment: string | null }) => {
+      await createAsync(input);
       toast.show(t("notes.addEntrySaved"), { variant: "success" });
     },
-    [appendAsync, t, toast],
+    [createAsync, t, toast],
   );
 
-  // An agent with no workspace has no project to file a note under, and no
-  // amount of retrying changes that.
-  if (!workspaceId) {
+  // Without a workspace or a project there is nothing to file a note under,
+  // and no amount of retrying changes that.
+  if (!workspaceId && !knownProjectId) {
     return children;
   }
 

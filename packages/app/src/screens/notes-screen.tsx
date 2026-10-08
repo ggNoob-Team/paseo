@@ -1,22 +1,13 @@
-import { useCallback, useMemo, type ReactElement } from "react";
-import {
-  FlatList,
-  Pressable,
-  Text,
-  View,
-  type PressableStateCallbackType,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { useCallback, type ReactElement } from "react";
+import { FlatList, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { MenuHeader } from "@/components/headers/menu-header";
+import { StackScreenHeader } from "@/components/headers/stack-screen-header";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useCompactTimeAgo } from "@/hooks/use-time-ago";
-import { useNoteUpdatesSubscription, useProjectNotesList } from "@/notes/use-notes";
-import type { HostProjectNoteSummary } from "@/notes/notes-model";
+import { NoteListRow } from "@/notes/note-list-row";
+import type { HostNote } from "@/notes/notes-model";
+import { useNotesList } from "@/notes/use-notes";
 import type { Theme } from "@/styles/theme";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -34,14 +25,9 @@ export function NotesScreen(): ReactElement {
 
 function NotesScreenContent(): ReactElement {
   const { t } = useTranslation();
-  const { notes, isLoading, unsupportedHostLabels, refresh } = useProjectNotesList();
-  const serverIds = useMemo(() => [...new Set(notes.map((note) => note.serverId))], [notes]);
-  useNoteUpdatesSubscription(serverIds);
+  const { notes, isLoading, unsupportedHostLabels, refresh } = useNotesList();
 
-  const renderItem = useCallback(
-    ({ item }: { item: HostProjectNoteSummary }) => <NoteSummaryRow row={item} />,
-    [],
-  );
+  const renderItem = useCallback(({ item }: { item: HostNote }) => <NoteListRow note={item} />, []);
 
   let body: ReactElement;
   if (isLoading) {
@@ -61,7 +47,7 @@ function NotesScreenContent(): ReactElement {
     body = (
       <FlatList
         data={notes}
-        keyExtractor={noteSummaryKey}
+        keyExtractor={noteKey}
         renderItem={renderItem}
         onRefresh={refresh}
         refreshing={false}
@@ -73,7 +59,7 @@ function NotesScreenContent(): ReactElement {
 
   return (
     <View style={styles.container} testID="notes-screen">
-      <MenuHeader title={t("notes.title")} />
+      <StackScreenHeader title={t("notes.title")} />
       {unsupportedHostLabels.length > 0 ? (
         <HostUpgradeNotices labels={unsupportedHostLabels} />
       ) : null}
@@ -97,58 +83,8 @@ function HostUpgradeNotices({ labels }: { labels: readonly string[] }): ReactEle
   );
 }
 
-/**
- * One suffix for the row's meta line: a failed run is the most important thing
- * to say, then a run that is still queued, then nothing.
- */
-function resolveRowStatusLabel(
-  row: HostProjectNoteSummary,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  if (row.lastError !== null) return ` · ${t("notes.failedShort")}`;
-  if (row.pendingEntryCount > 0) return ` · ${t("notes.pending")}`;
-  return "";
-}
-
-function noteSummaryKey(row: HostProjectNoteSummary): string {
-  return `${row.serverId}:${row.projectId}`;
-}
-
-function noteRowStyle({ hovered, pressed }: PressableStateCallbackType): StyleProp<ViewStyle> {
-  return [styles.row, hovered ? styles.rowHovered : null, pressed ? styles.rowPressed : null];
-}
-
-function NoteSummaryRow({ row }: { row: HostProjectNoteSummary }): ReactElement {
-  const { t } = useTranslation();
-  const timeLabel = useCompactTimeAgo(new Date(row.updatedAt));
-  const statusLabel = resolveRowStatusLabel(row, t);
-
-  const handlePress = useCallback(() => {
-    router.push({
-      pathname: "/notes/[projectId]",
-      params: { projectId: row.projectId, server: row.serverId },
-    });
-  }, [row.projectId, row.serverId]);
-
-  return (
-    <Pressable
-      onPress={handlePress}
-      style={noteRowStyle}
-      accessibilityRole="button"
-      testID={`note-row-${row.serverId}-${row.projectId}`}
-    >
-      <View style={styles.rowText}>
-        <Text numberOfLines={1} style={styles.projectName}>
-          {row.projectName}
-        </Text>
-        <Text numberOfLines={1} style={styles.rowMeta}>
-          {row.hostLabel} · {t("notes.entryCount", { count: row.entryCount })}
-          {statusLabel}
-        </Text>
-      </View>
-      <Text style={styles.time}>{timeLabel}</Text>
-    </Pressable>
-  );
+function noteKey(note: HostNote): string {
+  return `${note.serverId}:${note.noteId}`;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -199,40 +135,5 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[6],
     },
     paddingBottom: theme.spacing[6],
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    minHeight: 56,
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    marginTop: theme.spacing[1],
-  },
-  rowHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
-  },
-  rowPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[0.5],
-  },
-  projectName: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-  },
-  rowMeta: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  time: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    flexShrink: 0,
   },
 }));

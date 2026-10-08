@@ -1087,20 +1087,9 @@ export async function createPaseoDaemon(
   const emitExternalSessionMessage = (message: SessionOutboundMessage) => {
     wsServer?.broadcast(wrapSessionMessage(message));
   };
-  // Note updates originate in the daemon-scoped organizer, so they fan out through
-  // the sessions rather than through whichever connection triggered the append.
   const noteService = new NoteService({
     paseoHome: config.paseoHome,
     projectRegistry,
-    agentManager,
-    providerSnapshotManager,
-    readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
-    logger,
-    onNoteUpdated: (note) => {
-      for (const session of wsServer?.listSessions() ?? []) {
-        session.emitNoteUpdated(note);
-      }
-    },
   });
   const workspaceAutoName = new WorkspaceAutoName({
     agentManager,

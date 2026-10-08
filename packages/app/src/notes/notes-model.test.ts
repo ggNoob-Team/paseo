@@ -1,96 +1,57 @@
 import { describe, expect, test } from "vitest";
-import type { NoteProjectPayload } from "@getpaseo/protocol/messages";
-import {
-  countPendingNoteEntries,
-  mergeProjectNoteSummaries,
-  resolveNoteGenerationState,
-  type HostProjectNoteSummary,
-} from "./notes-model";
+import { findNoteById, mergeNotes, noteDisplayTitle, type HostNote } from "./notes-model";
 
-function summary(overrides: Partial<HostProjectNoteSummary>): HostProjectNoteSummary {
+function note(overrides: Partial<HostNote> & { noteId: string }): HostNote {
   return {
     serverId: "srv_1",
     hostLabel: "Host 1",
     projectId: "prj_1",
     projectName: "Alpha",
-    entryCount: 1,
-    pendingEntryCount: 0,
-    hasBody: true,
-    lastError: null,
+    title: null,
+    text: "text",
+    comment: null,
+    source: { workspaceId: null, agentId: null },
+    createdAt: "2026-05-01T00:00:00.000Z",
     updatedAt: "2026-05-01T00:00:00.000Z",
     ...overrides,
   };
 }
 
-function note(overrides: Partial<NoteProjectPayload>): NoteProjectPayload {
-  return {
-    projectId: "prj_1",
-    projectName: "Alpha",
-    body: "",
-    bodyUpdatedAt: null,
-    entries: [],
-    lastError: null,
-    updatedAt: "2026-05-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
-describe("mergeProjectNoteSummaries", () => {
-  test("orders by most recent activity, then project name", () => {
-    const merged = mergeProjectNoteSummaries([
-      summary({ projectId: "b", projectName: "Beta", updatedAt: "2026-05-01T00:00:00.000Z" }),
-      summary({ projectId: "c", projectName: "Gamma", updatedAt: "2026-05-02T00:00:00.000Z" }),
-      summary({ projectId: "a", projectName: "Alpha", updatedAt: "2026-05-01T00:00:00.000Z" }),
+describe("mergeNotes", () => {
+  test("orders by most recent edit and keeps every capture", () => {
+    const merged = mergeNotes([
+      note({ noteId: "b", updatedAt: "2026-05-01T00:00:00.000Z" }),
+      note({ noteId: "a", updatedAt: "2026-05-02T00:00:00.000Z" }),
+      note({ noteId: "c", updatedAt: "2026-05-01T00:00:00.000Z" }),
     ]);
-    expect(merged.map((row) => row.projectName)).toEqual(["Gamma", "Alpha", "Beta"]);
+    expect(merged.map((entry) => entry.noteId)).toEqual(["a", "b", "c"]);
   });
 
-  test("keeps the same project on two hosts as two rows", () => {
-    const merged = mergeProjectNoteSummaries([
-      summary({ serverId: "srv_1" }),
-      summary({ serverId: "srv_2" }),
+  test("keeps notes from different hosts apart", () => {
+    const merged = mergeNotes([
+      note({ noteId: "a", serverId: "srv_1" }),
+      note({ noteId: "b", serverId: "srv_2" }),
     ]);
     expect(merged).toHaveLength(2);
   });
 });
 
-describe("resolveNoteGenerationState", () => {
-  test("is organizing while any entry is pending", () => {
-    const entry = {
-      entryId: "e1",
-      createdAt: "2026-05-01T00:00:00.000Z",
-      text: "snippet",
-      comment: null,
-      source: { workspaceId: null, agentId: null },
-      organizedAt: null,
-    };
-    expect(resolveNoteGenerationState(note({ entries: [entry] }))).toBe("organizing");
-    expect(countPendingNoteEntries(note({ entries: [entry] }))).toBe(1);
+describe("noteDisplayTitle", () => {
+  test("prefers the user's title", () => {
+    expect(noteDisplayTitle({ title: "  Plan  ", text: "body" })).toBe("Plan");
   });
 
-  test("reports a failure even while entries are still pending", () => {
-    expect(resolveNoteGenerationState(note({ lastError: "no provider" }))).toBe("failed");
-    expect(
-      resolveNoteGenerationState(
-        note({
-          lastError: "no provider",
-          entries: [
-            {
-              entryId: "e1",
-              createdAt: "2026-05-01T00:00:00.000Z",
-              text: "snippet",
-              comment: null,
-              source: { workspaceId: null, agentId: null },
-              organizedAt: null,
-            },
-          ],
-        }),
-      ),
-    ).toBe("failed");
+  test("falls back to the first line of the text", () => {
+    expect(noteDisplayTitle({ title: null, text: "first line\nsecond line" })).toBe("first line");
+    expect(noteDisplayTitle({ title: "  ", text: "only line" })).toBe("only line");
   });
+});
 
-  test("is idle for a clean note", () => {
-    expect(resolveNoteGenerationState(note({}))).toBe("idle");
-    expect(resolveNoteGenerationState(null)).toBe("idle");
+describe("findNoteById", () => {
+  test("finds a note or reports nothing", () => {
+    const notes = [note({ noteId: "a" })];
+    expect(findNoteById(notes, "a")?.noteId).toBe("a");
+    expect(findNoteById(notes, "missing")).toBeNull();
+    expect(findNoteById(notes, null)).toBeNull();
   });
 });

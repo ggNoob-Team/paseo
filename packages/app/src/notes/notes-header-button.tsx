@@ -1,5 +1,5 @@
-import { useCallback, useState, type ReactElement } from "react";
-import * as Clipboard from "expo-clipboard";
+import { useCallback, type ReactElement } from "react";
+import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { NotebookPen } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
@@ -9,62 +9,49 @@ import {
   iconButtonChromeGlyphSize,
 } from "@/components/ui/icon-button-chrome";
 import { useToast } from "@/contexts/toast-context";
-import { useNotesCaptureOptional } from "./capture-context";
+import { useHostFeature } from "@/runtime/host-features";
 
 const ThemedNotebookPen = withUnistyles(NotebookPen);
 
 /**
- * The header's "add to notes" action.
- *
- * Android does not expose the current text selection to JS — the selection
- * lives in the platform's floating toolbar — but the text the user copied out
- * of it is readable. So the flow is: long-press, tap Copy in the system menu,
- * then tap this button; whatever is on the clipboard becomes the entry, and the
- * sheet still lets it be trimmed before it is saved.
- *
- * Renders nothing when the surrounding screen has no notes context.
+ * The workspace header's notes action: it opens this project's notes, where the
+ * "add note" button starts the capture flow. A host that cannot store notes
+ * says so rather than opening a list that would stay empty.
  */
-export function NotesHeaderButton(): ReactElement | null {
+export function NotesHeaderButton({
+  serverId,
+  projectId,
+  projectName,
+}: {
+  serverId: string;
+  projectId: string;
+  projectName: string;
+}): ReactElement {
   const { t } = useTranslation();
   const toast = useToast();
-  const capture = useNotesCaptureOptional();
-  const [isReadingClipboard, setIsReadingClipboard] = useState(false);
-
-  const copyClipboardIntoDraft = useCallback(async () => {
-    try {
-      const clipboardText = await Clipboard.getStringAsync();
-      const text = clipboardText.trim();
-      if (text.length === 0) {
-        toast.show(t("notes.copyHint"), { variant: "warning" });
-        return;
-      }
-      capture?.addText(text);
-    } catch {
-      toast.show(t("notes.copyHint"), { variant: "warning" });
-    } finally {
-      setIsReadingClipboard(false);
-    }
-  }, [capture, t, toast]);
+  const supportsNotes = useHostFeature(serverId, "notesPerEntry");
 
   const handlePress = useCallback(() => {
-    if (!capture || isReadingClipboard) return;
-    setIsReadingClipboard(true);
-    void copyClipboardIntoDraft();
-  }, [capture, copyClipboardIntoDraft, isReadingClipboard]);
-
-  if (!capture) return null;
+    if (!supportsNotes) {
+      toast.show(t("notes.hostUpgrade", { host: serverId }), { variant: "warning" });
+      return;
+    }
+    router.push({
+      pathname: "/notes/project/[projectId]",
+      params: { projectId, server: serverId, name: projectName },
+    });
+  }, [projectId, projectName, serverId, supportsNotes, t, toast]);
 
   return (
     <HeaderToggleButton
       testID="workspace-notes-button"
       onPress={handlePress}
-      tooltipLabel={t("notes.addEntryAction")}
+      tooltipLabel={t("notes.title")}
       tooltipKeys={[]}
       tooltipSide="left"
-      disabled={isReadingClipboard}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={t("notes.addEntryAction")}
+      accessibilityLabel={t("notes.title")}
     >
       <ThemedNotebookPen
         size={iconButtonChromeGlyphSize("large")}
