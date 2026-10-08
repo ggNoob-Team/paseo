@@ -1137,6 +1137,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                   baseListContentContainerStyle: stylesheet.listContentContainer,
                   forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
                   contentMaxWidth,
+                  imageContext: { serverId: resolvedServerId, workspaceRoot },
                 })}
               </MessageOuterSpacingProvider>
               <ChatOutlineRail
