@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Paseo HarmonyOS shell"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Paseo"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Paseo"
+    },
+    {
+      "name": "mic_reason",
+      "value": "Paseo uses the microphone for voice input to your agents."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  name: "entry",
+  // hvigor validates this against /^[1-9]\d?(\.([1-9]?\d)){2}$/ and warns on a
+  // leading-zero major, so the app's real 0.x version cannot live here. The
+  // version that ships is AppScope/app.json5, stamped by the build script.
+  version: "1.0.0",
+  description: "Paseo entry module",
+  main: "",
+  author: "",
+  license: "Apache-2.0",
+  dependencies: {},
+}

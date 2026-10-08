@@ -1,0 +1,19 @@
+# ohpm / hvigor
+oh_modules/
+.hvigor/
+.clang-format
+.clangd
+.cxx
+local.properties
+**/oh_modules/
+
+# Build output
+**/build/
+
+# Generated from packages/app (see scripts/build-harmony.mjs)
+entry/src/main/resources/rawfile/
+AppScope/resources/base/media/app_icon.png
+entry/src/main/resources/base/media/app_icon.png
+
+# Signing material never lives in the repo; build-profile.json5 points at $HOME/.paseo-harmony
+signing/

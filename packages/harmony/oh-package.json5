@@ -1,0 +1,11 @@
+{
+  modelVersion: "6.0.0",
+  name: "paseo-harmony",
+  version: "0.10.0",
+  description: "Paseo HarmonyOS shell: loads the Expo web build of packages/app in a Web component.",
+  main: "",
+  author: "",
+  license: "Apache-2.0",
+  dependencies: {},
+  devDependencies: {},
+}

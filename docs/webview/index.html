@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="data:," />
+    <title>Paseo 二开 · 功能索引</title>
+    <style>
+      :root {
+        --bg: #070b14;
+        --panel: #0e1524;
+        --panel2: #141d31;
+        --line: rgba(255, 255, 255, 0.08);
+        --txt: #e8edf7;
+        --dim: #8899b3;
+        --faint: #5b6b85;
+        --live: #22d3a7;
+        --wip: #f59e0b;
+        --todo: #38bdf8;
+        --plan: #8b93a7;
+        --test: #a78bfa;
+        --mono: ui-monospace, "SF Mono", Menlo, monospace;
+        --cn: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background:
+          radial-gradient(1200px 600px at 12% -10%, rgba(56, 189, 248, 0.1), transparent 60%),
+          var(--bg);
+        color: var(--txt);
+        font-family: var(--cn);
+        min-height: 100vh;
+        padding: 44px 40px 60px;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+      h1 small {
+        display: block;
+        font-size: 11.5px;
+        letter-spacing: 0.22em;
+        color: var(--faint);
+        font-weight: 400;
+        margin-top: 8px;
+      }
+      .meta {
+        font-size: 12px;
+        color: var(--dim);
+        line-height: 1.9;
+        margin: 14px 0 30px;
+        border-left: 2px solid rgba(56, 189, 248, 0.4);
+        padding-left: 14px;
+      }
+      .meta code {
+        font-family: var(--mono);
+        color: #7dd3fc;
+        background: rgba(56, 189, 248, 0.08);
+        padding: 1px 6px;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+      section {
+        margin-bottom: 30px;
+      }
+      h2 {
+        font-size: 13px;
+        letter-spacing: 0.16em;
+        color: var(--dim);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 14px;
+      }
+      h2 .n {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint);
+        font-weight: 400;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        display: block;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-decoration: none;
+        color: inherit;
+      }
+      a.card {
+        transition: 0.15s;
+      }
+      a.card:hover {
+        border-color: rgba(56, 189, 248, 0.5);
+        background: var(--panel2);
+        transform: translateY(-2px);
+      }
+      .card .t {
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+      }
+      .card .t .go {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--accent, #38bdf8);
+        opacity: 0.75;
+      }
+      .card .d {
+        font-size: 12.5px;
+        color: var(--dim);
+        margin-top: 8px;
+        line-height: 1.7;
+      }
+      .card .src {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--faint);
+        margin-top: 10px;
+        word-break: break-all;
+      }
+      .badge {
+        font-size: 10px;
+        font-family: var(--mono);
+        padding: 1.5px 8px;
+        border-radius: 20px;
+        border: 1px solid;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+      .b-live {
+        color: var(--live);
+        border-color: rgba(34, 211, 167, 0.45);
+        background: rgba(34, 211, 167, 0.1);
+      }
+      .b-wip {
+        color: var(--wip);
+        border-color: rgba(245, 158, 11, 0.45);
+        background: rgba(245, 158, 11, 0.1);
+      }
+      .b-todo {
+        color: var(--todo);
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(56, 189, 248, 0.1);
+      }
+      .b-plan {
+        color: var(--plan);
+        border-color: rgba(139, 147, 167, 0.45);
+        background: rgba(139, 147, 167, 0.1);
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 20px 0 24px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 16px;
+      }
+      .tab {
+        font-family: var(--cn);
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--dim);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 10px 24px;
+        cursor: pointer;
+        transition: 0.15s;
+      }
+      .tab:hover {
+        color: var(--txt);
+        border-color: rgba(56, 189, 248, 0.45);
+      }
+      .tab .c {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        font-weight: 400;
+        color: var(--faint);
+        margin-left: 9px;
+      }
+      .tab.on {
+        color: #06111c;
+      }
+      .tab.on.live {
+        background: var(--live);
+        border-color: var(--live);
+      }
+      .tab.on.plan {
+        background: var(--plan);
+        border-color: var(--plan);
+      }
+      .tab.on.todo {
+        background: var(--todo);
+        border-color: var(--todo);
+      }
+      .tab.on .c {
+        color: rgba(6, 17, 28, 0.62);
+      }
+      .pane {
+        display: none;
+      }
+      .pane.on {
+        display: block;
+        animation: fade 0.18s ease-out;
+      }
+      @keyframes fade {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .req .rq {
+        margin-top: 12px;
+        padding-top: 11px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.07);
+      }
+      .req .rq:first-of-type {
+        margin-top: 10px;
+        padding-top: 0;
+        border-top: 0;
+      }
+      .req .k {
+        display: block;
+        font-size: 10.5px;
+        font-family: var(--mono);
+        letter-spacing: 0.14em;
+        color: var(--faint);
+        margin-bottom: 6px;
+      }
+      .req .v {
+        font-size: 12.5px;
+        color: var(--dim);
+        line-height: 1.75;
+      }
+      .req .v b {
+        color: var(--txt);
+        font-weight: 600;
+      }
+      .req ul {
+        margin: 0 0 0 16px;
+      }
+      .req li {
+        font-size: 12.5px;
+        color: var(--dim);
+        line-height: 1.75;
+      }
+      .req li b {
+        color: var(--txt);
+        font-weight: 600;
+      }
+      .req .out li {
+        color: var(--faint);
+      }
+      footer {
+        margin-top: 36px;
+        font-size: 11.5px;
+        color: var(--faint);
+        line-height: 1.9;
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+      }
+      footer code {
+        font-family: var(--mono);
+        color: #7dd3fc;
+      }
+      @media (max-width: 640px) {
+        body {
+          padding: 26px 18px 40px;
+        }
+        h1 {
+          font-size: 21px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .tab {
+          padding: 9px 16px;
+          font-size: 13.5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Paseo 二开 · 功能索引<small>PASEO FORK · FEATURES &amp; REQUIREMENTS</small></h1>
+
+      <div class="meta">
+        站点 <code>https://paseo.zxyz.app</code> · 站点根 <code>/www/wwwroot/paseo.zxyz.app</code
+        ><br />
+        站点根 <code>index.html</code> 软链至
+        <code>/home/workspace/code/paseo/docs/webview/index.html</code
+        >，改仓库文件即时生效，无需重新发布。<br />
+        状态口径：<b style="color: var(--live)">已实现</b>=能跑、有入口或后台在运行；<b
+          style="color: var(--plan)"
+          >计划中</b
+        >=需求已整理、待排期；<b style="color: var(--todo)">未开发</b>=明确暂缓或尚无方案。
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab live on" data-tab="done">已实现<span class="c">4</span></button>
+        <button class="tab plan" data-tab="plan">计划中<span class="c">3</span></button>
+        <button class="tab todo" data-tab="todo">未开发<span class="c">4</span></button>
+      </div>
+
+      <div class="pane on" id="pane-done">
+        <section>
+          <h2>已实现 <span class="n">4 项 · fork 相对上游的增量</span></h2>
+          <div class="grid">
+            <div class="card">
+              <div class="t">Archify 架构图集成<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                内置 <b>paseo-archify</b> skill（vendored 渲染运行时 + 五类图表 schema）、工作区
+                Archify 面板、<code>archify_render</code> MCP
+                工具与产物存储；面板含图表标签页、规格搜索与聚焦跳转。
+              </div>
+              <div class="src">
+                skills/paseo-archify · packages/server/src/server/archify/service.ts ·
+                packages/app/src/panels/archify-panel.tsx
+              </div>
+            </div>
+            <div class="card">
+              <div class="t">项目笔记 + 最近工作区<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                按项目保存的笔记（原始片段 +
+                后台整理的正文），消息块与头部剪贴板两种捕获入口，笔记列表与详情页；以及最近工作区入口。
+              </div>
+              <div class="src">
+                packages/app/src/notes · packages/server/src/server/notes · 9e20414f9 · f77844e67 ·
+                2f884242d
+              </div>
+            </div>
+            <div class="card">
+              <div class="t">口述实时转写 + 本地 STT<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                输入框内实时显示口述转写；接入 SenseVoice 本地语音识别模型，覆盖中文、日文、韩文。
+              </div>
+              <div class="src">c83482f8b · 2615294a8</div>
+            </div>
+            <div class="card">
+              <div class="t">打包与发布链路<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                Android APK 构建脚本与 CI（可裁剪 ABI、缓存、磁盘清理）、未签名 macOS
+                桌面构建、Windows 安装包拆分上传、daemon 包发布到 GitHub Packages、web 客户端部署到
+                fork 的 Cloudflare 账号。
+              </div>
+              <div class="src">
+                .github/workflows · scripts · 2d2ec8e9a · 1bd56d870 · 6af70fded · 87d2708fe ·
+                3e135931a
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="pane" id="pane-plan">
+        <section>
+          <h2>计划中 <span class="n">3 项 · 需求已整理，待排期</span></h2>
+          <div class="grid">
+            <div class="card req">
+              <div class="t">Archify 生成体验重构<span class="badge b-plan">计划中</span></div>
+              <div class="d">
+                把"等 4 分钟黑盒"变成"几十秒有产出、全程看得见"。速度、透明、随时能停是一体的。
+              </div>
+              <div class="rq">
+                <span class="k">痛点</span>
+                <div class="v">
+                  <ul>
+                    <li>
+                      生成要等非常久 —— 实测 3 张图约 4 分钟，耗时全在模型侧（渲染仅 <b>93ms</b>）。
+                    </li>
+                    <li>
+                      过程不可见 —— 只有一个转圈 + 2.5
+                      秒轮询产物，不知道在读什么、第几张图、第几轮修复。
+                    </li>
+                    <li>无法聚焦 —— 系统很大，只想看某一个点/某一部分，没有指定范围的交互。</li>
+                    <li>出图与意图不符 —— 要的那张图没出来，出来的是另一种，且"完全不对"。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">已定方向</span>
+                <div class="v">
+                  <ul>
+                    <li>
+                      确定性预扫描产出"仓库事实清单 + ≤40KB
+                      精简摘要"直接喂模型，砍掉探索轮次（模型想三四次即可出结果）。
+                    </li>
+                    <li>流水线由 daemon 接管，阶段真实上报：扫描 / 出图 / 校验 / 交付。</li>
+                    <li>
+                      多张图并行，以"父任务 + 子 agent"层级呈现，侧边栏不散落；worker
+                      交付后自动归档。
+                    </li>
+                    <li>渐进交付：每张都是成品、按序先出，架构图先可见，其余后台继续。</li>
+                    <li>可取消（停掉未完成项、保留已交付）；失败隔离；一个"重跑未完成"入口。</li>
+                    <li>证据包新鲜度：仓库版本或工作区有变化才重扫，否则复用。</li>
+                    <li>先扫出候选锚点（模块/入口/链路）让你确认，再动笔出图。</li>
+                    <li>进度展示：阶段 + 每张图状态与用时 + 实时动作行 + 失败原因。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">明确排除 v1</span>
+                <div class="v out">
+                  <ul>
+                    <li>骨架直出 IR、草稿先出后替换、单张独立按钮、换模型重跑。</li>
+                    <li>渲染链路优化（93ms，没有优化价值）、改动产物存储格式。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req">
+              <div class="t">笔记增强<span class="badge b-plan">计划中</span></div>
+              <div class="d">现在的笔记是"内容摘要器"，要的是"书签 + 待办收件箱"。</div>
+              <div class="rq">
+                <span class="k">痛点</span>
+                <div class="v">
+                  <ul>
+                    <li>记的是文本内容，不是位置。</li>
+                    <li>
+                      记完回不去 —— <code>source</code> 存了
+                      workspaceId/agentId，界面却从不渲染、点不了，跳转能力为 0。
+                    </li>
+                    <li>
+                      没有"待处理" ——
+                      <code>organizedAt</code>
+                      是"已并入正文"，不是"已处理"，笔记只会堆积，不能当清单清空。
+                    </li>
+                    <li>重心错位在 AI 合成正文，带来失败态、重试、状态行这些复杂度。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">已定方向</span>
+                <div class="v">
+                  <ul>
+                    <li>
+                      一条笔记 = 锚点（会话 / 消息 / 文件+行 / 那张图 / PR）+
+                      一句自述；文本降级为附件。
+                    </li>
+                    <li>
+                      条目主操作是"回去"，走 <code>navigateToAgent</code> 落到会话，有 messageId
+                      则落到该条消息。
+                    </li>
+                    <li>新增"待处理"状态，收件箱默认只看未处理，处理完勾掉。</li>
+                    <li>会话内一个按钮 → 弹窗预填当前位置，补一句话即存。</li>
+                    <li>AI 正文降级为可选的后台附加，不挡在"记"和"跳"中间。</li>
+                    <li>
+                      目标闭环：开发 → 反馈的工作台（随手记问题点 → 收工逐条跳回确认 → 汇成反馈）。
+                    </li>
+                    <li>先做"可跳转 + 待处理"这一件。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req">
+              <div class="t">Agent 开发模式<span class="badge b-plan">计划中</span></div>
+              <div class="d">把"新建一个 Agent"从裸配置改成有结构的三件事。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>一个 Agent 的开发应该改成 <b>入口 + 背景 + 模型</b>。</li>
+                    <li>本地的服务器系统可以封装成一个"智能包"，像一个<b>超级 Skills</b>。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="pane" id="pane-todo">
+        <section>
+          <h2>未开发 <span class="n">4 项 · 明确暂缓或尚无方案</span></h2>
+          <div class="grid">
+            <div class="card">
+              <div class="t">Archify 骨架直出 IR<span class="badge b-todo">未开发</span></div>
+              <div class="d">
+                由脚本从导入关系直接拼出架构图初稿、模型只做精修。当前定为不做——图形质量受限，先只把仓库事实喂给模型。
+              </div>
+            </div>
+            <div class="card">
+              <div class="t">草稿替换式交付<span class="badge b-todo">未开发</span></div>
+              <div class="d">
+                先秒级出一个轻量草稿、随后被完整版替换。当前定为不做——每张图都应是成品，避免图"变形"造成困惑。
+              </div>
+            </div>
+            <div class="card">
+              <div class="t">单张独立重跑 / 换模型重跑<span class="badge b-todo">未开发</span></div>
+              <div class="d">
+                当前只保留一个"重跑未完成"入口，不做每行的独立按钮，也不支持为单张图换模型重跑。
+              </div>
+            </div>
+            <div class="card">
+              <div class="t">笔记跨项目全文检索<span class="badge b-todo">未开发</span></div>
+              <div class="d">尚无方案。当前笔记只按项目汇总，没有跨项目的全文搜索能力。</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        生成时间 <code>2026-10-04 16:48 CST</code> · 仓库 revision <code>2f884242d</code><br />
+        内容来源：本次需求整理（Archify 生成体验 / 笔记增强 / Agent 开发模式）+ fork 相对上游
+        <code>getpaseo/paseo</code> 的提交记录。
+      </footer>
+    </div>
+    <script>
+      (function () {
+        var tabs = document.getElementById("tabs");
+        if (!tabs) return;
+        tabs.addEventListener("click", function (event) {
+          var button = event.target.closest(".tab");
+          if (!button) return;
+          var name = button.getAttribute("data-tab");
+          var pane = document.getElementById("pane-" + name);
+          if (!pane) return;
+          tabs.querySelectorAll(".tab").forEach(function (tab) {
+            tab.classList.remove("on");
+          });
+          document.querySelectorAll(".pane").forEach(function (p) {
+            p.classList.remove("on");
+          });
+          button.classList.add("on");
+          pane.classList.add("on");
+          if (history.replaceState) history.replaceState(null, "", "#" + name);
+        });
+        var initial = (location.hash || "").replace("#", "");
+        if (initial) {
+          var target = tabs.querySelector('.tab[data-tab="' + initial + '"]');
+          if (target) target.click();
+        }
+      })();
+    </script>
+  </body>
+</html>
