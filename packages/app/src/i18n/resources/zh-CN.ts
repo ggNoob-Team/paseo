@@ -11,6 +11,16 @@ export const zhCN: TranslationResources = {
     providerUnavailable: "当前没有可用的 Agent Provider。",
     generationFailed: "Archify 生成失败。",
     generating: "正在生成图表...",
+    stage: {
+      scan: "扫描仓库",
+      draw: "生成图",
+      validate: "校验",
+      deliver: "交付",
+      done: "完成",
+    },
+    actions: {
+      rerunUnfinished: "重跑未完成",
+    },
     ready: "图表已就绪",
     refresh: "刷新图表",
     searchPlaceholder: "搜索方法调用、变量、流转或业务步骤",

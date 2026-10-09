@@ -1,6 +1,8 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
+import type { ArchifyGenerationTask } from "@getpaseo/protocol/messages";
 import { openArchifyWorkspace, readArchifyArtifact } from "./archify/service.js";
 import { scanArchifyEvidence } from "./archify/evidence.js";
+import type { ArchifyGenerationService } from "./archify/generation.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { BrowserAutomationHostCapabilitySchema } from "@getpaseo/protocol/browser-automation/capabilities";
 import type {
@@ -469,6 +471,7 @@ export interface SessionOptions {
   directorySync?: DirectorySyncService;
   workspaceLabelService?: WorkspaceLabelService;
   noteService?: NoteService;
+  archifyGeneration?: ArchifyGenerationService;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
   checkoutDiffManager: CheckoutDiffManager;
@@ -638,6 +641,12 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
  * It owns all state management, orchestration logic, and message processing.
  * Session has no knowledge of WebSockets - it only emits and receives messages.
  */
+function resolveArchifyGenerationService(
+  service: ArchifyGenerationService | undefined,
+): ArchifyGenerationService | null {
+  return service ?? null;
+}
+
 function resolveNoteService(service: NoteService | undefined): NoteService | null {
   return service ?? null;
 }
@@ -773,6 +782,7 @@ export class Session {
   >();
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private readonly noteService: NoteService | null;
+  private readonly archifyGeneration: ArchifyGenerationService | null;
   private readonly eventSubscriptions = new Map<
     string,
     { owner: OwnedSubscription; events: Set<SessionEventSubscription>; notifications: boolean }
@@ -834,6 +844,7 @@ export class Session {
       directorySync,
       workspaceLabelService,
       noteService,
+      archifyGeneration,
       filesystem,
       scheduleService,
       checkoutDiffManager,
@@ -909,6 +920,7 @@ export class Session {
     this.directorySync = resolveDirectorySync(directorySync);
     this.workspaceLabelService = resolveWorkspaceLabelService(workspaceLabelService);
     this.noteService = resolveNoteService(noteService);
+    this.archifyGeneration = resolveArchifyGenerationService(archifyGeneration);
     this.filesystem = filesystem ?? nodeSessionFileSystem;
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
@@ -2994,6 +3006,14 @@ export class Session {
         return this.handleArchifyArtifactReadRequest(msg);
       case "archify.evidence.scan.request":
         return this.handleArchifyEvidenceScanRequest(msg);
+      case "archify.generation.start.request":
+        return this.handleArchifyGenerationStartRequest(msg);
+      case "archify.generation.cancel.request":
+        return this.handleArchifyGenerationCancelRequest(msg);
+      case "archify.generation.rerun.request":
+        return this.handleArchifyGenerationRerunRequest(msg);
+      case "archify.generation.get.request":
+        return this.handleArchifyGenerationGetRequest(msg);
       default:
         return undefined;
     }
@@ -3037,6 +3057,67 @@ export class Session {
         artifact,
         error: artifact ? null : "Archify artifact not found",
       },
+    });
+  }
+
+  /** Fan-out point for run updates: the daemon owns the run, every session forwards it. */
+  emitArchifyTaskUpdated(task: ArchifyGenerationTask): void {
+    this.emitSubscribedEvent({ type: "archify.generation.updated", payload: { task } });
+  }
+
+  private requireArchifyGeneration(): ArchifyGenerationService {
+    if (!this.archifyGeneration) {
+      throw new SessionRequestError("archify_unavailable", "Archify generation unavailable");
+    }
+    return this.archifyGeneration;
+  }
+
+  private async handleArchifyGenerationStartRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.generation.start.request" }>,
+  ): Promise<void> {
+    const task = await this.requireArchifyGeneration().start({
+      workspaceId: msg.workspaceId,
+      types: msg.types,
+      ...(msg.request === undefined ? {} : { request: msg.request }),
+      ...(msg.scope === undefined ? {} : { scope: msg.scope }),
+      provider: msg.provider,
+      ...(msg.model === undefined ? {} : { model: msg.model }),
+      ...(msg.modeId === undefined ? {} : { modeId: msg.modeId }),
+      ...(msg.forceScan === undefined ? {} : { forceScan: msg.forceScan }),
+    });
+    this.emit({
+      type: "archify.generation.start.response",
+      payload: { requestId: msg.requestId, task },
+    });
+  }
+
+  private async handleArchifyGenerationCancelRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.generation.cancel.request" }>,
+  ): Promise<void> {
+    const task = await this.requireArchifyGeneration().cancel(msg.taskId);
+    this.emit({
+      type: "archify.generation.cancel.response",
+      payload: { requestId: msg.requestId, task },
+    });
+  }
+
+  private async handleArchifyGenerationRerunRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.generation.rerun.request" }>,
+  ): Promise<void> {
+    const task = await this.requireArchifyGeneration().rerun(msg.taskId);
+    this.emit({
+      type: "archify.generation.rerun.response",
+      payload: { requestId: msg.requestId, task },
+    });
+  }
+
+  private async handleArchifyGenerationGetRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.generation.get.request" }>,
+  ): Promise<void> {
+    const task = this.requireArchifyGeneration().get(msg.workspaceId);
+    this.emit({
+      type: "archify.generation.get.response",
+      payload: { requestId: msg.requestId, task },
     });
   }
 
@@ -8846,6 +8927,7 @@ function legacyWantsEvent(
     // Notes are gated on `server_info.features.notes`; a client old enough to be
     // on the implicit event path never asked for this and cannot parse it.
     case "notes.project.updated":
+    case "archify.generation.updated":
       return false;
     default:
       return true;

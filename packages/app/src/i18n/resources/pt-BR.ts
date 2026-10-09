@@ -11,6 +11,16 @@ export const ptBR: TranslationResources = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "Analisando",
+      draw: "Desenhando",
+      validate: "Validando",
+      deliver: "Entregando",
+      done: "Concluído",
+    },
+    actions: {
+      rerunUnfinished: "Repetir o que faltou",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

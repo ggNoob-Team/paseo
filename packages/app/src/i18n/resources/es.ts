@@ -11,6 +11,16 @@ export const es: TranslationResources = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "Analizando",
+      draw: "Dibujando",
+      validate: "Validando",
+      deliver: "Entregando",
+      done: "Listo",
+    },
+    actions: {
+      rerunUnfinished: "Reintentar lo pendiente",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

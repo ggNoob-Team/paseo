@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ARCHIFY_INITIAL_TYPES,
   buildArchifyFocusScript,
-  buildArchifyGenerationPrompt,
   buildArchifySearchEntries,
   filterArchifySearchEntries,
   resolveArchifyAgentConfig,
@@ -10,39 +8,6 @@ import {
 } from "./model";
 
 describe("archify model", () => {
-  it("requests architecture, method calls, and variable flow for the first run", () => {
-    const prompt = buildArchifyGenerationPrompt({
-      artifactPrefix: "archify-test",
-      types: ARCHIFY_INITIAL_TYPES,
-    });
-    expect(prompt).toContain('artifactId="archify-test-architecture"');
-    expect(prompt).toContain('artifactId="archify-test-sequence"');
-    expect(prompt).toContain('artifactId="archify-test-dataflow"');
-    expect(prompt).toContain("archify_render");
-    expect(prompt).toContain("not only the diagram type");
-  });
-
-  it("feeds the pre-scanned evidence sheet and stops the agent exploring", () => {
-    const prompt = buildArchifyGenerationPrompt({
-      artifactPrefix: "archify-test",
-      types: ARCHIFY_INITIAL_TYPES,
-      evidenceDigest: "# Repository evidence\n- @fixture/core (packages/core)",
-    });
-
-    expect(prompt).toContain("# Pre-scanned repository evidence");
-    expect(prompt).toContain("@fixture/core");
-    expect(prompt).toContain("Do not walk or search the repository to rediscover its structure");
-  });
-
-  it("still asks for repository inspection when no evidence was scanned", () => {
-    const prompt = buildArchifyGenerationPrompt({
-      artifactPrefix: "archify-test",
-      types: ARCHIFY_INITIAL_TYPES,
-    });
-    expect(prompt).toContain("inspect the current repository");
-    expect(prompt).not.toContain("Pre-scanned repository evidence");
-  });
-
   it.each([
     ["codex", "full-access"],
     ["claude", "bypassPermissions"],

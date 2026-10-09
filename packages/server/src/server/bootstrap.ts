@@ -122,6 +122,7 @@ import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { NoteService } from "./notes/note-service.js";
+import { ArchifyGenerationService } from "./archify/generation.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -1203,6 +1204,21 @@ export async function createPaseoDaemon(
   };
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
+
+  // Archify runs are daemon-owned, so their progress is pushed to whichever
+  // sessions subscribed to the event rather than answered to one caller.
+  const archifyGeneration = new ArchifyGenerationService({
+    paseoHome: config.paseoHome,
+    workspaceRegistry,
+    createAgent,
+    agentManager,
+    logger,
+    onTaskUpdated: (task) => {
+      for (const session of wsServer?.listSessions() ?? []) {
+        session.emitArchifyTaskUpdated(task);
+      }
+    },
+  });
   const archiveWorkspaceByIdExternal = (workspaceId: string, requestId: string) =>
     archiveByScope(
       {
@@ -1748,6 +1764,7 @@ export async function createPaseoDaemon(
               orchestrationSkills,
               workspaceLabelService,
               noteService,
+              archifyGeneration,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

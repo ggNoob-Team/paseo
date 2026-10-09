@@ -8,6 +8,16 @@ export const en = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "Scanning",
+      draw: "Drawing diagrams",
+      validate: "Validating",
+      deliver: "Delivering",
+      done: "Done",
+    },
+    actions: {
+      rerunUnfinished: "Rerun unfinished",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

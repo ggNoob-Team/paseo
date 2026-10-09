@@ -11,6 +11,16 @@ export const ja: TranslationResources = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "スキャン中",
+      draw: "図を生成中",
+      validate: "検証中",
+      deliver: "配信中",
+      done: "完了",
+    },
+    actions: {
+      rerunUnfinished: "未完了を再実行",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

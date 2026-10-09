@@ -18,7 +18,6 @@ import {
   ARCHIFY_ALL_TYPES,
   ARCHIFY_INITIAL_TYPES,
   buildArchifyFocusScript,
-  buildArchifyGenerationPrompt,
   buildArchifySearchEntries,
   filterArchifySearchEntries,
   latestArchifyArtifactByType,
@@ -26,6 +25,7 @@ import {
   resolveArchifyArtifactTabLabel,
   type ArchifySearchEntry,
 } from "@/archify/model";
+import { Button } from "@/components/ui/button";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
 import { FileHtmlPreview } from "@/file-pane/html-preview";
@@ -35,14 +35,12 @@ import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
-import type { ArchifyArtifactSummary, ArchifyDiagramType } from "@getpaseo/protocol/messages";
-
-interface ArchifyGenerationState {
-  agentId: string;
-  types: readonly ArchifyDiagramType[];
-}
+import type {
+  ArchifyArtifactSummary,
+  ArchifyDiagramType,
+  ArchifyGenerationTask,
+} from "@getpaseo/protocol/messages";
 
 interface ArchifyPreviewCommand {
   id: number;
@@ -297,7 +295,7 @@ function ArchifyPanel(): ReactElement {
     [preferences, providers.entries],
   );
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
-  const [generation, setGeneration] = useState<ArchifyGenerationState | null>(null);
+  const [generationTask, setGenerationTask] = useState<ArchifyGenerationTask | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -312,16 +310,15 @@ function ArchifyPanel(): ReactElement {
   const skillReadyRef = useRef(false);
   const previousGenerationRunningRef = useRef(false);
 
-  const generationAgentStatus = useSessionStore((state) =>
-    generation ? (state.sessions[serverId]?.agents.get(generation.agentId)?.status ?? null) : null,
-  );
-  const generationAgentError = useSessionStore((state) =>
-    generation
-      ? (state.sessions[serverId]?.agents.get(generation.agentId)?.lastError ?? null)
-      : null,
-  );
-  const generationRunning =
-    generationAgentStatus === "initializing" || generationAgentStatus === "running";
+  const generationRunning = generationTask?.status === "running";
+  const generationTaskError = generationTask?.status === "failed" ? generationTask.error : null;
+  const generationDeliveredCount =
+    generationTask?.diagrams.filter((diagram) => diagram.status === "delivered").length ?? 0;
+  const generationDiagramCount = generationTask?.diagrams.length ?? 0;
+  const canRerunUnfinished =
+    generationTask !== null &&
+    generationTask.status !== "running" &&
+    generationDeliveredCount < generationDiagramCount;
 
   const workspaceQuery = useFetchQuery({
     queryKey: ["archify", "workspace", serverId, workspaceId],
@@ -404,30 +401,16 @@ function ArchifyPanel(): ReactElement {
           await ensureArchifySkill({ client, skillManagement });
           skillReadyRef.current = true;
         }
-        const artifactPrefix = `archify-${Date.now().toString(36)}`;
-        // The pre-scan is what keeps the agent from spending minutes
-        // rediscovering the repository; a failed scan must not block generation.
-        const evidenceDigest = await client
-          .scanArchifyEvidence({ workspaceId })
-          .then((evidence) => evidence.digest)
-          .catch(() => undefined);
-        const created = await client.createAgent({
+        const task = await client.startArchifyGeneration({
+          workspaceId,
+          types: [...types],
           provider: agentConfig.provider,
           ...(agentConfig.model ? { model: agentConfig.model } : {}),
           ...(agentConfig.modeId ? { modeId: agentConfig.modeId } : {}),
-          cwd: workspaceDirectory,
-          workspaceId,
-          title: "Archify",
-          initialPrompt: buildArchifyGenerationPrompt({
-            artifactPrefix,
-            types,
-            request: input?.request,
-            scope: input?.scope,
-            evidenceDigest,
-          }),
-          labels: { "paseo.archify.generator": "true" },
+          ...(input?.request ? { request: input.request } : {}),
+          ...(input?.scope ? { scope: input.scope } : {}),
         });
-        setGeneration({ agentId: created.id, types });
+        if (task) setGenerationTask(task);
         await workspaceQuery.refetch();
       } catch (error) {
         setGenerationError(error instanceof Error ? error.message : String(error));
@@ -445,6 +428,39 @@ function ArchifyPanel(): ReactElement {
       workspaceQuery,
     ],
   );
+
+  useEffect(() => {
+    if (!client || !supported || !workspaceId) return;
+    const subscription = client.observeArchifyGeneration();
+    const unsubscribe = subscription.subscribe({
+      snapshot: () => {},
+      update: (message) => {
+        if (message.type !== "archify.generation.updated") return;
+        if (message.payload.task.workspaceId !== workspaceId) return;
+        setGenerationTask(message.payload.task);
+      },
+    });
+    return () => {
+      unsubscribe();
+      void subscription.release().catch(() => undefined);
+    };
+  }, [client, supported, workspaceId]);
+
+  useEffect(() => {
+    if (!client || !supported || !workspaceId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const task = await client.getArchifyGeneration(workspaceId);
+        if (!cancelled && task) setGenerationTask(task);
+      } catch {
+        // The panel simply starts from an empty state when the task cannot be read.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, supported, workspaceId]);
 
   useEffect(() => {
     if (autoStartedRef.current || !workspaceQuery.data?.autoGenerate) return;
@@ -486,6 +502,32 @@ function ArchifyPanel(): ReactElement {
     setCommand(null);
   }, []);
 
+  const handleCancelGeneration = useCallback(() => {
+    const taskId = generationTask?.taskId;
+    if (!client || !taskId) return;
+    void (async () => {
+      try {
+        const task = await client.cancelArchifyGeneration(taskId);
+        if (task) setGenerationTask(task);
+      } catch (error) {
+        setGenerationError(error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [client, generationTask?.taskId]);
+
+  const handleRerunUnfinished = useCallback(() => {
+    const taskId = generationTask?.taskId;
+    if (!client || !taskId) return;
+    void (async () => {
+      try {
+        const task = await client.rerunArchifyGeneration(taskId);
+        if (task) setGenerationTask(task);
+      } catch (error) {
+        setGenerationError(error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [client, generationTask?.taskId]);
+
   const handleGenerate = useCallback(() => {
     void startGeneration({ types: selectedTypes, request, scope });
   }, [request, scope, selectedTypes, startGeneration]);
@@ -501,9 +543,12 @@ function ArchifyPanel(): ReactElement {
   }
 
   const generating = isStarting || generationRunning;
-  const currentGenerationError = generationError ?? generationAgentError;
+  const currentGenerationError = generationError ?? generationTaskError;
   let statusText = t("archify.ready");
   if (generating) statusText = t("archify.generating");
+  if (generationRunning && generationTask) {
+    statusText = `${t("archify.generating")} · ${t(`archify.stage.${generationTask.stage}`)}`;
+  }
   if (currentGenerationError) statusText = t("archify.generationFailed");
 
   let previewContent: ReactElement;
@@ -600,6 +645,21 @@ function ArchifyPanel(): ReactElement {
           <View style={styles.generationHeader}>
             <Text style={styles.generationTitle}>{statusText}</Text>
             {generating ? <ActivityIndicator size="small" /> : null}
+            {generationTask ? (
+              <Text style={styles.progressText}>
+                {generationDeliveredCount}/{generationDiagramCount}
+              </Text>
+            ) : null}
+            {generationRunning ? (
+              <Button variant="ghost" size="sm" onPress={handleCancelGeneration}>
+                {t("common.actions.cancel")}
+              </Button>
+            ) : null}
+            {canRerunUnfinished ? (
+              <Button variant="ghost" size="sm" onPress={handleRerunUnfinished}>
+                {t("archify.actions.rerunUnfinished")}
+              </Button>
+            ) : null}
           </View>
           {currentGenerationError ? (
             <Text style={styles.errorText}>{currentGenerationError}</Text>
@@ -787,6 +847,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  progressText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   generationTitle: {
     flex: 1,

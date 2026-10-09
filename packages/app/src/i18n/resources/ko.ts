@@ -11,6 +11,16 @@ export const ko: TranslationResources = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "스캔 중",
+      draw: "다이어그램 생성 중",
+      validate: "검증 중",
+      deliver: "전달 중",
+      done: "완료",
+    },
+    actions: {
+      rerunUnfinished: "미완료 다시 실행",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

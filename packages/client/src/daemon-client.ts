@@ -31,6 +31,7 @@ import {
 import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outbound";
 import type {
   ArchifyEvidence,
+  ArchifyGenerationTask,
   AgentStreamEventPayload,
   AgentSnapshotPayload,
   ProjectPlacementPayload,
@@ -5575,6 +5576,95 @@ export class DaemonClient {
         },
       });
     return { artifacts: payload.artifacts, autoGenerate: payload.autoGenerate };
+  }
+
+  async startArchifyGeneration(options: {
+    workspaceId: string;
+    types: ArchifyGenerationTask["diagrams"][number]["type"][];
+    request?: string;
+    scope?: string;
+    provider: string;
+    model?: string;
+    modeId?: string;
+    forceScan?: boolean;
+    requestId?: string;
+  }): Promise<ArchifyGenerationTask | null> {
+    const resolvedRequestId = this.createRequestId(options.requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.generation.start.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.generation.start.request",
+          requestId: resolvedRequestId,
+          workspaceId: options.workspaceId,
+          types: options.types,
+          provider: options.provider,
+          ...(options.request === undefined ? {} : { request: options.request }),
+          ...(options.scope === undefined ? {} : { scope: options.scope }),
+          ...(options.model === undefined ? {} : { model: options.model }),
+          ...(options.modeId === undefined ? {} : { modeId: options.modeId }),
+          ...(options.forceScan === undefined ? {} : { forceScan: options.forceScan }),
+        },
+      });
+    return payload.task;
+  }
+
+  async cancelArchifyGeneration(
+    taskId: string,
+    requestId?: string,
+  ): Promise<ArchifyGenerationTask | null> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.generation.cancel.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.generation.cancel.request",
+          requestId: resolvedRequestId,
+          taskId,
+        },
+      });
+    return payload.task;
+  }
+
+  async rerunArchifyGeneration(
+    taskId: string,
+    requestId?: string,
+  ): Promise<ArchifyGenerationTask | null> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.generation.rerun.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.generation.rerun.request",
+          requestId: resolvedRequestId,
+          taskId,
+        },
+      });
+    return payload.task;
+  }
+
+  async getArchifyGeneration(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<ArchifyGenerationTask | null> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.generation.get.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.generation.get.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+        },
+      });
+    return payload.task;
+  }
+
+  /** Progress pushes for every run this daemon owns. */
+  observeArchifyGeneration(options?: {
+    signal?: AbortSignal;
+  }): OwnedSubscription<CorrelatedResponsePayload<"session.events.set_subscription.response">> {
+    return this.observeEvents(["archify.generation.updated"], options);
   }
 
   async scanArchifyEvidence(options: {

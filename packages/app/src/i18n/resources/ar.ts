@@ -11,6 +11,16 @@ export const ar: TranslationResources = {
     providerUnavailable: "No agent provider is ready.",
     generationFailed: "Archify generation failed.",
     generating: "Generating diagrams...",
+    stage: {
+      scan: "جارٍ الفحص",
+      draw: "جارٍ الرسم",
+      validate: "جارٍ التحقق",
+      deliver: "جارٍ التسليم",
+      done: "تم",
+    },
+    actions: {
+      rerunUnfinished: "إعادة تشغيل غير المكتمل",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

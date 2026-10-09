@@ -98,6 +98,7 @@ import {
   createArchifyArtifactId,
   renderArchifyArtifact,
 } from "../../archify/service.js";
+import { notifyArchifyArtifactDelivered } from "../../archify/delivery-events.js";
 import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import type {
   PaseoToolCatalog,
@@ -1278,6 +1279,11 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           generatorAgentId: callerAgent.id,
           request,
           scope,
+        });
+        notifyArchifyArtifactDelivered({
+          workspaceId,
+          generatorAgentId: callerAgent.id,
+          artifact,
         });
         return {
           content: [

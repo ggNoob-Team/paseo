@@ -1678,6 +1678,89 @@ export const ArchifyEvidenceSchema = z.object({
   anchors: z.array(ArchifyEvidenceAnchorSchema),
 });
 
+export const ArchifyGenerationStageSchema = z.enum(["scan", "draw", "validate", "deliver", "done"]);
+export const ArchifyGenerationTaskStatusSchema = z.enum([
+  "running",
+  "completed",
+  "failed",
+  "canceled",
+]);
+export const ArchifyGenerationDiagramStatusSchema = z.enum([
+  "pending",
+  "drawing",
+  "delivered",
+  "failed",
+  "canceled",
+]);
+
+export const ArchifyGenerationDiagramSchema = z.object({
+  type: ArchifyDiagramTypeSchema,
+  artifactId: z.string(),
+  status: ArchifyGenerationDiagramStatusSchema,
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  error: z.string().nullable(),
+  artifact: ArchifyArtifactSummarySchema.nullable(),
+});
+
+/**
+ * One Archify run. The daemon owns it: the panel starts a task, watches it, and
+ * can cancel it or rerun whatever did not come back.
+ */
+export const ArchifyGenerationTaskSchema = z.object({
+  taskId: z.string(),
+  workspaceId: z.string(),
+  status: ArchifyGenerationTaskStatusSchema,
+  stage: ArchifyGenerationStageSchema,
+  agentId: z.string().nullable(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  error: z.string().nullable(),
+  actionLine: z.string().nullable(),
+  evidenceRevision: z.string().nullable(),
+  evidenceCached: z.boolean().nullable(),
+  diagrams: z.array(ArchifyGenerationDiagramSchema),
+});
+
+export const ArchifyGenerationStartRequestSchema = z
+  .object({
+    type: z.literal("archify.generation.start.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+    types: z.array(ArchifyDiagramTypeSchema).min(1),
+    request: z.string().optional(),
+    scope: z.string().optional(),
+    provider: z.string(),
+    model: z.string().optional(),
+    modeId: z.string().optional(),
+    forceScan: z.boolean().optional(),
+  })
+  .strict();
+
+export const ArchifyGenerationCancelRequestSchema = z
+  .object({
+    type: z.literal("archify.generation.cancel.request"),
+    requestId: z.string(),
+    taskId: z.string(),
+  })
+  .strict();
+
+export const ArchifyGenerationRerunRequestSchema = z
+  .object({
+    type: z.literal("archify.generation.rerun.request"),
+    requestId: z.string(),
+    taskId: z.string(),
+  })
+  .strict();
+
+export const ArchifyGenerationGetRequestSchema = z
+  .object({
+    type: z.literal("archify.generation.get.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+  })
+  .strict();
+
 export const ArchifyEvidenceScanRequestSchema = z
   .object({
     type: z.literal("archify.evidence.scan.request"),
@@ -3207,6 +3290,7 @@ export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlReque
 export const SessionEventSubscriptionSchema = z.enum([
   "project.update",
   "notes.project.updated",
+  "archify.generation.updated",
   "providers_snapshot_update",
   "agent_attention_required",
   "agent_permission_request",
@@ -3550,6 +3634,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ArchifyWorkspaceOpenRequestSchema,
   ArchifyArtifactReadRequestSchema,
   ArchifyEvidenceScanRequestSchema,
+  ArchifyGenerationStartRequestSchema,
+  ArchifyGenerationCancelRequestSchema,
+  ArchifyGenerationRerunRequestSchema,
+  ArchifyGenerationGetRequestSchema,
   GetDaemonConfigRequestMessageSchema,
   SetDaemonConfigRequestMessageSchema,
   ReadProjectConfigRequestMessageSchema,
@@ -7140,6 +7228,43 @@ export const ArchifyWorkspaceOpenResponseSchema = z.object({
   }),
 });
 
+function archifyGenerationTaskResponse<T extends string>(type: T) {
+  return z.object({
+    type: z.literal(type),
+    payload: z.object({
+      requestId: z.string(),
+      task: ArchifyGenerationTaskSchema.nullable(),
+    }),
+  });
+}
+
+export const ArchifyGenerationStartResponseSchema = archifyGenerationTaskResponse(
+  "archify.generation.start.response",
+);
+export const ArchifyGenerationCancelResponseSchema = archifyGenerationTaskResponse(
+  "archify.generation.cancel.response",
+);
+export const ArchifyGenerationRerunResponseSchema = archifyGenerationTaskResponse(
+  "archify.generation.rerun.response",
+);
+export const ArchifyGenerationGetResponseSchema = archifyGenerationTaskResponse(
+  "archify.generation.get.response",
+);
+
+/** Pushed whenever a run changes stage, delivers a diagram, or fails. */
+export const ArchifyGenerationUpdatedSchema = z.object({
+  type: z.literal("archify.generation.updated"),
+  payload: z.object({
+    task: ArchifyGenerationTaskSchema,
+  }),
+});
+
+export type ArchifyGenerationTask = z.infer<typeof ArchifyGenerationTaskSchema>;
+export type ArchifyGenerationDiagram = z.infer<typeof ArchifyGenerationDiagramSchema>;
+export type ArchifyGenerationStage = z.infer<typeof ArchifyGenerationStageSchema>;
+export type ArchifyGenerationTaskStatus = z.infer<typeof ArchifyGenerationTaskStatusSchema>;
+export type ArchifyGenerationDiagramStatus = z.infer<typeof ArchifyGenerationDiagramStatusSchema>;
+
 export const ArchifyEvidenceScanResponseSchema = z.object({
   type: z.literal("archify.evidence.scan.response"),
   payload: z.object({
@@ -7195,6 +7320,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ArchifyWorkspaceOpenResponseSchema,
   ArchifyArtifactReadResponseSchema,
   ArchifyEvidenceScanResponseSchema,
+  ArchifyGenerationStartResponseSchema,
+  ArchifyGenerationCancelResponseSchema,
+  ArchifyGenerationRerunResponseSchema,
+  ArchifyGenerationGetResponseSchema,
+  ArchifyGenerationUpdatedSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,
