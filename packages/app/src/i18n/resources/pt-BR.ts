@@ -21,6 +21,19 @@ export const ptBR: TranslationResources = {
     actions: {
       rerunUnfinished: "Repetir o que faltou",
     },
+    evidence: {
+      cached: "Folha de evidências reutilizada {{revision}}",
+      scanned: "Repositório reescaneado {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "Na fila",
+        drawing: "Desenhando",
+        delivered: "Entregue",
+        failed: "Falhou",
+        canceled: "Cancelado",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

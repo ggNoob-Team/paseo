@@ -21,6 +21,19 @@ export const ja: TranslationResources = {
     actions: {
       rerunUnfinished: "未完了を再実行",
     },
+    evidence: {
+      cached: "証跡シートを再利用 {{revision}}",
+      scanned: "リポジトリを再スキャン {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "待機中",
+        drawing: "作図中",
+        delivered: "納品済み",
+        failed: "失敗",
+        canceled: "キャンセル済み",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

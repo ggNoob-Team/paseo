@@ -21,6 +21,19 @@ export const ar: TranslationResources = {
     actions: {
       rerunUnfinished: "إعادة تشغيل غير المكتمل",
     },
+    evidence: {
+      cached: "أُعيد استخدام ورقة الأدلة {{revision}}",
+      scanned: "أُعيد فحص المستودع {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "في الانتظار",
+        drawing: "قيد الرسم",
+        delivered: "تم التسليم",
+        failed: "فشل",
+        canceled: "أُلغي",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

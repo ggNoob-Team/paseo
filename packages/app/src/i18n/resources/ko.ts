@@ -21,6 +21,19 @@ export const ko: TranslationResources = {
     actions: {
       rerunUnfinished: "미완료 다시 실행",
     },
+    evidence: {
+      cached: "증거 시트 재사용 {{revision}}",
+      scanned: "저장소 재스캔 {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "대기 중",
+        drawing: "그리는 중",
+        delivered: "전달됨",
+        failed: "실패",
+        canceled: "취소됨",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

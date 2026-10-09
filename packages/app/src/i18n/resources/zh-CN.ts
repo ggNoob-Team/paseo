@@ -21,6 +21,19 @@ export const zhCN: TranslationResources = {
     actions: {
       rerunUnfinished: "重跑未完成",
     },
+    evidence: {
+      cached: "复用了证据清单 {{revision}}",
+      scanned: "重新扫描了仓库 {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "排队中",
+        drawing: "绘图中",
+        delivered: "已交付",
+        failed: "失败",
+        canceled: "已取消",
+      },
+    },
     ready: "图表已就绪",
     refresh: "刷新图表",
     searchPlaceholder: "搜索方法调用、变量、流转或业务步骤",

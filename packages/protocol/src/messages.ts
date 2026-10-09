@@ -4024,6 +4024,10 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
         archify: z.boolean().optional(),
+        // COMPAT(archifyGeneration): the daemon began owning Archify runs in
+        // v0.11.2; remove the gate after 2027-10-09 once the daemon floor
+        // understands archify.generation.*.
+        archifyGeneration: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.

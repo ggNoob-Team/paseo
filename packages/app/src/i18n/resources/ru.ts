@@ -21,6 +21,19 @@ export const ru: TranslationResources = {
     actions: {
       rerunUnfinished: "Повторить незавершённое",
     },
+    evidence: {
+      cached: "Лист доказательств переиспользован {{revision}}",
+      scanned: "Репозиторий пересканирован {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "В очереди",
+        drawing: "Отрисовка",
+        delivered: "Доставлено",
+        failed: "Ошибка",
+        canceled: "Отменено",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

@@ -21,6 +21,19 @@ export const es: TranslationResources = {
     actions: {
       rerunUnfinished: "Reintentar lo pendiente",
     },
+    evidence: {
+      cached: "Se reutilizó la hoja de evidencia {{revision}}",
+      scanned: "Se reanalizó el repositorio {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "En cola",
+        drawing: "Dibujando",
+        delivered: "Entregado",
+        failed: "Falló",
+        canceled: "Cancelado",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

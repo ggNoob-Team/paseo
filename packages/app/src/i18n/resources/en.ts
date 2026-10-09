@@ -18,6 +18,19 @@ export const en = {
     actions: {
       rerunUnfinished: "Rerun unfinished",
     },
+    evidence: {
+      cached: "Reused the evidence sheet {{revision}}",
+      scanned: "Rescanned the repository {{revision}}",
+    },
+    generation: {
+      status: {
+        pending: "Queued",
+        drawing: "Drawing",
+        delivered: "Delivered",
+        failed: "Failed",
+        canceled: "Canceled",
+      },
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

@@ -39,6 +39,8 @@ import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import type {
   ArchifyArtifactSummary,
   ArchifyDiagramType,
+  ArchifyGenerationDiagram,
+  ArchifyGenerationDiagramStatus,
   ArchifyGenerationTask,
 } from "@getpaseo/protocol/messages";
 
@@ -272,13 +274,87 @@ function UnavailableState({ message }: { message: string }): ReactElement {
   );
 }
 
+/** Coarse duration label: 12s, 1m 05s, 1h 03m. */
+function formatArchifyDuration(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+function archifyElapsedMs(startedAt: string | null, finishedAt: string | null): number {
+  if (!startedAt) return 0;
+  const started = Date.parse(startedAt);
+  if (Number.isNaN(started)) return 0;
+  const finished = finishedAt ? Date.parse(finishedAt) : Date.now();
+  if (Number.isNaN(finished)) return 0;
+  return finished - started;
+}
+
+/** Ticks only while a diagram is still drawing, so the row shows live elapsed time. */
+function useArchifyElapsedMs(startedAt: string | null, finishedAt: string | null): number {
+  const [elapsedMs, setElapsedMs] = useState(() => archifyElapsedMs(startedAt, finishedAt));
+  useEffect(() => {
+    setElapsedMs(archifyElapsedMs(startedAt, finishedAt));
+    if (!startedAt || finishedAt) return undefined;
+    const timer = setInterval(() => setElapsedMs(archifyElapsedMs(startedAt, finishedAt)), 1000);
+    return () => clearInterval(timer);
+  }, [finishedAt, startedAt]);
+  return elapsedMs;
+}
+
+function archifyDiagramStatusStyle(status: ArchifyGenerationDiagramStatus) {
+  if (status === "delivered") return styles.diagramStatusDelivered;
+  if (status === "failed") return styles.diagramStatusFailed;
+  if (status === "drawing") return styles.diagramStatusDrawing;
+  return styles.diagramStatusMuted;
+}
+
+function ArchifyGenerationDiagramRow({
+  diagram,
+  typeLabel,
+  statusLabel,
+}: {
+  diagram: ArchifyGenerationDiagram;
+  typeLabel: string;
+  statusLabel: string;
+}): ReactElement {
+  const elapsedMs = useArchifyElapsedMs(diagram.startedAt, diagram.finishedAt);
+  const duration = diagram.startedAt ? formatArchifyDuration(elapsedMs) : null;
+  return (
+    <View style={styles.diagramBlock}>
+      <View style={styles.diagramRow}>
+        <DiagramTypeIcon type={diagram.type} size={14} color={styles.mutedColor.color} />
+        <Text style={styles.diagramType} numberOfLines={1}>
+          {typeLabel}
+        </Text>
+        <Text style={[styles.diagramStatus, archifyDiagramStatusStyle(diagram.status)]}>
+          {statusLabel}
+        </Text>
+        {duration ? <Text style={styles.diagramDuration}>{duration}</Text> : null}
+      </View>
+      {diagram.error ? (
+        <Text style={styles.diagramError} numberOfLines={3}>
+          {diagram.error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 // eslint-disable-next-line complexity
 function ArchifyPanel(): ReactElement {
   const { t } = useTranslation();
   const { serverId, workspaceId, target } = usePaneContext();
   invariant(target.kind === "archify", "ArchifyPanel requires archify target");
   const client = useHostRuntimeClient(serverId);
-  const supported = useHostFeature(serverId, "archify");
+  const archifyHost = useHostFeature(serverId, "archify");
+  // The panel runs through the daemon-owned pipeline; an older host that only
+  // serves artifacts cannot drive a run.
+  const archifyGenerationHost = useHostFeature(serverId, "archifyGeneration");
+  const supported = archifyHost && archifyGenerationHost;
   const skillManagement = useHostFeature(serverId, "skillManagement");
   const workspaceDirectory = useWorkspaceFields(
     serverId,
@@ -309,6 +385,9 @@ function ArchifyPanel(): ReactElement {
   const autoStartedRef = useRef(false);
   const skillReadyRef = useRef(false);
   const previousGenerationRunningRef = useRef(false);
+  const deliveredArtifactIdsRef = useRef<Set<string>>(new Set());
+  const userSelectedArtifactRef = useRef(false);
+  const generationTaskIdRef = useRef<string | null>(null);
 
   const generationRunning = generationTask?.status === "running";
   const generationTaskError = generationTask?.status === "failed" ? generationTask.error : null;
@@ -327,7 +406,6 @@ function ArchifyPanel(): ReactElement {
       return client.openArchifyWorkspace(workspaceId);
     },
     enabled: Boolean(client && supported && workspaceId),
-    refetchInterval: isStarting || generationRunning ? 2500 : false,
     dataShape: "list",
     staleTimeMs: 0,
   });
@@ -477,6 +555,31 @@ function ArchifyPanel(): ReactElement {
     previousGenerationRunningRef.current = generationRunning;
   }, [artifactQuery, generationRunning, workspaceQuery]);
 
+  // Progressive delivery: each push that reports a finished diagram refreshes
+  // the artifact list and shows the first new diagram, instead of polling.
+  const refetchWorkspace = workspaceQuery.refetch;
+  useEffect(() => {
+    if (!generationTask) return;
+    if (generationTaskIdRef.current !== generationTask.taskId) {
+      generationTaskIdRef.current = generationTask.taskId;
+      deliveredArtifactIdsRef.current = new Set();
+      userSelectedArtifactRef.current = false;
+    }
+    const newlyDelivered = generationTask.diagrams.filter(
+      (diagram) =>
+        diagram.artifact !== null && !deliveredArtifactIdsRef.current.has(diagram.artifactId),
+    );
+    if (newlyDelivered.length === 0) return;
+    for (const diagram of newlyDelivered) {
+      deliveredArtifactIdsRef.current.add(diagram.artifactId);
+    }
+    if (!userSelectedArtifactRef.current) {
+      const first = newlyDelivered[0]?.artifact;
+      if (first) setSelectedArtifactId(first.id);
+    }
+    void refetchWorkspace();
+  }, [generationTask, refetchWorkspace]);
+
   const toggleType = useCallback((type: ArchifyDiagramType) => {
     setSelectedTypes((current) =>
       current.includes(type)
@@ -498,6 +601,7 @@ function ArchifyPanel(): ReactElement {
   }, [artifactQuery, workspaceQuery]);
 
   const handleSelectArtifact = useCallback((artifactId: string) => {
+    userSelectedArtifactRef.current = true;
     setSelectedArtifactId(artifactId);
     setCommand(null);
   }, []);
@@ -550,6 +654,15 @@ function ArchifyPanel(): ReactElement {
     statusText = `${t("archify.generating")} · ${t(`archify.stage.${generationTask.stage}`)}`;
   }
   if (currentGenerationError) statusText = t("archify.generationFailed");
+
+  let evidenceLine: string | null = null;
+  if (generationTask?.evidenceRevision) {
+    const revision = generationTask.evidenceRevision;
+    evidenceLine = t(
+      generationTask.evidenceCached ? "archify.evidence.cached" : "archify.evidence.scanned",
+      { revision: revision.length > 12 ? revision.slice(0, 12) : revision },
+    );
+  }
 
   let previewContent: ReactElement;
   if (artifactQuery.isLoading && selectedArtifactId) {
@@ -663,6 +776,28 @@ function ArchifyPanel(): ReactElement {
           </View>
           {currentGenerationError ? (
             <Text style={styles.errorText}>{currentGenerationError}</Text>
+          ) : null}
+          {generationTask ? (
+            <View style={styles.diagramList}>
+              {generationTask.diagrams.map((diagram) => (
+                <ArchifyGenerationDiagramRow
+                  key={`${diagram.type}:${diagram.artifactId}`}
+                  diagram={diagram}
+                  typeLabel={t(`archify.types.${diagram.type}`)}
+                  statusLabel={t(`archify.generation.status.${diagram.status}`)}
+                />
+              ))}
+            </View>
+          ) : null}
+          {generationTask?.actionLine ? (
+            <Text style={styles.actionLine} numberOfLines={1}>
+              {generationTask.actionLine}
+            </Text>
+          ) : null}
+          {evidenceLine ? (
+            <Text style={styles.actionLine} numberOfLines={1}>
+              {evidenceLine}
+            </Text>
           ) : null}
           <View style={styles.typeRow}>
             {ARCHIFY_ALL_TYPES.map((type) => (
@@ -850,6 +985,53 @@ const styles = StyleSheet.create((theme) => ({
   },
   progressText: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  actionLine: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  diagramList: {
+    gap: theme.spacing[1],
+  },
+  diagramBlock: {
+    gap: 2,
+  },
+  diagramRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  diagramType: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  diagramStatus: {
+    fontSize: theme.fontSize.sm,
+  },
+  diagramStatusMuted: {
+    color: theme.colors.foregroundMuted,
+  },
+  diagramStatusDrawing: {
+    color: theme.colors.foreground,
+  },
+  diagramStatusDelivered: {
+    color: theme.colors.success,
+  },
+  diagramStatusFailed: {
+    color: theme.colors.statusDanger,
+  },
+  diagramDuration: {
+    minWidth: 48,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    textAlign: "right",
+  },
+  diagramError: {
+    marginLeft: 22,
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
   generationTitle: {
