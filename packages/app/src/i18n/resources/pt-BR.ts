@@ -46,6 +46,12 @@ export const ptBR: TranslationResources = {
         canceled: "Cancelado",
       },
     },
+    delete: {
+      title: "Excluir o diagrama?",
+      message: '"{{title}}" será excluído permanentemente.',
+      button: "Excluir diagrama",
+      failed: "Não foi possível excluir o diagrama.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

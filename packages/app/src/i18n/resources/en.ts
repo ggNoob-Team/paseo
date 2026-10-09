@@ -43,6 +43,12 @@ export const en = {
         canceled: "Canceled",
       },
     },
+    delete: {
+      title: "Delete diagram?",
+      message: '"{{title}}" will be permanently deleted.',
+      button: "Delete diagram",
+      failed: "Could not delete the diagram.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

@@ -40,11 +40,16 @@ Diagrams land progressively: the first delivery becomes the visible tab until th
 and the run can be canceled or, once stopped, have its unfinished diagrams rerun.
 
 The first open of a workspace writes `.initialized` and returns `autoGenerate: true`. The panel uses
-that one-shot signal to start the initial architecture, method-call, and variable-flow diagrams.
-Later opens return stored artifacts and do not spend another agent run. Each successful artifact
-has its own viewer tab. When a workspace has several method-call or workflow artifacts, their
-specific titles distinguish the variants; legacy or generic titles fall back to the type plus a
-one-based ordinal.
+that one-shot signal to start a single architecture overview; method-call, data-flow, workflow, and
+lifecycle diagrams are generated on request. Later opens return stored artifacts and do not spend
+another agent run, and an emptied workspace stays empty because the marker is per workspace rather
+than per artifact. Each successful artifact has its own viewer tab. When a workspace has several
+method-call or workflow artifacts, their specific titles distinguish the variants; legacy or
+generic titles fall back to the type plus a one-based ordinal.
+
+A host that advertises `archifyArtifactDelete` also lets the panel delete the diagram it is showing.
+The daemon removes the artifact directory and leaves the evidence sheet and the `.initialized`
+marker alone, so deleting the last diagram does not trigger another automatic run.
 
 ## Viewer and search
 

@@ -46,6 +46,12 @@ export const ja: TranslationResources = {
         canceled: "キャンセル済み",
       },
     },
+    delete: {
+      title: "図を削除しますか？",
+      message: "「{{title}}」は完全に削除されます。",
+      button: "図を削除",
+      failed: "図を削除できませんでした。",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

@@ -1650,6 +1650,15 @@ export const ArchifyArtifactReadRequestSchema = z
   })
   .strict();
 
+export const ArchifyArtifactDeleteRequestSchema = z
+  .object({
+    type: z.literal("archify.artifact.delete.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+    artifactId: z.string(),
+  })
+  .strict();
+
 /**
  * A deterministic, model-free reading of the repository: workspace packages,
  * entry points, internal edges, and where the code lives. The digest is capped
@@ -3635,6 +3644,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsImportLegacySelectionRequestSchema,
   ArchifyWorkspaceOpenRequestSchema,
   ArchifyArtifactReadRequestSchema,
+  ArchifyArtifactDeleteRequestSchema,
   ArchifyEvidenceScanRequestSchema,
   ArchifyGenerationStartRequestSchema,
   ArchifyGenerationCancelRequestSchema,
@@ -4030,6 +4040,8 @@ export const ServerInfoStatusPayloadSchema = z
         // v0.11.2; remove the gate after 2027-10-09 once the daemon floor
         // understands archify.generation.*.
         archifyGeneration: z.boolean().optional(),
+        // COMPAT(archifyArtifactDelete): added in v0.11.2, remove gate after 2027-10-09.
+        archifyArtifactDelete: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -7292,6 +7304,17 @@ export const ArchifyArtifactReadResponseSchema = z.object({
   }),
 });
 
+export const ArchifyArtifactDeleteResponseSchema = z.object({
+  type: z.literal("archify.artifact.delete.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    artifactId: z.string(),
+    deleted: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
@@ -7325,6 +7348,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsImportLegacySelectionResponseSchema,
   ArchifyWorkspaceOpenResponseSchema,
   ArchifyArtifactReadResponseSchema,
+  ArchifyArtifactDeleteResponseSchema,
   ArchifyEvidenceScanResponseSchema,
   ArchifyGenerationStartResponseSchema,
   ArchifyGenerationCancelResponseSchema,

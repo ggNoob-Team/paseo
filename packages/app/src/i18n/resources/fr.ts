@@ -46,6 +46,12 @@ export const fr: TranslationResources = {
         canceled: "Annulé",
       },
     },
+    delete: {
+      title: "Supprimer le diagramme ?",
+      message: '"{{title}}" sera définitivement supprimé.',
+      button: "Supprimer le diagramme",
+      failed: "Impossible de supprimer le diagramme.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

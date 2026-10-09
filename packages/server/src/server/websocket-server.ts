@@ -1866,6 +1866,8 @@ export class VoiceAssistantWebSocketServer {
         archify: true,
         // COMPAT(archifyGeneration): added in v0.11.2, remove gate after 2027-10-09.
         archifyGeneration: true,
+        // COMPAT(archifyArtifactDelete): added in v0.11.2, remove gate after 2027-10-09.
+        archifyArtifactDelete: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.

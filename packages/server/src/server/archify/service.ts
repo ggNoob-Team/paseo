@@ -174,6 +174,26 @@ export async function readArchifyArtifact(input: {
   };
 }
 
+/**
+ * Removes one artifact directory. The id is validated by
+ * `resolveArchifyArtifactDirectory`, so a caller cannot escape the workspace
+ * directory, and the workspace evidence sheet and `.initialized` marker stay.
+ */
+export async function deleteArchifyArtifact(input: {
+  paseoHome: string;
+  workspaceId: string;
+  artifactId: string;
+}): Promise<boolean> {
+  const artifactDirectory = resolveArchifyArtifactDirectory(input);
+  const exists = await fs
+    .access(path.join(artifactDirectory, "metadata.json"))
+    .then(() => true)
+    .catch(() => false);
+  if (!exists) return false;
+  await fs.rm(artifactDirectory, { recursive: true, force: true });
+  return true;
+}
+
 function parseJsonOutput(value: string): unknown {
   const trimmed = value.trim();
   if (!trimmed) return null;

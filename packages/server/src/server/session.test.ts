@@ -3,7 +3,15 @@ import {
   createTestCreationService,
 } from "./test-utils/session-stubs.js";
 import { execSync } from "child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "fs";
 import { tmpdir } from "os";
 import { join, resolve as resolvePath } from "path";
 import pino from "pino";
@@ -5855,4 +5863,37 @@ test("delivers Archify run updates to a session that subscribed", async () => {
   session.emitArchifyTaskUpdated(task);
 
   expect(findByType(messages, "archify.generation.updated")?.payload.task).toEqual(task);
+});
+
+test("deletes an Archify diagram through a session request", async () => {
+  const paseoHome = mkdtempSync(join(tmpdir(), "paseo-archify-delete-"));
+  const messages: SessionOutboundMessage[] = [];
+  const session = createSessionForTest({
+    messages,
+    paseoHome,
+    workspaceRegistry: { get: vi.fn().mockResolvedValue({ workspaceId: "ws_1" }) },
+  });
+  const artifactDirectory = join(paseoHome, "archify", "ws_1", "architecture-test");
+  mkdirSync(artifactDirectory, { recursive: true });
+  writeFileSync(join(artifactDirectory, "metadata.json"), "{}");
+
+  try {
+    await session.handleMessage({
+      type: "archify.artifact.delete.request",
+      requestId: "delete-diagram",
+      workspaceId: "ws_1",
+      artifactId: "architecture-test",
+    });
+
+    expect(findByType(messages, "archify.artifact.delete.response")?.payload).toEqual({
+      requestId: "delete-diagram",
+      workspaceId: "ws_1",
+      artifactId: "architecture-test",
+      deleted: true,
+      error: null,
+    });
+    expect(existsSync(artifactDirectory)).toBe(false);
+  } finally {
+    rmSync(paseoHome, { recursive: true, force: true });
+  }
 });

@@ -1,6 +1,10 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
 import type { ArchifyGenerationTask } from "@getpaseo/protocol/messages";
-import { openArchifyWorkspace, readArchifyArtifact } from "./archify/service.js";
+import {
+  deleteArchifyArtifact,
+  openArchifyWorkspace,
+  readArchifyArtifact,
+} from "./archify/service.js";
 import { scanArchifyEvidence } from "./archify/evidence.js";
 import type { ArchifyGenerationService } from "./archify/generation.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -3004,6 +3008,8 @@ export class Session {
         return this.handleArchifyWorkspaceOpenRequest(msg);
       case "archify.artifact.read.request":
         return this.handleArchifyArtifactReadRequest(msg);
+      case "archify.artifact.delete.request":
+        return this.handleArchifyArtifactDeleteRequest(msg);
       case "archify.evidence.scan.request":
         return this.handleArchifyEvidenceScanRequest(msg);
       case "archify.generation.start.request":
@@ -3063,6 +3069,28 @@ export class Session {
   /** Fan-out point for run updates: the daemon owns the run, every session forwards it. */
   emitArchifyTaskUpdated(task: ArchifyGenerationTask): void {
     this.emitSubscribedEvent({ type: "archify.generation.updated", payload: { task } });
+  }
+
+  private async handleArchifyArtifactDeleteRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.artifact.delete.request" }>,
+  ): Promise<void> {
+    const workspace = await this.workspaceRegistry.get(msg.workspaceId);
+    if (!workspace) throw new Error("Workspace not found");
+    const deleted = await deleteArchifyArtifact({
+      paseoHome: this.paseoHome,
+      workspaceId: msg.workspaceId,
+      artifactId: msg.artifactId,
+    });
+    this.emit({
+      type: "archify.artifact.delete.response",
+      payload: {
+        requestId: msg.requestId,
+        workspaceId: msg.workspaceId,
+        artifactId: msg.artifactId,
+        deleted,
+        error: deleted ? null : "Archify artifact not found",
+      },
+    });
   }
 
   private requireArchifyGeneration(): ArchifyGenerationService {

@@ -46,6 +46,12 @@ export const ko: TranslationResources = {
         canceled: "취소됨",
       },
     },
+    delete: {
+      title: "다이어그램을 삭제할까요?",
+      message: '"{{title}}"이(가) 영구적으로 삭제됩니다.',
+      button: "다이어그램 삭제",
+      failed: "다이어그램을 삭제하지 못했습니다.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

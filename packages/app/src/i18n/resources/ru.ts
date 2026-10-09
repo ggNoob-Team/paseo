@@ -46,6 +46,12 @@ export const ru: TranslationResources = {
         canceled: "Отменено",
       },
     },
+    delete: {
+      title: "Удалить диаграмму?",
+      message: '"{{title}}" будет удалена безвозвратно.',
+      button: "Удалить диаграмму",
+      failed: "Не удалось удалить диаграмму.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

@@ -46,6 +46,12 @@ export const ar: TranslationResources = {
         canceled: "أُلغي",
       },
     },
+    delete: {
+      title: "حذف المخطط؟",
+      message: 'سيُحذف "{{title}}" نهائيًا.',
+      button: "حذف المخطط",
+      failed: "تعذّر حذف المخطط.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

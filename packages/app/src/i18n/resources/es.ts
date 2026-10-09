@@ -46,6 +46,12 @@ export const es: TranslationResources = {
         canceled: "Cancelado",
       },
     },
+    delete: {
+      title: "¿Eliminar el diagrama?",
+      message: 'Se eliminará "{{title}}" de forma permanente.',
+      button: "Eliminar diagrama",
+      failed: "No se pudo eliminar el diagrama.",
+    },
     ready: "Diagrams ready",
     refresh: "Refresh diagrams",
     searchPlaceholder: "Search calls, variables, flows, or steps",

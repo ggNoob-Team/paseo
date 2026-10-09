@@ -5707,6 +5707,25 @@ export class DaemonClient {
     return { artifact: payload.artifact, error: payload.error };
   }
 
+  async deleteArchifyArtifact(
+    workspaceId: string,
+    artifactId: string,
+    requestId?: string,
+  ): Promise<{ deleted: boolean; error: string | null }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.artifact.delete.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.artifact.delete.request",
+          requestId: resolvedRequestId,
+          workspaceId,
+          artifactId,
+        },
+      });
+    return { deleted: payload.deleted, error: payload.error };
+  }
+
   async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{
     imported: boolean;
     selection: AgentSkillSelection;

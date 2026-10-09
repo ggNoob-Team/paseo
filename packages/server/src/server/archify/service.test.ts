@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  deleteArchifyArtifact,
+  listArchifyArtifacts,
   openArchifyWorkspace,
   readArchifyArtifact,
   renderArchifyArtifact,
@@ -80,5 +82,21 @@ describe("archify service", () => {
       ),
     ) as { delivery?: { ok?: boolean } };
     expect(receipt.delivery?.ok).toBe(true);
+
+    const firstOpen = await openArchifyWorkspace({ paseoHome, workspaceId });
+    expect(firstOpen.autoGenerate).toBe(false);
+    expect(firstOpen.artifacts.map((entry) => entry.id)).toEqual([artifactId]);
+
+    // Deleting leaves the `.initialized` marker and the evidence sheet in
+    // place, so reopening an emptied workspace does not auto-generate again.
+    await expect(deleteArchifyArtifact({ paseoHome, workspaceId, artifactId })).resolves.toBe(true);
+    await expect(listArchifyArtifacts({ paseoHome, workspaceId })).resolves.toEqual([]);
+    await expect(deleteArchifyArtifact({ paseoHome, workspaceId, artifactId })).resolves.toBe(
+      false,
+    );
+    await expect(openArchifyWorkspace({ paseoHome, workspaceId })).resolves.toEqual({
+      artifacts: [],
+      autoGenerate: false,
+    });
   }, 30_000);
 });

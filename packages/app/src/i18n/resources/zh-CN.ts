@@ -46,6 +46,12 @@ export const zhCN: TranslationResources = {
         canceled: "已取消",
       },
     },
+    delete: {
+      title: "删除这张图？",
+      message: "“{{title}}”将被永久删除。",
+      button: "删除图表",
+      failed: "删除图表失败。",
+    },
     ready: "图表已就绪",
     refresh: "刷新图表",
     searchPlaceholder: "搜索方法调用、变量、流转或业务步骤",

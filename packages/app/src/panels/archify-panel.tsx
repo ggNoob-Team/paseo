@@ -11,6 +11,7 @@ import {
   Network,
   RefreshCw,
   Search,
+  Trash2,
   Workflow,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -38,6 +39,7 @@ import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import type {
   ArchifyArtifactSummary,
   ArchifyDiagramType,
@@ -114,6 +116,29 @@ function ArchifyRefreshButton({
       style={styles.iconButton}
     >
       <RefreshCw size={15} color={styles.mutedColor.color} />
+    </Pressable>
+  );
+}
+
+function ArchifyDeleteButton({
+  disabled,
+  label,
+  onPress,
+}: {
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onPress(), [onPress]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={handlePress}
+      style={[styles.iconButton, disabled && styles.generateButtonDisabled]}
+    >
+      <Trash2 size={15} color={styles.mutedColor.color} />
     </Pressable>
   );
 }
@@ -419,6 +444,7 @@ function ArchifyPanel(): ReactElement {
   // serves artifacts cannot drive a run.
   const archifyGenerationHost = useHostFeature(serverId, "archifyGeneration");
   const supported = archifyHost && archifyGenerationHost;
+  const canDeleteArtifacts = useHostFeature(serverId, "archifyArtifactDelete");
   const skillManagement = useHostFeature(serverId, "skillManagement");
   const workspaceDirectory = useWorkspaceFields(
     serverId,
@@ -451,6 +477,8 @@ function ArchifyPanel(): ReactElement {
   const [isScanningAnchors, setIsScanningAnchors] = useState(false);
   const [anchorError, setAnchorError] = useState<string | null>(null);
   const [selectedAnchorKeys, setSelectedAnchorKeys] = useState<string[]>([]);
+  const [isDeletingArtifact, setIsDeletingArtifact] = useState(false);
+  const [artifactDeleteError, setArtifactDeleteError] = useState<string | null>(null);
   const autoStartedRef = useRef(false);
   const skillReadyRef = useRef(false);
   const previousGenerationRunningRef = useRef(false);
@@ -681,6 +709,38 @@ function ArchifyPanel(): ReactElement {
     setCommand(null);
   }, []);
 
+  const handleDeleteArtifact = useCallback(() => {
+    const artifactId = selectedArtifactId;
+    if (!client || !artifactId || isDeletingArtifact) return;
+    const title = artifacts.find((item) => item.id === artifactId)?.title ?? artifactId;
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("archify.delete.title"),
+        message: t("archify.delete.message", { title }),
+        confirmLabel: t("common.actions.delete"),
+        cancelLabel: t("common.actions.cancel"),
+        destructive: true,
+      });
+      if (!confirmed) return;
+      setIsDeletingArtifact(true);
+      setArtifactDeleteError(null);
+      try {
+        const result = await client.deleteArchifyArtifact(workspaceId, artifactId);
+        if (!result.deleted) {
+          setArtifactDeleteError(result.error ?? t("archify.delete.failed"));
+          return;
+        }
+        setSelectedArtifactId(null);
+        setCommand(null);
+        await workspaceQuery.refetch();
+      } catch (error) {
+        setArtifactDeleteError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsDeletingArtifact(false);
+      }
+    })();
+  }, [artifacts, client, isDeletingArtifact, selectedArtifactId, t, workspaceId, workspaceQuery]);
+
   const handleCancelGeneration = useCallback(() => {
     const taskId = generationTask?.taskId;
     if (!client || !taskId) return;
@@ -821,8 +881,17 @@ function ArchifyPanel(): ReactElement {
             autoCapitalize="none"
           />
         </View>
+        {canDeleteArtifacts ? (
+          <ArchifyDeleteButton
+            disabled={!selectedArtifactId || isDeletingArtifact}
+            label={t("archify.delete.button")}
+            onPress={handleDeleteArtifact}
+          />
+        ) : null}
         <ArchifyRefreshButton label={t("archify.refresh")} onPress={handleRefresh} />
       </View>
+
+      {artifactDeleteError ? <Text style={styles.toolbarError}>{artifactDeleteError}</Text> : null}
 
       {searchQuery.trim() ? (
         <View style={styles.results}>
@@ -1146,6 +1215,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   actionLine: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  toolbarError: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
   diagramList: {
