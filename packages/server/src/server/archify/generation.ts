@@ -247,6 +247,7 @@ export class ArchifyGenerationService {
     const startedAt = new Date().toISOString();
     diagram.status = "drawing";
     diagram.startedAt = startedAt;
+    let agentId: string | null = null;
 
     try {
       const created = await this.options.createAgent({
@@ -273,7 +274,7 @@ export class ArchifyGenerationService {
         background: true,
         notifyOnFinish: false,
       });
-      const agentId = created.snapshot.id;
+      agentId = created.snapshot.id;
       record.workerAgentIdByType.set(diagram.type, agentId);
       task.agentId = task.agentId ?? agentId;
       this.publish(task);
@@ -297,14 +298,6 @@ export class ArchifyGenerationService {
         diagram.finishedAt = new Date().toISOString();
         diagram.error ??= result.canceled ? "Canceled" : "The worker finished without a diagram";
       }
-      // A delivered worker is archived so the run leaves no agents behind.
-      await this.archiveAgent(agentId).catch((error) => {
-        this.options.logger.warn(
-          { err: error, taskId: task.taskId, agentId },
-          "Failed to archive an Archify worker",
-        );
-      });
-      this.publish(task);
       return { canceled: result.canceled };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -313,8 +306,18 @@ export class ArchifyGenerationService {
         diagram.error = message;
       }
       diagram.finishedAt ??= new Date().toISOString();
-      this.publish(task);
       return { canceled: false };
+    } finally {
+      // Workers never linger in the agent list, whether they delivered or not.
+      if (agentId) {
+        await this.archiveAgent(agentId).catch((error) => {
+          this.options.logger.warn(
+            { err: error, taskId: task.taskId, agentId },
+            "Failed to archive an Archify worker",
+          );
+        });
+      }
+      this.publish(task);
     }
   }
 

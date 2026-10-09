@@ -163,6 +163,32 @@ describe("ArchifyGenerationService", () => {
     expect(delivered.artifact?.id).toBe("sequence-renamed-by-the-model");
   });
 
+  test("a worker whose run throws is archived and only fails its own diagram", async () => {
+    const { service, archiveAgent } = createService({
+      runGenerator: async (agentId) => {
+        if (agentId === workerAgentId("sequence")) throw new Error("provider exploded");
+        return { canceled: false };
+      },
+    });
+
+    await service.start({
+      workspaceId: "ws_1",
+      types: ["architecture", "sequence"],
+      provider: "codex",
+    });
+
+    await vi.waitFor(() => {
+      expect(service.get("ws_1")?.status).toBe("failed");
+    });
+    const task = service.get("ws_1")!;
+    expect(task.diagrams[1]?.status).toBe("failed");
+    expect(task.diagrams[1]?.error).toBe("provider exploded");
+    expect(archiveAgent.mock.calls.map(([agentId]) => agentId).sort()).toEqual([
+      "agent_architecture",
+      "agent_sequence",
+    ]);
+  });
+
   test("cancel keeps delivered diagrams and stops every worker", async () => {
     const { runGenerator } = gatedGenerator();
     const { service, stopGenerator } = createService({ runGenerator });
