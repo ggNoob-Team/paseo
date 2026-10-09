@@ -8876,9 +8876,17 @@ function isValidGitHubRepoSegment(value: string): boolean {
 }
 
 function sessionEventCategory(message: SessionOutboundMessage): SessionEventSubscription | null {
-  switch (message.type) {
+  if (message.type === "status") return sessionStatusEventCategory(message.payload.status);
+  return sessionDirectEventCategory(message.type);
+}
+
+function sessionDirectEventCategory(
+  type: Exclude<SessionOutboundMessage["type"], "status">,
+): SessionEventSubscription | null {
+  switch (type) {
     case "project.update":
     case "notes.project.updated":
+    case "archify.generation.updated":
     case "providers_snapshot_update":
     case "agent_attention_required":
     case "agent_permission_request":
@@ -8891,20 +8899,22 @@ function sessionEventCategory(message: SessionOutboundMessage): SessionEventSubs
     case "activity_log":
     case "hub.execution.agent.update":
     case "hub.execution.agent.stream":
-      return message.type;
-    case "status":
-      switch (message.payload.status) {
-        case "server_info":
-          return "status.server_info";
-        case "daemon_config_changed":
-          return "status.daemon_config_changed";
-        case "plugin_catalog_changed":
-          return "status.plugin_catalog_changed";
-        case "plugin_settings_changed":
-          return "status.plugin_settings_changed";
-        default:
-          return null;
-      }
+      return type;
+    default:
+      return null;
+  }
+}
+
+function sessionStatusEventCategory(status: string): SessionEventSubscription | null {
+  switch (status) {
+    case "server_info":
+      return "status.server_info";
+    case "daemon_config_changed":
+      return "status.daemon_config_changed";
+    case "plugin_catalog_changed":
+      return "status.plugin_catalog_changed";
+    case "plugin_settings_changed":
+      return "status.plugin_settings_changed";
     default:
       return null;
   }

@@ -15,7 +15,10 @@ import {
 } from "../services/github-service.js";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
+import type {
+  ArchifyGenerationTask,
+  WorkspaceDescriptorPayload,
+} from "@getpaseo/protocol/messages";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
@@ -5811,4 +5814,45 @@ test("provider snapshots preserve versionless visibility while capabilities upda
     "plugin-provider",
   ]);
   expect(references.compactSnapshot!.entries[0]!.modes![0]!.icon).toBe("ShieldCheck");
+});
+
+test("delivers Archify run updates to a session that subscribed", async () => {
+  const messages: SessionOutboundMessage[] = [];
+  const session = createSessionForTest({ messages });
+
+  await session.handleMessage({
+    type: "session.events.set_subscription.request",
+    requestId: "archify-updates",
+    events: ["archify.generation.updated"],
+  });
+  messages.length = 0;
+
+  const task: ArchifyGenerationTask = {
+    taskId: "archify_task_test",
+    workspaceId: "ws_1",
+    status: "running",
+    stage: "draw",
+    agentId: "agent_1",
+    startedAt: "2026-10-09T12:00:00.000Z",
+    finishedAt: null,
+    error: null,
+    actionLine: "Drawing the architecture diagram",
+    evidenceRevision: "git:abc",
+    evidenceCached: false,
+    diagrams: [
+      {
+        type: "architecture",
+        artifactId: "archify-test-architecture",
+        status: "drawing",
+        startedAt: "2026-10-09T12:00:01.000Z",
+        finishedAt: null,
+        error: null,
+        artifact: null,
+      },
+    ],
+  };
+
+  session.emitArchifyTaskUpdated(task);
+
+  expect(findByType(messages, "archify.generation.updated")?.payload.task).toEqual(task);
 });
