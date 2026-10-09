@@ -1213,6 +1213,9 @@ export async function createPaseoDaemon(
     createAgent,
     agentManager,
     logger,
+    archiveAgent: async (agentId) => {
+      await archiveAgentCommand({ agentManager, agentStorage, logger }, agentId);
+    },
     onTaskUpdated: (task) => {
       for (const session of wsServer?.listSessions() ?? []) {
         session.emitArchifyTaskUpdated(task);

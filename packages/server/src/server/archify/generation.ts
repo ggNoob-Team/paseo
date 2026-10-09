@@ -32,17 +32,22 @@ export interface ArchifyGenerationServiceOptions {
   logger: GenerationLogger;
   /** Called on every task change; the daemon fans it out to subscribed clients. */
   onTaskUpdated?: (task: ArchifyGenerationTask) => void;
+  /** Archives a worker once its diagram is delivered, so the sidebar stays quiet. */
+  archiveAgent?: (agentId: string) => Promise<void>;
   deps?: {
     scanEvidence?: typeof scanArchifyEvidence;
     /** Test seam: run the generator turn without a real provider. */
     runGenerator?: (agentId: string, prompt: string) => Promise<{ canceled: boolean }>;
     stopGenerator?: (agentId: string) => Promise<void>;
+    archiveAgent?: (agentId: string) => Promise<void>;
   };
 }
 
 interface TaskRecord {
   task: ArchifyGenerationTask;
   input: ArchifyGenerationStartInput;
+  /** One worker per requested diagram; the worker's own agent draws one diagram. */
+  workerAgentIdByType: Map<ArchifyDiagramType, string>;
 }
 
 /**
@@ -61,6 +66,7 @@ export class ArchifyGenerationService {
     prompt: string,
   ) => Promise<{ canceled: boolean }>;
   private readonly stopGenerator: (agentId: string) => Promise<void>;
+  private readonly archiveAgent: (agentId: string) => Promise<void>;
   private readonly unsubscribeDeliveries: () => void;
 
   constructor(private readonly options: ArchifyGenerationServiceOptions) {
@@ -76,6 +82,8 @@ export class ArchifyGenerationService {
       (async (agentId) => {
         await options.agentManager.cancelAgentRun(agentId);
       });
+    this.archiveAgent =
+      options.deps?.archiveAgent ?? options.archiveAgent ?? (async () => undefined);
     this.unsubscribeDeliveries = subscribeArchifyArtifactDeliveries((delivery) => {
       if (!delivery.generatorAgentId) return;
       this.handleDelivery(delivery.generatorAgentId, delivery.artifact);
@@ -119,7 +127,11 @@ export class ArchifyGenerationService {
         artifact: null,
       })),
     };
-    const record: TaskRecord = { task, input: { ...input, types: [...input.types] } };
+    const record: TaskRecord = {
+      task,
+      input: { ...input, types: [...input.types] },
+      workerAgentIdByType: new Map(),
+    };
     this.tasks.set(taskId, record);
     this.latestTaskIdByWorkspaceId.set(input.workspaceId, taskId);
     this.publish(task);
@@ -147,11 +159,13 @@ export class ArchifyGenerationService {
     }
     this.publish(task);
 
-    if (task.agentId) {
-      await this.stopGenerator(task.agentId).catch((error) => {
-        this.options.logger.warn({ err: error, taskId }, "Failed to stop the Archify agent");
-      });
-    }
+    await Promise.all(
+      [...record.workerAgentIdByType.values()].map((agentId) =>
+        this.stopGenerator(agentId).catch((error) => {
+          this.options.logger.warn({ err: error, taskId }, "Failed to stop an Archify worker");
+        }),
+      ),
+    );
     return snapshot(task);
   }
 
@@ -183,50 +197,117 @@ export class ArchifyGenerationService {
       task.stage = "draw";
       task.actionLine = evidence.cached
         ? "Using the cached evidence sheet"
-        : "Wrote the evidence sheet; starting the generator";
+        : "Wrote the evidence sheet; starting the workers";
       this.publish(task);
 
+      const artifactPrefix = task.diagrams[0]?.artifactId.replace(/-[a-z]+$/, "") ?? "archify";
+      const results = await Promise.all(
+        task.diagrams.map((diagram) =>
+          this.runWorker(record, {
+            diagram,
+            workspaceCwd: workspace.cwd,
+            evidenceDigest: evidence.digest,
+            artifactPrefix,
+          }),
+        ),
+      );
+      if (task.status !== "running") return;
+      this.finish(
+        task,
+        results.every((result) => result.canceled),
+      );
+    } catch (error) {
+      if (task.status !== "running") return;
+      this.fail(task, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * One worker per diagram: they run in parallel, each owns a single artifact,
+   * and a worker that delivered is archived instead of lingering in the agent
+   * list. A worker that fails only fails its own diagram.
+   */
+  private async runWorker(
+    record: TaskRecord,
+    input: {
+      diagram: ArchifyGenerationTask["diagrams"][number];
+      workspaceCwd: string;
+      evidenceDigest: string;
+      artifactPrefix: string;
+    },
+  ): Promise<{ canceled: boolean }> {
+    const { task } = record;
+    const { diagram } = input;
+    const startedAt = new Date().toISOString();
+    diagram.status = "drawing";
+    diagram.startedAt = startedAt;
+
+    try {
       const created = await this.options.createAgent({
         kind: "mcp",
-        provider: formatProviderModel(input.provider, input.model),
+        provider: formatProviderModel(record.input.provider, record.input.model),
         config: {
-          provider: input.provider,
-          cwd: workspace.cwd,
-          ...(input.model ? { model: input.model } : {}),
-          ...(input.modeId ? { modeId: input.modeId } : {}),
-          title: "Archify",
+          provider: record.input.provider,
+          cwd: input.workspaceCwd,
+          ...(record.input.model ? { model: record.input.model } : {}),
+          ...(record.input.modeId ? { modeId: record.input.modeId } : {}),
+          title: `Archify ${diagram.type}`,
         },
-        cwd: workspace.cwd,
-        workspaceId: input.workspaceId,
-        title: "Archify",
+        cwd: input.workspaceCwd,
+        workspaceId: task.workspaceId,
+        title: `Archify ${diagram.type}`,
         labels: {
           "paseo.archify.generator": "true",
           "paseo.archify-task": task.taskId,
+          "paseo.archify-type": diagram.type,
         },
-        ...(input.modeId ? { mode: input.modeId } : {}),
+        ...(record.input.modeId ? { mode: record.input.modeId } : {}),
         unattended: true,
         promptFailure: "return-error",
         background: true,
         notifyOnFinish: false,
       });
-      if (task.status !== "running") return;
-      task.agentId = created.snapshot.id;
-      this.markNextDiagramDrawing(task);
+      const agentId = created.snapshot.id;
+      record.workerAgentIdByType.set(diagram.type, agentId);
+      task.agentId = task.agentId ?? agentId;
       this.publish(task);
+      if (task.status !== "running") {
+        return { canceled: true };
+      }
 
       const prompt = buildArchifyGenerationPrompt({
-        artifactPrefix: task.diagrams[0]?.artifactId.replace(/-[a-z]+$/, "") ?? "archify",
-        types: input.types,
-        request: input.request,
-        scope: input.scope,
-        evidenceDigest: evidence.digest,
+        artifactPrefix: input.artifactPrefix,
+        types: [diagram.type],
+        request: record.input.request,
+        scope: record.input.scope,
+        evidenceDigest: input.evidenceDigest,
       });
-      const result = await this.runGenerator(created.snapshot.id, prompt);
-      if (task.status !== "running") return;
-      this.finish(task, result.canceled);
+      const result = await this.runGenerator(agentId, prompt);
+      // The delivery hook fills `artifact`; the status alone cannot be compared
+      // here because this frame set it to "drawing" above.
+      if (diagram.artifact === null) {
+        diagram.status = result.canceled ? "canceled" : "failed";
+        diagram.finishedAt = new Date().toISOString();
+        diagram.error ??= result.canceled ? "Canceled" : "The worker finished without a diagram";
+      }
+      // A delivered worker is archived so the run leaves no agents behind.
+      await this.archiveAgent(agentId).catch((error) => {
+        this.options.logger.warn(
+          { err: error, taskId: task.taskId, agentId },
+          "Failed to archive an Archify worker",
+        );
+      });
+      this.publish(task);
+      return { canceled: result.canceled };
     } catch (error) {
-      if (task.status !== "running") return;
-      this.fail(task, error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      if (diagram.artifact === null) {
+        diagram.status = "failed";
+        diagram.error = message;
+      }
+      diagram.finishedAt ??= new Date().toISOString();
+      this.publish(task);
+      return { canceled: false };
     }
   }
 
@@ -235,13 +316,20 @@ export class ArchifyGenerationService {
     artifact: ArchifyGenerationTask["diagrams"][number]["artifact"],
   ): void {
     if (!artifact) return;
-    const record = [...this.tasks.values()].find(
+    const owner = [...this.tasks.values()].find(
       (candidate) =>
-        candidate.task.status === "running" && candidate.task.agentId === generatorAgentId,
+        candidate.task.status === "running" &&
+        [...candidate.workerAgentIdByType.values()].includes(generatorAgentId),
     );
-    if (!record) return;
-    const { task } = record;
-    const diagram = task.diagrams.find((candidate) => candidate.artifactId === artifact.id);
+    if (!owner) return;
+    const { task } = owner;
+    const type = [...owner.workerAgentIdByType.entries()].find(
+      ([, agentId]) => agentId === generatorAgentId,
+    )?.[0];
+    if (!type) return;
+    // The worker owns its diagram, so its delivery counts even when the model
+    // picked a different artifact id than the one it was asked for.
+    const diagram = task.diagrams.find((candidate) => candidate.type === type);
     if (!diagram || diagram.status === "delivered") return;
 
     const now = new Date().toISOString();
@@ -254,15 +342,7 @@ export class ArchifyGenerationService {
       ? "deliver"
       : "validate";
     task.actionLine = `Delivered ${artifact.title}`;
-    this.markNextDiagramDrawing(task);
     this.publish(task);
-  }
-
-  private markNextDiagramDrawing(task: ArchifyGenerationTask): void {
-    const next = task.diagrams.find((diagram) => diagram.status === "pending");
-    if (!next) return;
-    next.status = "drawing";
-    next.startedAt ??= new Date().toISOString();
   }
 
   private finish(task: ArchifyGenerationTask, canceled: boolean): void {
