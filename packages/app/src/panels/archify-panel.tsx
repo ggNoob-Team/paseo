@@ -405,6 +405,12 @@ function ArchifyPanel(): ReactElement {
           skillReadyRef.current = true;
         }
         const artifactPrefix = `archify-${Date.now().toString(36)}`;
+        // The pre-scan is what keeps the agent from spending minutes
+        // rediscovering the repository; a failed scan must not block generation.
+        const evidenceDigest = await client
+          .scanArchifyEvidence({ workspaceId })
+          .then((evidence) => evidence.digest)
+          .catch(() => undefined);
         const created = await client.createAgent({
           provider: agentConfig.provider,
           ...(agentConfig.model ? { model: agentConfig.model } : {}),
@@ -417,6 +423,7 @@ function ArchifyPanel(): ReactElement {
             types,
             request: input?.request,
             scope: input?.scope,
+            evidenceDigest,
           }),
           labels: { "paseo.archify.generator": "true" },
         });

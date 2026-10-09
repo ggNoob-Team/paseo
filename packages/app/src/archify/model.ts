@@ -116,6 +116,12 @@ export function buildArchifyGenerationPrompt(input: {
   types: readonly ArchifyDiagramType[];
   request?: string;
   scope?: string;
+  /**
+   * The daemon's deterministic pre-scan of the workspace. Handing it to the
+   * agent is what keeps the run from paying for exploration rounds; the agent
+   * reads this instead of walking the repository itself.
+   */
+  evidenceDigest?: string;
 }): string {
   const typeInstructions: Record<ArchifyDiagramType, string> = {
     architecture:
@@ -133,8 +139,13 @@ export function buildArchifyGenerationPrompt(input: {
     const artifactId = `${input.artifactPrefix}-${type}`;
     return `${index + 1}. ${type}: artifactId="${artifactId}", title="<specific title>", diagramType="${type}". Use a short title that names the analyzed flow, scope, or feature, not only the diagram type. ${typeInstructions[type]}`;
   });
+  const evidenceDigest = input.evidenceDigest?.trim();
   return [
-    "Use the `paseo-archify` skill to inspect the current repository and produce the requested Archify diagrams.",
+    evidenceDigest
+      ? "Paseo already pre-scanned this repository. The evidence sheet below is authoritative: start from it, and read at most a few specific files when you need an exact symbol, signature, or line. Do not walk or search the repository to rediscover its structure."
+      : "Use the `paseo-archify` skill to inspect the current repository and produce the requested Archify diagrams.",
+    evidenceDigest ? `# Pre-scanned repository evidence\n${evidenceDigest}` : "",
+    "Use the `paseo-archify` skill to author the requested Archify diagrams.",
     "You are a read-only analysis agent: do not edit or create repository files. Deliver every artifact through the `archify_render` Paseo tool; never run the Archify CLI directly.",
     'For each artifact, read the matching Archify schema and example from the installed skill, author a valid JSON IR, set meta.quality_profile to "showcase" and meta.locale to "zh-CN", then call `archify_render` with the complete specification.',
     "The generated labels must be searchable. Include exact code symbols, variable names, business step names, types, and source paths where the schema supports them.",

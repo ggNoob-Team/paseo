@@ -1,5 +1,6 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
 import { openArchifyWorkspace, readArchifyArtifact } from "./archify/service.js";
+import { scanArchifyEvidence } from "./archify/evidence.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { BrowserAutomationHostCapabilitySchema } from "@getpaseo/protocol/browser-automation/capabilities";
 import type {
@@ -2991,6 +2992,8 @@ export class Session {
         return this.handleArchifyWorkspaceOpenRequest(msg);
       case "archify.artifact.read.request":
         return this.handleArchifyArtifactReadRequest(msg);
+      case "archify.evidence.scan.request":
+        return this.handleArchifyEvidenceScanRequest(msg);
       default:
         return undefined;
     }
@@ -3034,6 +3037,23 @@ export class Session {
         artifact,
         error: artifact ? null : "Archify artifact not found",
       },
+    });
+  }
+
+  private async handleArchifyEvidenceScanRequest(
+    msg: Extract<SessionInboundMessage, { type: "archify.evidence.scan.request" }>,
+  ): Promise<void> {
+    const workspace = await this.workspaceRegistry.get(msg.workspaceId);
+    if (!workspace) throw new Error("Workspace not found");
+    const evidence = await scanArchifyEvidence({
+      paseoHome: this.paseoHome,
+      workspaceId: msg.workspaceId,
+      cwd: workspace.cwd,
+      force: msg.force === true,
+    });
+    this.emit({
+      type: "archify.evidence.scan.response",
+      payload: { requestId: msg.requestId, evidence },
     });
   }
 

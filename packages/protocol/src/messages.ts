@@ -1650,6 +1650,44 @@ export const ArchifyArtifactReadRequestSchema = z
   })
   .strict();
 
+/**
+ * A deterministic, model-free reading of the repository: workspace packages,
+ * entry points, internal edges, and where the code lives. The digest is capped
+ * so it can be handed to the generator agent as a finished fact sheet instead
+ * of paying for exploration rounds.
+ */
+export const ArchifyEvidenceAnchorSchema = z.object({
+  kind: z.enum(["module", "entry", "flow"]),
+  label: z.string(),
+  detail: z.string(),
+});
+
+export const ArchifyEvidenceSchema = z.object({
+  workspaceId: z.string(),
+  revision: z.string(),
+  scannedAt: z.string(),
+  cached: z.boolean(),
+  digest: z.string(),
+  digestBytes: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  facts: z.object({
+    packages: z.number().int().nonnegative(),
+    entryPoints: z.number().int().nonnegative(),
+    sourceFiles: z.number().int().nonnegative(),
+  }),
+  anchors: z.array(ArchifyEvidenceAnchorSchema),
+});
+
+export const ArchifyEvidenceScanRequestSchema = z
+  .object({
+    type: z.literal("archify.evidence.scan.request"),
+    requestId: z.string(),
+    workspaceId: z.string(),
+    /** Rescan even when the cached evidence still matches the workspace revision. */
+    force: z.boolean().optional(),
+  })
+  .strict();
+
 export const GetDaemonConfigRequestMessageSchema = z.object({
   type: z.literal("get_daemon_config_request"),
   requestId: z.string(),
@@ -3511,6 +3549,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsImportLegacySelectionRequestSchema,
   ArchifyWorkspaceOpenRequestSchema,
   ArchifyArtifactReadRequestSchema,
+  ArchifyEvidenceScanRequestSchema,
   GetDaemonConfigRequestMessageSchema,
   SetDaemonConfigRequestMessageSchema,
   ReadProjectConfigRequestMessageSchema,
@@ -7101,6 +7140,17 @@ export const ArchifyWorkspaceOpenResponseSchema = z.object({
   }),
 });
 
+export const ArchifyEvidenceScanResponseSchema = z.object({
+  type: z.literal("archify.evidence.scan.response"),
+  payload: z.object({
+    requestId: z.string(),
+    evidence: ArchifyEvidenceSchema,
+  }),
+});
+
+export type ArchifyEvidence = z.infer<typeof ArchifyEvidenceSchema>;
+export type ArchifyEvidenceAnchor = z.infer<typeof ArchifyEvidenceAnchorSchema>;
+
 export const ArchifyArtifactReadResponseSchema = z.object({
   type: z.literal("archify.artifact.read.response"),
   payload: z.object({
@@ -7144,6 +7194,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsImportLegacySelectionResponseSchema,
   ArchifyWorkspaceOpenResponseSchema,
   ArchifyArtifactReadResponseSchema,
+  ArchifyEvidenceScanResponseSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,

@@ -30,6 +30,7 @@ import {
 } from "@getpaseo/protocol/messages";
 import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outbound";
 import type {
+  ArchifyEvidence,
   AgentStreamEventPayload,
   AgentSnapshotPayload,
   ProjectPlacementPayload,
@@ -5574,6 +5575,25 @@ export class DaemonClient {
         },
       });
     return { artifacts: payload.artifacts, autoGenerate: payload.autoGenerate };
+  }
+
+  async scanArchifyEvidence(options: {
+    workspaceId: string;
+    force?: boolean;
+    requestId?: string;
+  }): Promise<ArchifyEvidence> {
+    const resolvedRequestId = this.createRequestId(options.requestId);
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"archify.evidence.scan.response">({
+        requestId: resolvedRequestId,
+        message: {
+          type: "archify.evidence.scan.request",
+          requestId: resolvedRequestId,
+          workspaceId: options.workspaceId,
+          ...(options.force === undefined ? {} : { force: options.force }),
+        },
+      });
+    return payload.evidence;
   }
 
   async readArchifyArtifact(
