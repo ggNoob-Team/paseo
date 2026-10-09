@@ -185,8 +185,10 @@ export async function deleteArchifyArtifact(input: {
   artifactId: string;
 }): Promise<boolean> {
   const artifactDirectory = resolveArchifyArtifactDirectory(input);
+  // The directory itself is the artifact, not `metadata.json`: a render that
+  // failed before delivery leaves a directory worth cleaning up too.
   const exists = await fs
-    .access(path.join(artifactDirectory, "metadata.json"))
+    .access(artifactDirectory)
     .then(() => true)
     .catch(() => false);
   if (!exists) return false;
