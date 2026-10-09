@@ -3,11 +3,11 @@ import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import { getUnattendedModeId } from "@getpaseo/protocol/provider-manifest";
 import type { FormPreferences } from "@/hooks/use-form-preferences";
 
-export const ARCHIFY_INITIAL_TYPES: readonly ArchifyDiagramType[] = [
-  "architecture",
-  "sequence",
-  "dataflow",
-];
+/**
+ * What a workspace gets on its first open: one architecture overview. The user
+ * picks the method-call, data-flow, and workflow diagrams from the panel.
+ */
+export const ARCHIFY_INITIAL_TYPES: readonly ArchifyDiagramType[] = ["architecture"];
 
 export const ARCHIFY_ALL_TYPES: readonly ArchifyDiagramType[] = [
   "architecture",
