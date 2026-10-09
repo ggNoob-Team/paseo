@@ -12,6 +12,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useToast } from "@/contexts/toast-context";
 import { findNoteById, noteDisplayTitle, type HostNote } from "@/notes/notes-model";
+import { NoteLinksSection } from "@/notes/note-links-section";
 import { useNoteActions, useNotesList } from "@/notes/use-notes";
 import type { Theme } from "@/styles/theme";
 
@@ -172,6 +173,7 @@ function NoteDetailBody({ note }: { note: HostNote }): ReactElement {
         <View style={styles.viewer}>
           {note.title ? <Text style={styles.title}>{note.title}</Text> : null}
           <MarkdownRenderer text={note.text} />
+          <NoteLinksSection text={note.text} />
           {note.comment ? <Text style={styles.comment}>{note.comment}</Text> : null}
           <NoteMetadata note={note} />
         </View>
