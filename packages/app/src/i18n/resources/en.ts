@@ -18,6 +18,18 @@ export const en = {
     actions: {
       rerunUnfinished: "Rerun unfinished",
     },
+    anchors: {
+      title: "Confirm what the diagrams must cover",
+      selected: "{{count}} selected",
+      wholeWorkspace: "Whole workspace",
+      generate: "Generate",
+      empty: "No candidate anchors were found. The whole workspace will be used.",
+      kind: {
+        module: "Module",
+        entry: "Entry point",
+        flow: "Flow",
+      },
+    },
     evidence: {
       cached: "Reused the evidence sheet {{revision}}",
       scanned: "Rescanned the repository {{revision}}",

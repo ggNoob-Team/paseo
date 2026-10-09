@@ -21,6 +21,18 @@ export const ru: TranslationResources = {
     actions: {
       rerunUnfinished: "Повторить незавершённое",
     },
+    anchors: {
+      title: "Подтвердите, что должны охватывать диаграммы",
+      selected: "выбрано: {{count}}",
+      wholeWorkspace: "Всё рабочее пространство",
+      generate: "Создать",
+      empty: "Кандидатные якоря не найдены. Будет использовано всё рабочее пространство.",
+      kind: {
+        module: "Модуль",
+        entry: "Точка входа",
+        flow: "Поток",
+      },
+    },
     evidence: {
       cached: "Лист доказательств переиспользован {{revision}}",
       scanned: "Репозиторий пересканирован {{revision}}",

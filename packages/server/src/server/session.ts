@@ -3080,6 +3080,7 @@ export class Session {
       types: msg.types,
       ...(msg.request === undefined ? {} : { request: msg.request }),
       ...(msg.scope === undefined ? {} : { scope: msg.scope }),
+      ...(msg.anchors === undefined ? {} : { anchors: msg.anchors }),
       provider: msg.provider,
       ...(msg.model === undefined ? {} : { model: msg.model }),
       ...(msg.modeId === undefined ? {} : { modeId: msg.modeId }),

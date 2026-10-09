@@ -21,6 +21,18 @@ export const ja: TranslationResources = {
     actions: {
       rerunUnfinished: "未完了を再実行",
     },
+    anchors: {
+      title: "図が扱う対象を確認",
+      selected: "{{count}} 件選択中",
+      wholeWorkspace: "ワークスペース全体",
+      generate: "生成",
+      empty: "候補アンカーが見つかりません。ワークスペース全体を使用します。",
+      kind: {
+        module: "モジュール",
+        entry: "エントリポイント",
+        flow: "フロー",
+      },
+    },
     evidence: {
       cached: "証跡シートを再利用 {{revision}}",
       scanned: "リポジトリを再スキャン {{revision}}",

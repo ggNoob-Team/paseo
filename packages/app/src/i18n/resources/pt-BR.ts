@@ -21,6 +21,18 @@ export const ptBR: TranslationResources = {
     actions: {
       rerunUnfinished: "Repetir o que faltou",
     },
+    anchors: {
+      title: "Confirme o que os diagramas devem cobrir",
+      selected: "{{count}} selecionados",
+      wholeWorkspace: "Espaço de trabalho inteiro",
+      generate: "Gerar",
+      empty: "Nenhuma âncora candidata encontrada. O espaço de trabalho inteiro será usado.",
+      kind: {
+        module: "Módulo",
+        entry: "Ponto de entrada",
+        flow: "Fluxo",
+      },
+    },
     evidence: {
       cached: "Folha de evidências reutilizada {{revision}}",
       scanned: "Repositório reescaneado {{revision}}",

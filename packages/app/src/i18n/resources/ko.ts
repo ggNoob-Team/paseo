@@ -21,6 +21,18 @@ export const ko: TranslationResources = {
     actions: {
       rerunUnfinished: "미완료 다시 실행",
     },
+    anchors: {
+      title: "다이어그램이 다룰 범위를 확인하세요",
+      selected: "{{count}}개 선택됨",
+      wholeWorkspace: "전체 워크스페이스",
+      generate: "생성",
+      empty: "후보 앵커를 찾지 못했습니다. 전체 워크스페이스를 사용합니다.",
+      kind: {
+        module: "모듈",
+        entry: "진입점",
+        flow: "흐름",
+      },
+    },
     evidence: {
       cached: "증거 시트 재사용 {{revision}}",
       scanned: "저장소 재스캔 {{revision}}",

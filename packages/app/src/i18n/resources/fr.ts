@@ -21,6 +21,18 @@ export const fr: TranslationResources = {
     actions: {
       rerunUnfinished: "Relancer ce qui reste",
     },
+    anchors: {
+      title: "Confirmez ce que les diagrammes doivent couvrir",
+      selected: "{{count}} sélectionnés",
+      wholeWorkspace: "Tout l'espace de travail",
+      generate: "Générer",
+      empty: "Aucune ancre candidate trouvée. Tout l'espace de travail sera utilisé.",
+      kind: {
+        module: "Module",
+        entry: "Point d'entrée",
+        flow: "Flux",
+      },
+    },
     evidence: {
       cached: "Feuille de preuves réutilisée {{revision}}",
       scanned: "Dépôt réanalysé {{revision}}",

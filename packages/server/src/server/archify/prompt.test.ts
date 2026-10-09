@@ -34,4 +34,27 @@ describe("buildArchifyGenerationPrompt", () => {
     expect(prompt).toContain("inspect the current repository");
     expect(prompt).not.toContain("Pre-scanned repository evidence");
   });
+
+  it("makes confirmed anchors mandatory for every diagram", () => {
+    const prompt = buildArchifyGenerationPrompt({
+      artifactPrefix: "archify-test",
+      types: ["architecture"],
+      anchors: [
+        { kind: "module", label: "@fixture/core", detail: "packages/core" },
+        { kind: "flow", label: "@fixture/app -> @fixture/core", detail: "" },
+      ],
+    });
+    expect(prompt).toContain("The user confirmed these anchors");
+    expect(prompt).toContain("- [module] @fixture/core — packages/core");
+    expect(prompt).toContain("- [flow] @fixture/app -> @fixture/core");
+  });
+
+  it("omits the anchor section when nothing was confirmed", () => {
+    const prompt = buildArchifyGenerationPrompt({
+      artifactPrefix: "archify-test",
+      types: ["architecture"],
+      anchors: [],
+    });
+    expect(prompt).not.toContain("The user confirmed these anchors");
+  });
 });

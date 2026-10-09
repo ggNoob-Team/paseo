@@ -21,6 +21,18 @@ export const zhCN: TranslationResources = {
     actions: {
       rerunUnfinished: "重跑未完成",
     },
+    anchors: {
+      title: "确认图表要覆盖的范围",
+      selected: "已选 {{count}} 个",
+      wholeWorkspace: "整个工作区",
+      generate: "生成",
+      empty: "没有找到候选锚点，将使用整个工作区。",
+      kind: {
+        module: "模块",
+        entry: "入口",
+        flow: "链路",
+      },
+    },
     evidence: {
       cached: "复用了证据清单 {{revision}}",
       scanned: "重新扫描了仓库 {{revision}}",

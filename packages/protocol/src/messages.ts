@@ -1730,6 +1730,8 @@ export const ArchifyGenerationStartRequestSchema = z
     types: z.array(ArchifyDiagramTypeSchema).min(1),
     request: z.string().optional(),
     scope: z.string().optional(),
+    /** Candidate anchors the user confirmed before the run started. */
+    anchors: z.array(ArchifyEvidenceAnchorSchema).max(80).optional(),
     provider: z.string(),
     model: z.string().optional(),
     modeId: z.string().optional(),

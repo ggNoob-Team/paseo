@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import {
+  Check,
   ChevronDown,
   ChevronUp,
   Database,
@@ -17,6 +18,7 @@ import invariant from "tiny-invariant";
 import {
   ARCHIFY_ALL_TYPES,
   ARCHIFY_INITIAL_TYPES,
+  type ArchifyAgentConfig,
   buildArchifyFocusScript,
   buildArchifySearchEntries,
   filterArchifySearchEntries,
@@ -39,6 +41,8 @@ import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import type {
   ArchifyArtifactSummary,
   ArchifyDiagramType,
+  ArchifyEvidence,
+  ArchifyEvidenceAnchor,
   ArchifyGenerationDiagram,
   ArchifyGenerationDiagramStatus,
   ArchifyGenerationTask,
@@ -344,6 +348,66 @@ function ArchifyGenerationDiagramRow({
   );
 }
 
+function archifyAnchorKey(anchor: ArchifyEvidenceAnchor): string {
+  return `${anchor.kind}:${anchor.label}`;
+}
+
+function buildArchifyStartRequest(input: {
+  workspaceId: string;
+  types: readonly ArchifyDiagramType[];
+  agentConfig: ArchifyAgentConfig;
+  request?: string;
+  scope?: string;
+  anchors?: readonly ArchifyEvidenceAnchor[];
+}) {
+  return {
+    workspaceId: input.workspaceId,
+    types: [...input.types],
+    provider: input.agentConfig.provider,
+    ...(input.agentConfig.model ? { model: input.agentConfig.model } : {}),
+    ...(input.agentConfig.modeId ? { modeId: input.agentConfig.modeId } : {}),
+    ...(input.request ? { request: input.request } : {}),
+    ...(input.scope ? { scope: input.scope } : {}),
+    ...(input.anchors?.length ? { anchors: [...input.anchors] } : {}),
+  };
+}
+
+function ArchifyAnchorRow({
+  anchor,
+  kindLabel,
+  selected,
+  onToggle,
+}: {
+  anchor: ArchifyEvidenceAnchor;
+  kindLabel: string;
+  selected: boolean;
+  onToggle: (anchor: ArchifyEvidenceAnchor) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onToggle(anchor), [anchor, onToggle]);
+  const accessibilityState = useMemo(() => ({ checked: selected }), [selected]);
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={accessibilityState}
+      onPress={handlePress}
+      style={[styles.anchorRow, selected && styles.anchorRowSelected]}
+    >
+      <Text style={styles.anchorKind}>{kindLabel}</Text>
+      <View style={styles.anchorMain}>
+        <Text style={styles.anchorLabel} numberOfLines={1}>
+          {anchor.label}
+        </Text>
+        {anchor.detail ? (
+          <Text style={styles.anchorDetail} numberOfLines={1}>
+            {anchor.detail}
+          </Text>
+        ) : null}
+      </View>
+      {selected ? <Check size={14} color={styles.activeColor.color} /> : null}
+    </Pressable>
+  );
+}
+
 // eslint-disable-next-line complexity
 function ArchifyPanel(): ReactElement {
   const { t } = useTranslation();
@@ -382,6 +446,11 @@ function ArchifyPanel(): ReactElement {
   const [selectedTypes, setSelectedTypes] = useState<ArchifyDiagramType[]>([
     ...ARCHIFY_INITIAL_TYPES,
   ]);
+  const [anchorStep, setAnchorStep] = useState<ArchifyEvidence | null>(null);
+  const [isAnchorStepOpen, setIsAnchorStepOpen] = useState(false);
+  const [isScanningAnchors, setIsScanningAnchors] = useState(false);
+  const [anchorError, setAnchorError] = useState<string | null>(null);
+  const [selectedAnchorKeys, setSelectedAnchorKeys] = useState<string[]>([]);
   const autoStartedRef = useRef(false);
   const skillReadyRef = useRef(false);
   const previousGenerationRunningRef = useRef(false);
@@ -469,7 +538,12 @@ function ArchifyPanel(): ReactElement {
   }, [artifacts, t]);
 
   const startGeneration = useCallback(
-    async (input?: { types?: readonly ArchifyDiagramType[]; request?: string; scope?: string }) => {
+    async (input?: {
+      types?: readonly ArchifyDiagramType[];
+      request?: string;
+      scope?: string;
+      anchors?: readonly ArchifyEvidenceAnchor[];
+    }) => {
       if (!client || !agentConfig || !workspaceDirectory || isStarting) return;
       const types = input?.types?.length ? input.types : ARCHIFY_INITIAL_TYPES;
       setIsStarting(true);
@@ -479,15 +553,16 @@ function ArchifyPanel(): ReactElement {
           await ensureArchifySkill({ client, skillManagement });
           skillReadyRef.current = true;
         }
-        const task = await client.startArchifyGeneration({
-          workspaceId,
-          types: [...types],
-          provider: agentConfig.provider,
-          ...(agentConfig.model ? { model: agentConfig.model } : {}),
-          ...(agentConfig.modeId ? { modeId: agentConfig.modeId } : {}),
-          ...(input?.request ? { request: input.request } : {}),
-          ...(input?.scope ? { scope: input.scope } : {}),
-        });
+        const task = await client.startArchifyGeneration(
+          buildArchifyStartRequest({
+            workspaceId,
+            types,
+            agentConfig,
+            ...(input?.request ? { request: input.request } : {}),
+            ...(input?.scope ? { scope: input.scope } : {}),
+            ...(input?.anchors ? { anchors: input.anchors } : {}),
+          }),
+        );
         if (task) setGenerationTask(task);
         await workspaceQuery.refetch();
       } catch (error) {
@@ -632,7 +707,47 @@ function ArchifyPanel(): ReactElement {
     })();
   }, [client, generationTask?.taskId]);
 
+  /** Confirm what the run covers before any worker starts drawing. */
   const handleGenerate = useCallback(() => {
+    if (!client) return;
+    setIsAnchorStepOpen(true);
+    setIsScanningAnchors(true);
+    setAnchorError(null);
+    void (async () => {
+      try {
+        const evidence = await client.scanArchifyEvidence({ workspaceId });
+        setAnchorStep(evidence);
+        setSelectedAnchorKeys([]);
+      } catch (error) {
+        setAnchorError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsScanningAnchors(false);
+      }
+    })();
+  }, [client, workspaceId]);
+
+  const handleToggleAnchor = useCallback((anchor: ArchifyEvidenceAnchor) => {
+    const key = archifyAnchorKey(anchor);
+    setSelectedAnchorKeys((current) =>
+      current.includes(key) ? current.filter((candidate) => candidate !== key) : [...current, key],
+    );
+  }, []);
+
+  const handleCloseAnchorStep = useCallback(() => {
+    setIsAnchorStepOpen(false);
+  }, []);
+
+  const handleStartWithAnchors = useCallback(() => {
+    const anchors =
+      anchorStep?.anchors.filter((anchor) =>
+        selectedAnchorKeys.includes(archifyAnchorKey(anchor)),
+      ) ?? [];
+    setIsAnchorStepOpen(false);
+    void startGeneration({ types: selectedTypes, request, scope, anchors });
+  }, [anchorStep, request, scope, selectedAnchorKeys, selectedTypes, startGeneration]);
+
+  const handleGenerateWithoutAnchors = useCallback(() => {
+    setIsAnchorStepOpen(false);
     void startGeneration({ types: selectedTypes, request, scope });
   }, [request, scope, selectedTypes, startGeneration]);
 
@@ -798,6 +913,48 @@ function ArchifyPanel(): ReactElement {
             <Text style={styles.actionLine} numberOfLines={1}>
               {evidenceLine}
             </Text>
+          ) : null}
+          {isAnchorStepOpen ? (
+            <View style={styles.anchorStep}>
+              <View style={styles.anchorHeader}>
+                <Text style={styles.anchorTitle}>{t("archify.anchors.title")}</Text>
+                {isScanningAnchors ? <ActivityIndicator size="small" /> : null}
+                <Text style={styles.progressText}>
+                  {t("archify.anchors.selected", { count: selectedAnchorKeys.length })}
+                </Text>
+                <Button variant="ghost" size="sm" onPress={handleCloseAnchorStep}>
+                  {t("common.actions.cancel")}
+                </Button>
+              </View>
+              {anchorError ? <Text style={styles.errorText}>{anchorError}</Text> : null}
+              {anchorStep && anchorStep.anchors.length === 0 ? (
+                <Text style={styles.actionLine}>{t("archify.anchors.empty")}</Text>
+              ) : null}
+              {anchorStep && anchorStep.anchors.length > 0 ? (
+                <ScrollView style={styles.anchorList} nestedScrollEnabled>
+                  {anchorStep.anchors.map((anchor) => (
+                    <ArchifyAnchorRow
+                      key={archifyAnchorKey(anchor)}
+                      anchor={anchor}
+                      kindLabel={t(`archify.anchors.kind.${anchor.kind}`)}
+                      selected={selectedAnchorKeys.includes(archifyAnchorKey(anchor))}
+                      onToggle={handleToggleAnchor}
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+              <View style={styles.anchorActions}>
+                <Button variant="ghost" size="sm" onPress={handleGenerateWithoutAnchors}>
+                  {t("archify.anchors.wholeWorkspace")}
+                </Button>
+                <ArchifyGenerateButton
+                  disabled={isScanningAnchors || generating}
+                  generating={isStarting}
+                  label={t("archify.anchors.generate")}
+                  onPress={handleStartWithAnchors}
+                />
+              </View>
+            </View>
           ) : null}
           <View style={styles.typeRow}>
             {ARCHIFY_ALL_TYPES.map((type) => (
@@ -1033,6 +1190,62 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: 22,
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
+  },
+  anchorStep: {
+    gap: theme.spacing[2],
+    padding: theme.spacing[2],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface0,
+  },
+  anchorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  anchorTitle: {
+    flex: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  anchorList: {
+    maxHeight: 168,
+  },
+  anchorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.sm,
+  },
+  anchorRowSelected: {
+    backgroundColor: theme.colors.surface2,
+  },
+  anchorKind: {
+    minWidth: 74,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  anchorMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  anchorLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  anchorDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  anchorActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
   },
   generationTitle: {
     flex: 1,

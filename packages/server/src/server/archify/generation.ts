@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { ArchifyDiagramType, ArchifyGenerationTask } from "@getpaseo/protocol/messages";
+import type {
+  ArchifyDiagramType,
+  ArchifyEvidenceAnchor,
+  ArchifyGenerationTask,
+} from "@getpaseo/protocol/messages";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { formatProviderModel, type BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
@@ -18,6 +22,8 @@ export interface ArchifyGenerationStartInput {
   types: readonly ArchifyDiagramType[];
   request?: string;
   scope?: string;
+  /** Anchors the user confirmed from the evidence scan; the run must cover them. */
+  anchors?: readonly ArchifyEvidenceAnchor[];
   provider: string;
   model?: string;
   modeId?: string;
@@ -280,6 +286,7 @@ export class ArchifyGenerationService {
         types: [diagram.type],
         request: record.input.request,
         scope: record.input.scope,
+        anchors: record.input.anchors,
         evidenceDigest: input.evidenceDigest,
       });
       const result = await this.runGenerator(agentId, prompt);

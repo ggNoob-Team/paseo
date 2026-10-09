@@ -21,6 +21,18 @@ export const ar: TranslationResources = {
     actions: {
       rerunUnfinished: "إعادة تشغيل غير المكتمل",
     },
+    anchors: {
+      title: "أكّد ما يجب أن تغطيه المخططات",
+      selected: "{{count}} محدد",
+      wholeWorkspace: "كامل مساحة العمل",
+      generate: "إنشاء",
+      empty: "لم يُعثر على مراسٍ مرشحة. ستُستخدم مساحة العمل كاملة.",
+      kind: {
+        module: "وحدة",
+        entry: "نقطة دخول",
+        flow: "تدفق",
+      },
+    },
     evidence: {
       cached: "أُعيد استخدام ورقة الأدلة {{revision}}",
       scanned: "أُعيد فحص المستودع {{revision}}",

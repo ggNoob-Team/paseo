@@ -5583,6 +5583,7 @@ export class DaemonClient {
     types: ArchifyGenerationTask["diagrams"][number]["type"][];
     request?: string;
     scope?: string;
+    anchors?: ArchifyEvidence["anchors"];
     provider: string;
     model?: string;
     modeId?: string;
@@ -5601,6 +5602,7 @@ export class DaemonClient {
           provider: options.provider,
           ...(options.request === undefined ? {} : { request: options.request }),
           ...(options.scope === undefined ? {} : { scope: options.scope }),
+          ...(options.anchors === undefined ? {} : { anchors: options.anchors }),
           ...(options.model === undefined ? {} : { model: options.model }),
           ...(options.modeId === undefined ? {} : { modeId: options.modeId }),
           ...(options.forceScan === undefined ? {} : { forceScan: options.forceScan }),
