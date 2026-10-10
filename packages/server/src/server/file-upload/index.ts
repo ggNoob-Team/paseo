@@ -1,28 +1,61 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, rename, rm, writeFile, type FileHandle } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 
 import { FileTransferOpcode, type FileTransferFrame } from "@getpaseo/protocol/binary-frames/index";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import type { FileUploadRequest, FileUploadResponse } from "../messages.js";
+import type { FileEntryUploadRequest, FileUploadRequest } from "../messages.js";
 
 interface FileUploadStoreOptions {
   paseoHome: string;
   staleUploadTimeoutMs?: number;
 }
 
+/** Terminal result of one upload, translated into an RPC response by the session. */
+export type FileUploadOutcome =
+  | { status: "completed"; uploadId: string; fileName: string; path: string }
+  | { status: "failed"; error: string; alreadyExists: boolean }
+  | { status: "cancelled" };
+
+type UploadFinished = (outcome: FileUploadOutcome) => void;
+
+/** Where one upload streams its bytes and what removes partial artifacts. */
+type UploadTarget =
+  | {
+      kind: "attachment";
+      mimeType: string;
+      stagingDirectory: string;
+      streamPath: string;
+      started: boolean;
+    }
+  | {
+      kind: "workspace";
+      cwd: string;
+      parentPath: string;
+      replace: boolean;
+      /** Resolves the workspace directory on file begin, when the symlink scope can be checked. */
+      resolveDirectory: () => Promise<string>;
+      /** Set on file begin, before any chunk is accepted. */
+      destination: UploadDestination | null;
+    };
+
+interface UploadDestination {
+  /** Absolute path bytes stream into; a hidden temp file for replace uploads. */
+  streamPath: string;
+  /** Absolute path the finished file lands at. */
+  destinationPath: string;
+}
+
 interface PendingUpload {
   requestId: string;
   id: string;
   source: object;
-  completed: boolean;
-  finished(response: FileUploadResponse | null): void;
   fileName: string;
-  mimeType: string;
   size: number;
-  path: string;
   receivedBytes: number;
-  started: boolean;
+  completed: boolean;
+  finished: UploadFinished;
+  target: UploadTarget;
   staleTimeout: ReturnType<typeof setTimeout>;
   queue: Promise<void>;
   cleanup?: Promise<void>;
@@ -45,38 +78,63 @@ export class FileUploadStore {
   beginUpload(
     request: FileUploadRequest,
     source: object = this.defaultSource,
-    finished: (response: FileUploadResponse | null) => void = () => {},
+    finished: UploadFinished = () => {},
   ): () => Promise<void> {
-    const existingUpload = this.pending.get(source)?.get(request.requestId);
-    if (existingUpload) void this.cancel(existingUpload).catch(() => {});
-    const fileName = sanitizeFileName(request.fileName);
     const id = `upload_${randomUUID()}`;
-    const uploadDir = join(this.paseoHome, "uploads", id);
-    const upload: PendingUpload = {
+    const fileName = sanitizeFileName(request.fileName);
+    const stagingDirectory = join(this.paseoHome, "uploads", id);
+    return this.register({
       requestId: request.requestId,
       id,
       source,
-      completed: false,
-      finished,
       fileName,
-      mimeType: request.mimeType,
       size: request.size,
-      path: join(uploadDir, fileName),
-      receivedBytes: 0,
-      started: false,
-      staleTimeout: this.createStaleUploadTimeout(source, request.requestId),
-      queue: Promise.resolve(),
-    };
-    const uploads = this.pending.get(source) ?? new Map<string, PendingUpload>();
-    uploads.set(request.requestId, upload);
-    this.pending.set(source, uploads);
-    return () => this.cancel(upload);
+      finished,
+      target: {
+        kind: "attachment",
+        mimeType: request.mimeType,
+        stagingDirectory,
+        streamPath: join(stagingDirectory, fileName),
+        started: false,
+      },
+    });
+  }
+
+  /**
+   * Receives an explorer upload into a workspace directory. Registration is
+   * synchronous so transfer frames that follow the request are never dropped;
+   * the directory itself resolves on file begin.
+   */
+  beginFileEntryUpload(
+    request: FileEntryUploadRequest,
+    options: {
+      resolveDirectory: () => Promise<string>;
+      source: object;
+      finished: UploadFinished;
+    },
+  ): () => Promise<void> {
+    return this.register({
+      requestId: request.requestId,
+      id: `upload_${randomUUID()}`,
+      source: options.source,
+      fileName: sanitizeFileName(request.fileName),
+      size: request.size,
+      finished: options.finished,
+      target: {
+        kind: "workspace",
+        cwd: request.cwd,
+        parentPath: request.parentPath,
+        replace: request.overwrite === true,
+        resolveDirectory: options.resolveDirectory,
+        destination: null,
+      },
+    });
   }
 
   async receiveFrame(
     frame: FileTransferFrame,
     source: object = this.defaultSource,
-  ): Promise<FileUploadResponse | null> {
+  ): Promise<FileUploadOutcome | null> {
     const upload = this.pending.get(source)?.get(frame.requestId);
     if (!upload) {
       return null;
@@ -85,11 +143,13 @@ export class FileUploadStore {
 
     const operation = upload.queue.then(() => this.applyFrame(upload, frame));
     void operation.then(
-      (response) => {
-        if (response) upload.finished(response);
+      (outcome) => {
+        if (outcome) upload.finished(outcome);
         return undefined;
       },
-      () => upload.finished(null),
+      (error: unknown) => {
+        upload.finished({ status: "failed", error: getErrorMessage(error), alreadyExists: false });
+      },
     );
     upload.queue = operation.then(
       () => undefined,
@@ -98,10 +158,34 @@ export class FileUploadStore {
     return operation;
   }
 
+  private register(input: {
+    requestId: string;
+    id: string;
+    source: object;
+    fileName: string;
+    size: number;
+    finished: UploadFinished;
+    target: UploadTarget;
+  }): () => Promise<void> {
+    const existingUpload = this.pending.get(input.source)?.get(input.requestId);
+    if (existingUpload) void this.cancel(existingUpload).catch(() => {});
+    const upload: PendingUpload = {
+      ...input,
+      receivedBytes: 0,
+      completed: false,
+      staleTimeout: this.createStaleUploadTimeout(input.source, input.requestId),
+      queue: Promise.resolve(),
+    };
+    const uploads = this.pending.get(input.source) ?? new Map<string, PendingUpload>();
+    uploads.set(input.requestId, upload);
+    this.pending.set(input.source, uploads);
+    return () => this.cancel(upload);
+  }
+
   private async applyFrame(
     upload: PendingUpload,
     frame: FileTransferFrame,
-  ): Promise<FileUploadResponse | null> {
+  ): Promise<FileUploadOutcome | null> {
     if (this.pending.get(upload.source)?.get(upload.requestId) !== upload) {
       return null;
     }
@@ -118,41 +202,83 @@ export class FileUploadStore {
       return await this.completeUpload(upload);
     } catch (error) {
       await this.removeFailedUpload(upload);
-      return buildUploadResponse(upload, getErrorMessage(error));
+      return buildFailure(error);
     }
   }
 
   private async startWriting(upload: PendingUpload): Promise<void> {
-    await mkdir(join(this.paseoHome, "uploads", upload.id), { recursive: true });
-    await writeFile(upload.path, new Uint8Array());
-    upload.started = true;
+    const { target } = upload;
+    if (target.kind === "attachment") {
+      await mkdir(target.stagingDirectory, { recursive: true });
+      await writeFile(target.streamPath, new Uint8Array());
+      target.started = true;
+      return;
+    }
+
+    const directory = await target.resolveDirectory();
+    const destinationPath = join(directory, upload.fileName);
+    const streamPath = target.replace
+      ? join(directory, `.${upload.fileName}.paseo-${randomUUID()}.tmp`)
+      : destinationPath;
+    let handle: FileHandle;
+    try {
+      handle = await open(streamPath, "wx", 0o644);
+    } catch (error) {
+      if (isFileExistsError(error)) throw new UploadDestinationExistsError(upload.fileName);
+      throw error;
+    }
+    target.destination = { streamPath, destinationPath };
+    await handle.close();
   }
 
   private async writeChunk(upload: PendingUpload, bytes: Uint8Array): Promise<void> {
-    if (!upload.started) {
-      throw new Error("Upload chunks arrived before file begin.");
-    }
+    const streamPath = uploadStreamPath(upload);
     const nextReceivedBytes = upload.receivedBytes + bytes.byteLength;
     if (nextReceivedBytes > upload.size) {
       throw new Error(
         `Upload exceeded declared size: expected ${upload.size}, received ${nextReceivedBytes}.`,
       );
     }
-    await appendFile(upload.path, bytes);
+    await appendFile(streamPath, bytes);
     upload.receivedBytes += bytes.byteLength;
   }
 
-  private async completeUpload(upload: PendingUpload): Promise<FileUploadResponse> {
+  private async completeUpload(upload: PendingUpload): Promise<FileUploadOutcome> {
     this.clearPendingUpload(upload);
     if (upload.receivedBytes !== upload.size) {
-      await this.removeUploadDirectory(upload);
-      return buildUploadResponse(
-        upload,
-        `Upload size mismatch: expected ${upload.size}, received ${upload.receivedBytes}.`,
+      await this.removePartialUpload(upload);
+      return buildFailure(
+        new Error(
+          `Upload size mismatch: expected ${upload.size}, received ${upload.receivedBytes}.`,
+        ),
       );
     }
+
+    const { target } = upload;
+    if (target.kind === "attachment") {
+      upload.completed = true;
+      return {
+        status: "completed",
+        uploadId: upload.id,
+        fileName: upload.fileName,
+        path: target.streamPath,
+      };
+    }
+
+    const destination = target.destination;
+    if (!destination) {
+      return buildFailure(new Error("Upload ended before file begin."));
+    }
+    if (target.replace) {
+      await rename(destination.streamPath, destination.destinationPath);
+    }
     upload.completed = true;
-    return buildUploadResponse(upload, null);
+    return {
+      status: "completed",
+      uploadId: upload.id,
+      fileName: upload.fileName,
+      path: destination.destinationPath,
+    };
   }
 
   private createStaleUploadTimeout(
@@ -176,10 +302,10 @@ export class FileUploadStore {
     if (upload.cleanup) return upload.cleanup;
     this.clearPendingUpload(upload);
     upload.cleanup = upload.queue.then(async () => {
-      if (!upload.completed) await this.removeUploadDirectory(upload);
+      if (!upload.completed) await this.removePartialUpload(upload);
       return undefined;
     });
-    upload.finished(null);
+    upload.finished({ status: "cancelled" });
     return upload.cleanup;
   }
 
@@ -192,32 +318,47 @@ export class FileUploadStore {
 
   private async removeFailedUpload(upload: PendingUpload): Promise<void> {
     this.clearPendingUpload(upload);
-    await this.removeUploadDirectory(upload);
+    await this.removePartialUpload(upload);
   }
 
-  private async removeUploadDirectory(upload: PendingUpload): Promise<void> {
-    await rm(join(this.paseoHome, "uploads", upload.id), { recursive: true, force: true });
+  private async removePartialUpload(upload: PendingUpload): Promise<void> {
+    const { target } = upload;
+    if (target.kind === "attachment") {
+      await rm(target.stagingDirectory, { recursive: true, force: true });
+      return;
+    }
+    if (target.destination) {
+      await rm(target.destination.streamPath, { force: true });
+    }
   }
 }
 
-function buildUploadResponse(upload: PendingUpload, error: string | null): FileUploadResponse {
+function uploadStreamPath(upload: PendingUpload): string {
+  const { target } = upload;
+  if (target.kind === "attachment") {
+    if (!target.started) throw new Error("Upload chunks arrived before file begin.");
+    return target.streamPath;
+  }
+  if (!target.destination) throw new Error("Upload chunks arrived before file begin.");
+  return target.destination.streamPath;
+}
+
+function buildFailure(error: unknown): FileUploadOutcome {
   return {
-    type: "file.upload.response",
-    payload: {
-      requestId: upload.requestId,
-      file: error
-        ? null
-        : {
-            type: "uploaded_file",
-            id: upload.id,
-            fileName: upload.fileName,
-            mimeType: upload.mimeType,
-            size: upload.size,
-            path: upload.path,
-          },
-      error,
-    },
+    status: "failed",
+    error: getErrorMessage(error),
+    alreadyExists: error instanceof UploadDestinationExistsError,
   };
+}
+
+function isFileExistsError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === "EEXIST";
+}
+
+class UploadDestinationExistsError extends Error {
+  constructor(fileName: string) {
+    super(`"${fileName}" already exists`);
+  }
 }
 
 // Most file systems cap a single file name at 255 bytes.

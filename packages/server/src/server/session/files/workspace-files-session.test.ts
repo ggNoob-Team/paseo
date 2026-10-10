@@ -1,6 +1,7 @@
 import { SessionDelivery } from "../owned-subscriptions/index.js";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -609,6 +610,178 @@ describe("WorkspaceFilesSession", () => {
     if (!file) throw new Error("Expected uploaded file");
     expect(file.path.startsWith(join(paseoHome, "uploads"))).toBe(true);
     expect(readFileSync(file.path, "utf8")).toBe("hello world");
+    await ownership.close();
+  });
+
+  test("round-trips a file entry upload into a workspace directory", async () => {
+    const cwd = makeDir("workspace-files-entry-upload-");
+    mkdirSync(join(cwd, "docs"));
+    const { subsystem, emitted } = makeSubsystem();
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: "docs",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-upload",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileEntryUploadRequest(request, ownership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-entry-upload",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      source,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileChunk,
+        requestId: "req-entry-upload",
+        payload: new TextEncoder().encode("hello world"),
+      }),
+      source,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({ opcode: FileTransferOpcode.FileEnd, requestId: "req-entry-upload" }),
+      source,
+    );
+
+    expect(emitted).toEqual([
+      {
+        type: "fs.entry.upload.response",
+        payload: {
+          cwd,
+          parentPath: "docs",
+          path: "docs/notes.txt",
+          success: true,
+          alreadyExists: false,
+          error: null,
+          requestId: "req-entry-upload",
+        },
+      },
+    ]);
+    expect(readFileSync(join(cwd, "docs", "notes.txt"), "utf8")).toBe("hello world");
+    await ownership.close();
+  });
+
+  test("reports an existing destination without overwriting it", async () => {
+    const cwd = makeDir("workspace-files-entry-upload-conflict-");
+    writeFileSync(join(cwd, "notes.txt"), "existing");
+    const { subsystem, emitted } = makeSubsystem();
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-conflict",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileEntryUploadRequest(request, ownership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-entry-conflict",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      source,
+    );
+
+    expect(emitted).toEqual([
+      {
+        type: "fs.entry.upload.response",
+        payload: {
+          cwd,
+          parentPath: ".",
+          path: null,
+          success: false,
+          alreadyExists: true,
+          error: '"notes.txt" already exists',
+          requestId: "req-entry-conflict",
+        },
+      },
+    ]);
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("existing");
+    await ownership.close();
+  });
+
+  test("refuses a file entry upload whose parent path escapes the workspace", async () => {
+    const cwd = makeDir("workspace-files-entry-upload-escape-");
+    const { subsystem, emitted } = makeSubsystem();
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: "../outside",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-escape",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileEntryUploadRequest(request, ownership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-entry-escape",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      source,
+    );
+
+    expect(emitted).toEqual([
+      {
+        type: "fs.entry.upload.response",
+        payload: {
+          cwd,
+          parentPath: "../outside",
+          path: null,
+          success: false,
+          alreadyExists: false,
+          error: "Access outside of workspace is not allowed",
+          requestId: "req-entry-escape",
+        },
+      },
+    ]);
     await ownership.close();
   });
 });

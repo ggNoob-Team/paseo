@@ -39,6 +39,7 @@ import type {
   CreateAgentRequestMessage,
   CreatePaseoWorktreeRequest,
   FileDownloadTokenResponse,
+  FileEntryUploadResponse,
   FileUploadResponse,
   FileExplorerResponse,
   FileVersion,
@@ -557,6 +558,18 @@ export interface FileUploadInput {
   chunkSize?: number;
 }
 export type FileUploadResult = FileUploadResponse["payload"];
+export interface FileEntryUploadInput {
+  cwd: string;
+  parentPath: string;
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array | ArrayBuffer;
+  overwrite?: boolean;
+  modifiedAt?: string;
+  requestId?: string;
+  chunkSize?: number;
+}
+export type FileEntryUploadResult = FileEntryUploadResponse["payload"];
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
@@ -994,6 +1007,14 @@ type CorrelatedResponsePayloads = {
 };
 type CorrelatedResponsePayload<TType extends CorrelatedResponseType> =
   CorrelatedResponsePayloads[TType];
+
+function requireFileBytes(bytes: Uint8Array | ArrayBuffer): Uint8Array {
+  const resolved = asUint8Array(bytes);
+  if (!resolved) {
+    throw new Error("File bytes are required.");
+  }
+  return resolved;
+}
 
 export class DaemonConnectionError extends Error {
   constructor(
@@ -4948,29 +4969,77 @@ export class DaemonClient {
   }
 
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
-    const bytes = asUint8Array(input.bytes);
-    if (!bytes) {
-      throw new Error("File bytes are required.");
-    }
+    const bytes = requireFileBytes(input.bytes);
     // The file frames bypass the send queue, so start only on an open connection.
     await this.whenConnected();
-    const uploadTransport = this.transport;
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
-    const responsePromise = this.sendCorrelatedRequest({
+    return await this.streamFileTransfer({
       requestId: resolvedRequestId,
-      message: {
-        type: "file.upload.request",
-        fileName: input.fileName,
-        mimeType: input.mimeType,
-        size: bytes.byteLength,
-        modifiedAt,
-        requestId: resolvedRequestId,
-      },
-      responseType: "file.upload.response",
-      options: { skipQueue: true },
+      bytes,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      modifiedAt,
+      chunkSize: input.chunkSize,
+      start: () =>
+        this.sendCorrelatedRequest({
+          requestId: resolvedRequestId,
+          message: {
+            type: "file.upload.request",
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            size: bytes.byteLength,
+            modifiedAt,
+            requestId: resolvedRequestId,
+          },
+          responseType: "file.upload.response",
+          options: { skipQueue: true },
+        }),
     });
+  }
 
+  /** Uploads a file into a workspace directory through the explorer's fs.entry.upload RPC. */
+  async uploadFileEntry(input: FileEntryUploadInput): Promise<FileEntryUploadResult> {
+    const bytes = requireFileBytes(input.bytes);
+    await this.whenConnected();
+    const resolvedRequestId = this.createRequestId(input.requestId);
+    const modifiedAt = input.modifiedAt ?? new Date().toISOString();
+    return await this.streamFileTransfer({
+      requestId: resolvedRequestId,
+      bytes,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      modifiedAt,
+      chunkSize: input.chunkSize,
+      start: () =>
+        this.sendCorrelatedRequest({
+          requestId: resolvedRequestId,
+          message: {
+            type: "fs.entry.upload.request",
+            cwd: input.cwd,
+            parentPath: input.parentPath,
+            fileName: input.fileName,
+            size: bytes.byteLength,
+            overwrite: input.overwrite,
+            requestId: resolvedRequestId,
+          },
+          responseType: "fs.entry.upload.response",
+          options: { skipQueue: true },
+        }),
+    });
+  }
+
+  private async streamFileTransfer<TResult>(input: {
+    requestId: string;
+    bytes: Uint8Array;
+    fileName: string;
+    mimeType: string;
+    modifiedAt: string;
+    chunkSize?: number;
+    start: () => Promise<TResult>;
+  }): Promise<TResult> {
+    const uploadTransport = this.transport;
+    const responsePromise = input.start();
     let settled = false;
     void responsePromise.then(
       () => {
@@ -4986,19 +5055,19 @@ export class DaemonClient {
       this.sendBinaryFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileBegin,
-          requestId: resolvedRequestId,
+          requestId: input.requestId,
           metadata: {
             mime: input.mimeType,
-            size: bytes.byteLength,
+            size: input.bytes.byteLength,
             encoding: "binary",
-            modifiedAt,
+            modifiedAt: input.modifiedAt,
             fileName: input.fileName,
           },
         }),
       );
 
       const chunkSize = input.chunkSize ?? 128 * 1024;
-      for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+      for (let offset = 0; offset < input.bytes.byteLength; offset += chunkSize) {
         // Native WebSocket.send encodes binary synchronously. Let rendering and
         // incoming messages run between bounded pieces on every platform.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -5009,8 +5078,11 @@ export class DaemonClient {
         this.sendBinaryFrame(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileChunk,
-            requestId: resolvedRequestId,
-            payload: bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
+            requestId: input.requestId,
+            payload: input.bytes.subarray(
+              offset,
+              Math.min(offset + chunkSize, input.bytes.byteLength),
+            ),
           }),
         );
       }
@@ -5018,12 +5090,12 @@ export class DaemonClient {
       this.sendBinaryFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileEnd,
-          requestId: resolvedRequestId,
+          requestId: input.requestId,
         }),
       );
     } catch (error) {
       this.rejectWaitersForRequestId(
-        resolvedRequestId,
+        input.requestId,
         error instanceof Error ? error : new Error(String(error)),
       );
       throw error;

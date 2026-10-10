@@ -592,6 +592,7 @@ export const ar: TranslationResources = {
       moreActions: "المزيد من الإجراءات",
       newFile: "ملف جديد",
       newFolder: "مجلد جديد",
+      uploadFile: "رفع ملف",
       collapseFolder: "طي المجلد",
       rename: "إعادة تسمية",
       duplicate: "تكرار",
@@ -610,6 +611,12 @@ export const ar: TranslationResources = {
         confirm: "تجاهل",
         cancel: "إلغاء",
         failed: "فشل تجاهل التغييرات",
+      },
+      confirmOverwrite: {
+        title: "استبدال الملف؟",
+        message: "الملف «{{name}}» موجود بالفعل. سيؤدي الرفع إلى استبدال محتواه.",
+        confirm: "استبدال",
+        cancel: "إلغاء",
       },
     },
     fileExplorer: {
@@ -645,6 +652,13 @@ export const ar: TranslationResources = {
         duplicateFailed: "فشل تكرار العنصر",
         revealFailed: "فشل إظهار العنصر",
         deleteFailed: "فشل حذف العنصر",
+        uploadFailed: "تعذّر رفع الملف",
+      },
+      upload: {
+        uploading: "جارٍ رفع الملفات",
+        uploaded_one: "تم رفع {{name}}",
+        uploaded_other: "تم رفع {{count}} ملفات",
+        failed: "تعذّر رفع {{name}}",
       },
       draft: {
         filePlaceholder: "اسم الملف",

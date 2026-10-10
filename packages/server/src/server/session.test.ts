@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -1392,6 +1393,78 @@ describe("workspace file access (behavior preservation)", () => {
     expect(response.payload.error).toBeNull();
     expect(response.payload.file?.fileName).toBe("notes.txt");
     expect(response.payload.file?.size).toBe(11);
+  });
+
+  test("file entry upload writes into the workspace through binary frames", async () => {
+    const cwd = makeDir("file-entry-access-upload-");
+    const messages: SessionOutboundMessage[] = [];
+    const session = createSessionForTest({ messages });
+
+    const source = {};
+    await session.handleMessage(
+      {
+        type: "fs.entry.upload.request",
+        cwd,
+        parentPath: ".",
+        fileName: "notes.txt",
+        size: 11,
+        requestId: "req-entry-upload",
+      },
+      source,
+    );
+    await session.handleBinaryFrame(
+      {
+        kind: "file_transfer",
+        frame: uploadFrame({
+          opcode: FileTransferOpcode.FileBegin,
+          requestId: "req-entry-upload",
+          metadata: {
+            mime: "text/plain",
+            size: 11,
+            encoding: "binary",
+            modifiedAt: "2026-05-02T00:00:00.000Z",
+            fileName: "notes.txt",
+          },
+        }),
+      },
+      source,
+    );
+    await session.handleBinaryFrame(
+      {
+        kind: "file_transfer",
+        frame: uploadFrame({
+          opcode: FileTransferOpcode.FileChunk,
+          requestId: "req-entry-upload",
+          payload: new TextEncoder().encode("hello world"),
+        }),
+      },
+      source,
+    );
+    await session.handleBinaryFrame(
+      {
+        kind: "file_transfer",
+        frame: uploadFrame({
+          opcode: FileTransferOpcode.FileEnd,
+          requestId: "req-entry-upload",
+        }),
+      },
+      source,
+    );
+
+    const response = messages.find((message) => message.type === "fs.entry.upload.response");
+    if (response?.type !== "fs.entry.upload.response") {
+      throw new Error("expected a fs.entry.upload.response message");
+    }
+    expect(response.payload).toEqual({
+      cwd,
+      parentPath: ".",
+      path: "notes.txt",
+      success: true,
+      alreadyExists: false,
+      error: null,
+      requestId: "req-entry-upload",
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
   });
 });
 

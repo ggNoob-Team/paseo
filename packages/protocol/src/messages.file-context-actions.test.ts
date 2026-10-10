@@ -10,6 +10,8 @@ import {
   FileEntryDuplicateResponseSchema,
   FileEntryRenameRequestSchema,
   FileEntryRenameResponseSchema,
+  FileEntryUploadRequestSchema,
+  FileEntryUploadResponseSchema,
   ServerInfoStatusPayloadSchema,
 } from "./messages.js";
 
@@ -22,6 +24,7 @@ describe("file context action messages", () => {
     });
     expect(legacy.features?.fsEntryOps).toBeUndefined();
     expect(legacy.features?.fsEntryDuplicate).toBeUndefined();
+    expect(legacy.features?.fsEntryUpload).toBeUndefined();
     expect(legacy.features?.checkoutDiscardChanges).toBeUndefined();
 
     const current = ServerInfoStatusPayloadSchema.parse({
@@ -30,12 +33,14 @@ describe("file context action messages", () => {
       features: {
         fsEntryOps: true,
         fsEntryDuplicate: true,
+        fsEntryUpload: true,
         checkoutDiscardChanges: true,
       },
     });
     expect(current.features).toMatchObject({
       fsEntryOps: true,
       fsEntryDuplicate: true,
+      fsEntryUpload: true,
       checkoutDiscardChanges: true,
     });
   });
@@ -74,6 +79,35 @@ describe("file context action messages", () => {
       },
     };
     expect(FileEntryCreateResponseSchema.parse(response)).toEqual(response);
+  });
+
+  test("round-trips file entry upload requests and responses", () => {
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd: "/workspace",
+      parentPath: "docs",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "entry-upload-1",
+    };
+    expect(FileEntryUploadRequestSchema.parse(request)).toEqual(request);
+
+    const replaceRequest = { ...request, overwrite: true };
+    expect(FileEntryUploadRequestSchema.parse(replaceRequest)).toEqual(replaceRequest);
+
+    const response = {
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: "docs",
+        path: "docs/notes.txt",
+        success: true,
+        alreadyExists: false,
+        error: null,
+        requestId: "entry-upload-1",
+      },
+    };
+    expect(FileEntryUploadResponseSchema.parse(response)).toEqual(response);
   });
 
   test("round-trips file entry rename requests and responses", () => {

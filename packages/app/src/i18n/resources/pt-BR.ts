@@ -597,6 +597,7 @@ export const ptBR: TranslationResources = {
       moreActions: "Mais ações",
       newFile: "Novo arquivo",
       newFolder: "Nova pasta",
+      uploadFile: "Enviar arquivo",
       collapseFolder: "Recolher pasta",
       rename: "Renomear",
       duplicate: "Duplicar",
@@ -615,6 +616,12 @@ export const ptBR: TranslationResources = {
         confirm: "Descartar",
         cancel: "Cancelar",
         failed: "Falha ao descartar alterações",
+      },
+      confirmOverwrite: {
+        title: "Substituir arquivo?",
+        message: '"{{name}}" já existe. O envio substituirá o conteúdo.',
+        confirm: "Substituir",
+        cancel: "Cancelar",
       },
     },
     fileExplorer: {
@@ -650,6 +657,13 @@ export const ptBR: TranslationResources = {
         duplicateFailed: "Falha ao duplicar entrada",
         revealFailed: "Falha ao mostrar entrada",
         deleteFailed: "Falha ao excluir entrada",
+        uploadFailed: "Falha ao enviar o arquivo",
+      },
+      upload: {
+        uploading: "Enviando arquivos",
+        uploaded_one: "{{name}} enviado",
+        uploaded_other: "{{count}} arquivos enviados",
+        failed: "Falha ao enviar {{name}}",
       },
       draft: {
         filePlaceholder: "Nome do arquivo",

@@ -599,6 +599,7 @@ export const es: TranslationResources = {
       moreActions: "Más acciones",
       newFile: "Nuevo archivo",
       newFolder: "Nueva carpeta",
+      uploadFile: "Subir archivo",
       collapseFolder: "Contraer carpeta",
       rename: "Renombrar",
       duplicate: "Duplicar",
@@ -617,6 +618,12 @@ export const es: TranslationResources = {
         confirm: "Descartar",
         cancel: "Cancelar",
         failed: "No se pudieron descartar los cambios",
+      },
+      confirmOverwrite: {
+        title: "¿Reemplazar archivo?",
+        message: "«{{name}}» ya existe. Subirlo reemplazará su contenido.",
+        confirm: "Reemplazar",
+        cancel: "Cancelar",
       },
     },
     fileExplorer: {
@@ -652,6 +659,13 @@ export const es: TranslationResources = {
         duplicateFailed: "No se pudo duplicar la entrada",
         revealFailed: "No se pudo mostrar la entrada",
         deleteFailed: "No se pudo eliminar la entrada",
+        uploadFailed: "No se pudo subir el archivo",
+      },
+      upload: {
+        uploading: "Subiendo archivos",
+        uploaded_one: "{{name}} subido",
+        uploaded_other: "{{count}} archivos subidos",
+        failed: "No se pudo subir {{name}}",
       },
       draft: {
         filePlaceholder: "Nombre del archivo",

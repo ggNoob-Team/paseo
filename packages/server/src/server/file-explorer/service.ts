@@ -857,7 +857,13 @@ function isOutsideWorkspaceError(error: unknown): boolean {
   return error instanceof Error && error.message === ACCESS_OUTSIDE_WORKSPACE_MESSAGE;
 }
 
-function normalizeRelativePath({ root, targetPath }: { root: string; targetPath: string }): string {
+export function normalizeRelativePath({
+  root,
+  targetPath,
+}: {
+  root: string;
+  targetPath: string;
+}): string {
   const normalizedRoot = expandUserPath(root);
   const normalizedTarget = expandUserPath(targetPath);
   const relative = path.relative(normalizedRoot, normalizedTarget);

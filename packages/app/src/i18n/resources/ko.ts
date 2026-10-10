@@ -593,6 +593,7 @@ export const ko: TranslationResources = {
       moreActions: "추가 작업",
       newFile: "새 파일",
       newFolder: "새 폴더",
+      uploadFile: "파일 업로드",
       collapseFolder: "폴더 접기",
       rename: "이름 바꾸기",
       duplicate: "복제",
@@ -611,6 +612,12 @@ export const ko: TranslationResources = {
         confirm: "버리기",
         cancel: "취소",
         failed: "변경 사항을 버리지 못했습니다",
+      },
+      confirmOverwrite: {
+        title: "파일을 바꿀까요?",
+        message: '"{{name}}" 파일이 이미 있습니다. 업로드하면 내용이 바뀝니다.',
+        confirm: "바꾸기",
+        cancel: "취소",
       },
     },
     fileExplorer: {
@@ -646,6 +653,13 @@ export const ko: TranslationResources = {
         duplicateFailed: "항목을 복제하지 못했습니다",
         revealFailed: "항목을 표시하지 못했습니다",
         deleteFailed: "항목을 삭제하지 못했습니다",
+        uploadFailed: "파일 업로드 실패",
+      },
+      upload: {
+        uploading: "파일 업로드 중",
+        uploaded_one: "{{name}} 업로드됨",
+        uploaded_other: "{{count}}개 파일 업로드됨",
+        failed: "{{name}} 업로드 실패",
       },
       draft: {
         filePlaceholder: "파일 이름",

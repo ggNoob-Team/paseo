@@ -13,15 +13,18 @@ import type {
   FileEntryDeleteRequest,
   FileEntryDuplicateRequest,
   FileEntryRenameRequest,
+  FileEntryUploadRequest,
+  FileEntryUploadResponse,
   FileExplorerRequest,
   FileUploadRequest,
+  FileUploadResponse,
   FileSubscribeRequest,
   FileUnsubscribeRequest,
   FileWriteRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
 } from "../../messages.js";
-import { FileUploadStore } from "../../file-upload/index.js";
+import { FileUploadStore, type FileUploadOutcome } from "../../file-upload/index.js";
 import type { DownloadTokenStore } from "../../file-download/token-store.js";
 import {
   createExplorerEntry,
@@ -29,8 +32,10 @@ import {
   duplicateExplorerEntry,
   getDownloadableFileInfo,
   listDirectoryEntries,
+  normalizeRelativePath,
   readExplorerFile,
   renameExplorerEntry,
+  resolveExplorerFilePath,
   streamExplorerFile,
   writeExplorerFile,
 } from "../../file-explorer/service.js";
@@ -381,11 +386,34 @@ export class WorkspaceFilesSession {
         message.type === "file.upload.response" && message.payload.requestId === request.requestId,
       () => cancel?.(),
     );
-    cancel = this.fileUploads.beginUpload(request, operation.source, (response) => {
+    cancel = this.fileUploads.beginUpload(request, operation.source, (outcome) => {
+      const response = buildAttachmentUploadResponse(request, outcome);
       if (response) operation.emit(response);
       void operation
         .release()
         .catch((error) => this.logger.error({ err: error }, "Upload cleanup failed"));
+    });
+  }
+
+  handleFileEntryUploadRequest(request: FileEntryUploadRequest, ownership: SessionDelivery): void {
+    let cancel: (() => Promise<void>) | undefined;
+    const operation = ownership.operation(
+      (message) =>
+        message.type === "fs.entry.upload.response" &&
+        message.payload.requestId === request.requestId,
+      () => cancel?.(),
+    );
+    cancel = this.fileUploads.beginFileEntryUpload(request, {
+      source: operation.source,
+      resolveDirectory: () =>
+        resolveExplorerFilePath({ root: request.cwd, relativePath: request.parentPath }),
+      finished: (outcome) => {
+        const response = buildFileEntryUploadResponse(request, outcome);
+        if (response) operation.emit(response);
+        void operation
+          .release()
+          .catch((error) => this.logger.error({ err: error }, "Upload cleanup failed"));
+      },
     });
   }
 
@@ -494,4 +522,55 @@ export class WorkspaceFilesSession {
       });
     }
   }
+}
+
+function buildAttachmentUploadResponse(
+  request: FileUploadRequest,
+  outcome: FileUploadOutcome,
+): FileUploadResponse | null {
+  if (outcome.status === "cancelled") {
+    return null;
+  }
+  const completed = outcome.status === "completed";
+  return {
+    type: "file.upload.response",
+    payload: {
+      requestId: request.requestId,
+      file: completed
+        ? {
+            type: "uploaded_file",
+            id: outcome.uploadId,
+            fileName: outcome.fileName,
+            mimeType: request.mimeType,
+            size: request.size,
+            path: outcome.path,
+          }
+        : null,
+      error: outcome.status === "failed" ? outcome.error : null,
+    },
+  };
+}
+
+function buildFileEntryUploadResponse(
+  request: FileEntryUploadRequest,
+  outcome: FileUploadOutcome,
+): FileEntryUploadResponse | null {
+  if (outcome.status === "cancelled") {
+    return null;
+  }
+  return {
+    type: "fs.entry.upload.response",
+    payload: {
+      cwd: request.cwd,
+      parentPath: request.parentPath,
+      path:
+        outcome.status === "completed"
+          ? normalizeRelativePath({ root: request.cwd, targetPath: outcome.path })
+          : null,
+      success: outcome.status === "completed",
+      alreadyExists: outcome.status === "failed" && outcome.alreadyExists,
+      error: outcome.status === "failed" ? outcome.error : null,
+      requestId: request.requestId,
+    },
+  };
 }

@@ -590,6 +590,7 @@ export const zhCN: TranslationResources = {
       moreActions: "更多操作",
       newFile: "新建文件",
       newFolder: "新建文件夹",
+      uploadFile: "上传文件",
       collapseFolder: "折叠文件夹",
       rename: "重命名",
       duplicate: "复制",
@@ -608,6 +609,12 @@ export const zhCN: TranslationResources = {
         confirm: "放弃",
         cancel: "取消",
         failed: "放弃更改失败",
+      },
+      confirmOverwrite: {
+        title: "替换文件？",
+        message: "“{{name}}”已存在。上传将替换其内容。",
+        confirm: "替换",
+        cancel: "取消",
       },
     },
     fileExplorer: {
@@ -643,6 +650,13 @@ export const zhCN: TranslationResources = {
         duplicateFailed: "复制条目失败",
         revealFailed: "显示条目失败",
         deleteFailed: "删除条目失败",
+        uploadFailed: "上传文件失败",
+      },
+      upload: {
+        uploading: "正在上传文件",
+        uploaded_one: "已上传 {{name}}",
+        uploaded_other: "已上传 {{count}} 个文件",
+        failed: "上传 {{name}} 失败",
       },
       draft: {
         filePlaceholder: "文件名",

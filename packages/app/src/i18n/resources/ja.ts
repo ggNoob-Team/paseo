@@ -598,6 +598,7 @@ export const ja: TranslationResources = {
       moreActions: "その他のアクション",
       newFile: "新規ファイル",
       newFolder: "新規フォルダ",
+      uploadFile: "ファイルをアップロード",
       collapseFolder: "フォルダを折りたたむ",
       rename: "名前を変更",
       duplicate: "複製",
@@ -616,6 +617,12 @@ export const ja: TranslationResources = {
         confirm: "破棄",
         cancel: "キャンセル",
         failed: "変更の破棄に失敗しました",
+      },
+      confirmOverwrite: {
+        title: "ファイルを置き換えますか？",
+        message: "「{{name}}」は既に存在します。アップロードすると内容が置き換わります。",
+        confirm: "置き換え",
+        cancel: "キャンセル",
       },
     },
     fileExplorer: {
@@ -651,6 +658,13 @@ export const ja: TranslationResources = {
         duplicateFailed: "エントリの複製に失敗しました",
         revealFailed: "エントリの表示に失敗しました",
         deleteFailed: "エントリの削除に失敗しました",
+        uploadFailed: "ファイルのアップロードに失敗しました",
+      },
+      upload: {
+        uploading: "ファイルをアップロード中",
+        uploaded_one: "{{name}} をアップロードしました",
+        uploaded_other: "{{count}} 個のファイルをアップロードしました",
+        failed: "{{name}} のアップロードに失敗しました",
       },
       draft: {
         filePlaceholder: "ファイル名",

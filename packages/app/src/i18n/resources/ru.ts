@@ -597,6 +597,7 @@ export const ru: TranslationResources = {
       moreActions: "Дополнительные действия",
       newFile: "Новый файл",
       newFolder: "Новая папка",
+      uploadFile: "Загрузить файл",
       collapseFolder: "Свернуть папку",
       rename: "Переименовать",
       duplicate: "Создать копию",
@@ -615,6 +616,12 @@ export const ru: TranslationResources = {
         confirm: "Отменить",
         cancel: "Отмена",
         failed: "Не удалось отменить изменения",
+      },
+      confirmOverwrite: {
+        title: "Заменить файл?",
+        message: "Файл «{{name}}» уже существует. Загрузка заменит его содержимое.",
+        confirm: "Заменить",
+        cancel: "Отмена",
       },
     },
     fileExplorer: {
@@ -650,6 +657,13 @@ export const ru: TranslationResources = {
         duplicateFailed: "Не удалось создать копию элемента",
         revealFailed: "Не удалось показать расположение элемента",
         deleteFailed: "Не удалось удалить элемент",
+        uploadFailed: "Не удалось загрузить файл",
+      },
+      upload: {
+        uploading: "Загрузка файлов",
+        uploaded_one: "{{name}} загружен",
+        uploaded_other: "Загружено файлов: {{count}}",
+        failed: "Не удалось загрузить {{name}}",
       },
       draft: {
         filePlaceholder: "Имя файла",

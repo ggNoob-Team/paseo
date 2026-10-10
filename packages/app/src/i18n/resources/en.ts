@@ -588,6 +588,7 @@ export const en = {
       moreActions: "More actions",
       newFile: "New file",
       newFolder: "New folder",
+      uploadFile: "Upload file",
       collapseFolder: "Collapse folder",
       rename: "Rename",
       duplicate: "Duplicate",
@@ -606,6 +607,12 @@ export const en = {
         confirm: "Discard",
         cancel: "Cancel",
         failed: "Failed to discard changes",
+      },
+      confirmOverwrite: {
+        title: "Replace file?",
+        message: '"{{name}}" already exists. Uploading replaces its contents.',
+        confirm: "Replace",
+        cancel: "Cancel",
       },
     },
     fileExplorer: {
@@ -641,6 +648,13 @@ export const en = {
         duplicateFailed: "Failed to duplicate entry",
         revealFailed: "Failed to reveal entry",
         deleteFailed: "Failed to delete entry",
+        uploadFailed: "Failed to upload file",
+      },
+      upload: {
+        uploading: "Uploading files",
+        uploaded_one: "Uploaded {{name}}",
+        uploaded_other: "Uploaded {{count}} files",
+        failed: "Failed to upload {{name}}",
       },
       draft: {
         filePlaceholder: "File name",

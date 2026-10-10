@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, test } from "../support/fixtures";
 import {
   gotoWorkspace,
@@ -64,6 +66,74 @@ test.describe("Explorer sidebar", () => {
       await expect(
         page.getByTestId("workspace-pane-main").locator('[data-testid^="workspace-tab-"]'),
       ).toHaveCount(mainTabsBefore);
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+});
+
+test.describe("Explorer file upload", () => {
+  test("uploads to the workspace root and a folder, and replaces a conflicting file", async ({
+    page,
+  }) => {
+    const workspace = await seedWorkspace({
+      repoPrefix: "explorer-upload-",
+      repo: { files: [{ path: "docs/guide.md", content: "# Guide\n" }] },
+    });
+
+    try {
+      await gotoWorkspace(page, workspace.workspaceId);
+      await waitForWorkspaceTabsVisible(page);
+      const explorer = await ensureExplorerSidebar(page);
+      await openFilesPanel(page);
+
+      const rootChooser = page.waitForEvent("filechooser");
+      await explorer.getByTestId("files-upload").click();
+      await (
+        await rootChooser
+      ).setFiles({
+        name: "root-upload.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("root upload"),
+      });
+      await expect(explorer.getByText("root-upload.txt", { exact: true })).toBeVisible();
+      await expect(
+        readFile(join(workspace.workspaceDirectory, "root-upload.txt"), "utf8"),
+      ).resolves.toBe("root upload");
+
+      await explorer.getByText("docs", { exact: true }).click({ button: "right" });
+      const folderChooser = page.waitForEvent("filechooser");
+      await page.getByRole("menuitem", { name: "Upload file", exact: true }).click();
+      await (
+        await folderChooser
+      ).setFiles({
+        name: "folder-upload.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("folder upload"),
+      });
+      await expect(explorer.getByText("folder-upload.txt", { exact: true })).toBeVisible();
+      await expect(
+        readFile(join(workspace.workspaceDirectory, "docs", "folder-upload.txt"), "utf8"),
+      ).resolves.toBe("folder upload");
+
+      const replaceChooser = page.waitForEvent("filechooser");
+      const confirmation = page.waitForEvent("dialog");
+      await explorer.getByTestId("files-upload").click();
+      await (
+        await replaceChooser
+      ).setFiles({
+        name: "root-upload.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("replaced upload"),
+      });
+      await confirmation.then((dialog) => {
+        expect(dialog.message()).toContain("Replace file?");
+        return dialog.accept();
+      });
+      // The replacement lands after the confirmation round-trips through the daemon.
+      await expect
+        .poll(() => readFile(join(workspace.workspaceDirectory, "root-upload.txt"), "utf8"))
+        .toBe("replaced upload");
     } finally {
       await workspace.cleanup();
     }

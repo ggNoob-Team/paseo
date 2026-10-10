@@ -598,6 +598,7 @@ export const fr: TranslationResources = {
       moreActions: "Plus d’actions",
       newFile: "Nouveau fichier",
       newFolder: "Nouveau dossier",
+      uploadFile: "Importer un fichier",
       collapseFolder: "Replier le dossier",
       rename: "Renommer",
       duplicate: "Dupliquer",
@@ -616,6 +617,12 @@ export const fr: TranslationResources = {
         confirm: "Abandonner",
         cancel: "Annuler",
         failed: "Impossible d’abandonner les modifications",
+      },
+      confirmOverwrite: {
+        title: "Remplacer le fichier ?",
+        message: "« {{name}} » existe déjà. L’import remplacera son contenu.",
+        confirm: "Remplacer",
+        cancel: "Annuler",
       },
     },
     fileExplorer: {
@@ -651,6 +658,13 @@ export const fr: TranslationResources = {
         duplicateFailed: "Impossible de dupliquer l’élément",
         revealFailed: "Impossible d’afficher l’élément",
         deleteFailed: "Impossible de supprimer l’élément",
+        uploadFailed: "Échec de l’import du fichier",
+      },
+      upload: {
+        uploading: "Import de fichiers",
+        uploaded_one: "{{name}} importé",
+        uploaded_other: "{{count}} fichiers importés",
+        failed: "Échec de l’import de {{name}}",
       },
       draft: {
         filePlaceholder: "Nom du fichier",

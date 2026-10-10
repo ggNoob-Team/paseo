@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +19,7 @@ import {
   type FileTransferFrame,
 } from "@getpaseo/protocol/binary-frames/index";
 import { FileUploadStore } from "./index.js";
+import type { FileEntryUploadRequest } from "../messages.js";
 
 const tempDirs: string[] = [];
 
@@ -39,19 +49,10 @@ describe("file uploads", () => {
 
     const path = uploadedPath(paseoHome, "notes.txt");
     await expect(uploads.receiveFrame(uploadEnds("req-upload"))).resolves.toEqual({
-      type: "file.upload.response",
-      payload: {
-        requestId: "req-upload",
-        file: {
-          type: "uploaded_file",
-          id: expect.any(String),
-          fileName: "notes.txt",
-          mimeType: "text/plain",
-          size: 11,
-          path,
-        },
-        error: null,
-      },
+      status: "completed",
+      uploadId: expect.any(String),
+      fileName: "notes.txt",
+      path,
     });
     expect(readFileSync(path, "utf8")).toBe("hello world");
   });
@@ -116,12 +117,9 @@ describe("file uploads", () => {
     const path = uploadedPath(paseoHome, "notes.txt");
     const uploadDir = dirname(path);
     await expect(uploads.receiveFrame(uploadChunk("req-overflow", "hello!"))).resolves.toEqual({
-      type: "file.upload.response",
-      payload: {
-        requestId: "req-overflow",
-        file: null,
-        error: "Upload exceeded declared size: expected 5, received 6.",
-      },
+      status: "failed",
+      error: "Upload exceeded declared size: expected 5, received 6.",
+      alreadyExists: false,
     });
     expect(existsSync(path)).toBe(false);
     expect(existsSync(uploadDir)).toBe(false);
@@ -148,7 +146,7 @@ describe("file uploads", () => {
     ]);
 
     expect(results.slice(0, 3)).toEqual([null, null, null]);
-    expect(results[3]?.payload.error).toBeNull();
+    expect(results[3]).toMatchObject({ status: "completed" });
     expect(readFileSync(uploadedPath(paseoHome, "notes.txt"), "utf8")).toBe("hello world");
   });
 
@@ -184,19 +182,10 @@ describe("file uploads", () => {
     await expect(uploads.receiveFrame(uploadChunk("req-duplicate", "new"))).resolves.toBeNull();
     const path = uploadedPath(paseoHome, "new.txt");
     await expect(uploads.receiveFrame(uploadEnds("req-duplicate"))).resolves.toEqual({
-      type: "file.upload.response",
-      payload: {
-        requestId: "req-duplicate",
-        file: {
-          type: "uploaded_file",
-          id: expect.any(String),
-          fileName: "new.txt",
-          mimeType: "text/plain",
-          size: 3,
-          path,
-        },
-        error: null,
-      },
+      status: "completed",
+      uploadId: expect.any(String),
+      fileName: "new.txt",
+      path,
     });
     expect(readFileSync(path, "utf8")).toBe("new");
   });
@@ -227,23 +216,215 @@ describe("file uploads", () => {
 
     const path = uploadedPath(paseoHome, "notes.txt");
     await expect(uploads.receiveFrame(uploadEnds("req-slow-active"))).resolves.toEqual({
-      type: "file.upload.response",
-      payload: {
-        requestId: "req-slow-active",
-        file: {
-          type: "uploaded_file",
-          id: expect.any(String),
-          fileName: "notes.txt",
-          mimeType: "text/plain",
-          size: 11,
-          path,
-        },
-        error: null,
-      },
+      status: "completed",
+      uploadId: expect.any(String),
+      fileName: "notes.txt",
+      path,
     });
     expect(readFileSync(path, "utf8")).toBe("hello world");
   });
 });
+
+describe("file entry uploads", () => {
+  it("streams bytes into the requested workspace directory", async () => {
+    const cwd = makeDir("file-entry-upload-");
+    const targetDirectory = join(cwd, "docs");
+    mkdirSync(targetDirectory);
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: "docs",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry",
+      resolveDirectory: async () => targetDirectory,
+    });
+    await expect(uploads.receiveFrame(uploadBegins("req-entry"), source)).resolves.toBeNull();
+    await expect(
+      uploads.receiveFrame(uploadChunk("req-entry", "hello world"), source),
+    ).resolves.toBeNull();
+
+    const destinationPath = join(targetDirectory, "notes.txt");
+    await expect(uploads.receiveFrame(uploadEnds("req-entry"), source)).resolves.toEqual({
+      status: "completed",
+      uploadId: expect.any(String),
+      fileName: "notes.txt",
+      path: destinationPath,
+    });
+    expect(readFileSync(destinationPath, "utf8")).toBe("hello world");
+  });
+
+  it("leaves an existing file untouched when overwrite is not requested", async () => {
+    const cwd = makeDir("file-entry-upload-conflict-");
+    writeFileSync(join(cwd, "notes.txt"), "existing");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-conflict",
+      resolveDirectory: async () => cwd,
+    });
+
+    await expect(uploads.receiveFrame(uploadBegins("req-entry-conflict"), source)).resolves.toEqual(
+      {
+        status: "failed",
+        error: '"notes.txt" already exists',
+        alreadyExists: true,
+      },
+    );
+    await expect(
+      uploads.receiveFrame(uploadChunk("req-entry-conflict", "hello world"), source),
+    ).resolves.toBeNull();
+    await expect(
+      uploads.receiveFrame(uploadEnds("req-entry-conflict"), source),
+    ).resolves.toBeNull();
+
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("existing");
+    expect(readdirSync(cwd)).toEqual(["notes.txt"]);
+  });
+
+  it("replaces an existing file when overwrite is requested", async () => {
+    const cwd = makeDir("file-entry-upload-replace-");
+    writeFileSync(join(cwd, "notes.txt"), "existing");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      overwrite: true,
+      requestId: "req-entry-replace",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-entry-replace"), source);
+    await uploads.receiveFrame(uploadChunk("req-entry-replace", "hello world"), source);
+
+    await expect(uploads.receiveFrame(uploadEnds("req-entry-replace"), source)).resolves.toEqual({
+      status: "completed",
+      uploadId: expect.any(String),
+      fileName: "notes.txt",
+      path: join(cwd, "notes.txt"),
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
+    expect(readdirSync(cwd)).toEqual(["notes.txt"]);
+  });
+
+  it("keeps the existing file when a replace upload fails", async () => {
+    const cwd = makeDir("file-entry-upload-replace-failure-");
+    writeFileSync(join(cwd, "notes.txt"), "existing");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 5,
+      overwrite: true,
+      requestId: "req-entry-replace-overflow",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-entry-replace-overflow"), source);
+
+    await expect(
+      uploads.receiveFrame(uploadChunk("req-entry-replace-overflow", "hello!"), source),
+    ).resolves.toEqual({
+      status: "failed",
+      error: "Upload exceeded declared size: expected 5, received 6.",
+      alreadyExists: false,
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("existing");
+    expect(readdirSync(cwd)).toEqual(["notes.txt"]);
+  });
+
+  it("removes the partial file when a workspace upload fails", async () => {
+    const cwd = makeDir("file-entry-upload-partial-");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 5,
+      requestId: "req-entry-overflow",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-entry-overflow"), source);
+
+    await expect(
+      uploads.receiveFrame(uploadChunk("req-entry-overflow", "hello!"), source),
+    ).resolves.toEqual({
+      status: "failed",
+      error: "Upload exceeded declared size: expected 5, received 6.",
+      alreadyExists: false,
+    });
+    expect(readdirSync(cwd)).toEqual([]);
+  });
+
+  it("fails without writing when the destination directory cannot be resolved", async () => {
+    const cwd = makeDir("file-entry-upload-unresolved-");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: "missing",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-unresolved",
+      resolveDirectory: async () => {
+        throw new Error("Requested path is not a directory");
+      },
+    });
+
+    await expect(
+      uploads.receiveFrame(uploadBegins("req-entry-unresolved"), source),
+    ).resolves.toEqual({
+      status: "failed",
+      error: "Requested path is not a directory",
+      alreadyExists: false,
+    });
+    expect(readdirSync(cwd)).toEqual([]);
+  });
+});
+
+function beginWorkspaceUpload(
+  uploads: FileUploadStore,
+  source: object,
+  input: {
+    cwd: string;
+    parentPath: string;
+    fileName: string;
+    size: number;
+    overwrite?: boolean;
+    requestId: string;
+    resolveDirectory: () => Promise<string>;
+  },
+): void {
+  const request: FileEntryUploadRequest = {
+    type: "fs.entry.upload.request",
+    cwd: input.cwd,
+    parentPath: input.parentPath,
+    fileName: input.fileName,
+    size: input.size,
+    overwrite: input.overwrite,
+    requestId: input.requestId,
+  };
+  uploads.beginFileEntryUpload(request, {
+    source,
+    resolveDirectory: input.resolveDirectory,
+    finished: () => {},
+  });
+}
 
 let uploadCount = 0;
 
@@ -259,9 +440,17 @@ async function uploadNamed(uploads: FileUploadStore, fileName: string) {
   });
   await uploads.receiveFrame(uploadBegins(requestId));
   await uploads.receiveFrame(uploadChunk(requestId, "hello world"));
-  const response = await uploads.receiveFrame(uploadEnds(requestId));
-  expect(response?.payload.error).toBeNull();
-  return response?.payload.file;
+  const outcome = await uploads.receiveFrame(uploadEnds(requestId));
+  if (outcome?.status !== "completed") {
+    throw new Error(`expected a completed upload, got ${outcome?.status}`);
+  }
+  return outcome;
+}
+
+function makeDir(prefix: string): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  tempDirs.push(root);
+  return root;
 }
 
 function makePaseoHome(): string {
