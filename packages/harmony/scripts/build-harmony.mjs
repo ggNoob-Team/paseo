@@ -50,11 +50,12 @@ function log(message) {
 }
 
 function run(command, args, options = {}) {
-  log(`$ ${command} ${args.join(" ")}`);
+  const { mask = [], ...spawnOptions } = options;
+  log(`$ ${command} ${args.map((arg) => (mask.includes(arg) ? "***" : arg)).join(" ")}`);
   const result = spawnSync(command, args, {
     stdio: "inherit",
     shell: false,
-    ...options,
+    ...spawnOptions,
   });
   if (result.error) {
     fail(`failed to run ${command}: ${result.error.message}`);
@@ -110,8 +111,9 @@ async function readNativeVersion() {
  */
 async function stampAppScopeManifest(nativeVersion) {
   const original = await readFile(APP_SCOPE_MANIFEST, "utf8");
+  // The manifest is JSON5: keys may be quoted or bare.
   const replace = (text, key, value) =>
-    text.replace(new RegExp(`("${key}"\\s*:\\s*)[^,\\n]+`), `$1${value}`);
+    text.replace(new RegExp(`("?${key}"?\\s*:\\s*)[^,\\n]+`), `$1${value}`);
   let next = replace(original, "bundleName", `"${BUNDLE_NAME}"`);
   next = replace(next, "versionCode", String(nativeVersion.androidVersionCode));
   next = replace(next, "versionName", `"${nativeVersion.appVersion}"`);
@@ -466,7 +468,12 @@ function signHap({ hapPath, sdkHome }) {
     "-outFile",
     signedPath,
   ];
-  run("java", args);
+  // JDK 21.0.0 rejects hvigor's zip64 headers ("Invalid CEN header (invalid
+  // zip64 extra data field size)"); 17.0.10+ and 21.0.1+ read them. Point
+  // PASEO_HARMONY_JAVA at a working JRE when the default java is affected.
+  run(process.env.PASEO_HARMONY_JAVA ?? "java", args, {
+    mask: [material.keystorePwd, material.keyPwd],
+  });
   return signedPath;
 }
 
@@ -513,7 +520,9 @@ async function main() {
   }
 
   if (options.installOnly) {
-    const existing = await findLatestHap({ signed: true });
+    // Emulator images install unsigned haps, so fall back to the newest hap
+    // when nothing went through signing.
+    const existing = (await findLatestHap({ signed: true })) ?? (await findLatestHap());
     if (!existing) {
       fail("no built hap found; run npm run harmony:build first");
     }

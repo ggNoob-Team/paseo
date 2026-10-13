@@ -46,6 +46,10 @@ nesting it under `rawfile/web/` makes every asset 404. `npm run harmony:verify`
 checks that every root-absolute URL in `index.html` and in the JS bundles
 resolves inside `rawfile/`.
 
+The `Web` component loads the origin root (`paseo://app/`), not `/index.html`:
+Expo Router matches routes against the document path, and an `/index.html`
+document path matches no route (its "Unmatched Route" page).
+
 ## Version stamping
 
 `versionCode` and `versionName` come from `packages/app/native-release-version.js`
@@ -102,6 +106,21 @@ place is filed as "incompatible" and the build fails with
 error and is really a path error. `entry/src/main/module.json5` also has to use
 `deviceTypes: ["default"]`; `phone`/`tablet` only exist in the HarmonyOS SDK.
 
+DevEco Studio's bundled SDK uses the rejected `sdk/default/openharmony/...`
+shape, so pointing `DEVECO_SDK_HOME` at a DevEco install from WSL fails with
+the same `00308018`. Keep the public mirror SDK at `~/.paseo-harmony/sdk`.
+
+The SDK's `releaseType` is copied into the hap as `app.apiReleaseType` and into
+`pack.info`, and AppGallery rejects Beta packages at submit with
+`205339313 beta api not allowed to submit`. Take the SDK from `7.0-Release`, not
+`7.0-Beta1`: the version strings match (`26.0.0.38`), so a Beta SDK produces a
+hap that builds, signs, and installs without any sign of trouble and only fails
+at submission. Check before uploading:
+
+```bash
+unzip -p entry-default-unsigned.hap module.json | grep -o '"apiReleaseType":"[^"]*"'
+```
+
 The OpenHarmony SDK is a substitute for smoke testing, not a guarantee: a hap it
 produces targets OpenHarmony devices. Whether a retail HarmonyOS 7 phone accepts
 one is the open question this module cannot answer without the device.
@@ -127,16 +146,25 @@ PASEO_HARMONY_DAEMON=localhost:6767 npm run harmony:build
 
 ## Signing
 
-A hap only installs on a device whose UDID is in its signing profile, and there
-is no "install from unknown sources" switch. In AppGallery Connect:
+There is no "install from unknown sources" switch. A hap installs only when its
+signing profile covers the device, and profiles come in two types:
+
+- **调试 (debug)** — covers the devices registered in it and nothing else.
+- **发布 (release)** — covers every device, needs no registration, and does not
+  require the app to be published. Use it for any hap you hand to someone else.
+
+In AppGallery Connect:
 
 1. Create a project and an app. `bundleName` must match `AppScope/app.json5`
    (`sh.paseo.app` by default).
-2. Register the device as a debug device and copy its UDID
-   (`hdc shell bm get --udid`).
-3. Create a debug certificate (`.cer`), a `.p12` keystore, and a debug profile
-   (`.p7b`) that includes the device.
-4. Put the three files in `~/.paseo-harmony/signing/` plus a `signing.json`:
+2. Generate a keystore and a CSR (`keytool`), then create a certificate from
+   the CSR — 调试证书 for device-bound builds, 发布证书 for shareable ones.
+3. Create a profile of the same type, picking the app and the certificate; a
+   debug profile additionally needs its devices registered (`hdc shell bm get
+--udid` prints a device's UDID).
+4. Put the downloaded certificate (`.cer`, a full chain) and profile (`.p7b`)
+   in `~/.paseo-harmony/signing/` alongside the `.p12`, and write
+   `signing.json`:
 
 ```json
 {
@@ -144,14 +172,23 @@ is no "install from unknown sources" switch. In AppGallery Connect:
   "keystoreFile": "/home/you/.paseo-harmony/signing/paseo.p12",
   "keystorePwd": "...",
   "keyPwd": "...",
-  "appCertFile": "/home/you/.paseo-harmony/signing/paseo.cer",
-  "profileFile": "/home/you/.paseo-harmony/signing/paseo.p7b"
+  "appCertFile": "/home/you/.paseo-harmony/signing/paseo-release.cer",
+  "profileFile": "/home/you/.paseo-harmony/signing/paseo-release.p7b"
 }
 ```
 
 `npm run harmony:build` signs with `hap-sign-tool.jar` from the SDK toolchains
 when that file exists, and leaves the hap unsigned otherwise. Signing material
-never enters the repo.
+never enters the repo. A signed hap can be checked with `verify-app`:
+
+```bash
+java -jar ~/.paseo-harmony/sdk/26.0.0/toolchains/lib/hap-sign-tool.jar verify-app \
+  -inFile <signed.hap> -outCertChain /tmp/chain.cer -outProfile /tmp/profile.p7b
+```
+
+Signing runs on the `java` in `PATH`; override it with `PASEO_HARMONY_JAVA`. JDK
+21.0.0 chokes on hvigor's zip64 headers with `Invalid CEN header (invalid zip64
+extra data field size)`; 17.0.10+ and 21.0.1+ are fine.
 
 ## Installing
 
@@ -165,6 +202,16 @@ phone on USB or wirelessly on the same network:
 
 The `hdc` binary ships in the SDK toolchains, not in `command-line-tools/bin`.
 
+### Emulator (Windows)
+
+WSL reaches a DevEco Studio emulator on the same Windows machine when
+`.wslconfig` sets `networkingMode=mirrored`: the SDK's Linux `hdc` lists it as
+`127.0.0.1:5555` on its own, and `npm run harmony:install` installs to it with
+no `tconn` step. The HarmonyOS 7.0.0 emulator image also installs unsigned
+haps, so emulator debugging needs no AGC material — `npm run harmony:build
+--skip-sign`, then `npm run harmony:install`. Physical devices need a profile
+that covers them: a debug profile with their UDID, or a release profile.
+
 ## Connecting to the daemon
 
 Building and installing do not involve the daemon. It only has to be reachable
@@ -173,7 +220,8 @@ when you press Connect:
 - **Reverse port forward (recommended).** `hdc rport tcp:6767 tcp:6767`, then
   enter `localhost:6767` in the app. `localhost` is a potentially trustworthy
   origin, so the secure `paseo://app` document is not blocked from opening an
-  insecure WebSocket to it.
+  insecure WebSocket to it. The forward survives hap reinstalls but not an
+  emulator or hdc server restart; re-run it after either.
 - **LAN address.** `PASEO_LISTEN=0.0.0.0:6767`, then enter `192.168.1.77:6767`.
   A `ws://` socket to a non-loopback host from a secure origin is mixed content
   and may be refused; prefer the reverse forward.
@@ -189,9 +237,11 @@ is not wired up in the shell.
 - No push notifications. `packages/app/src/push-notifications/index.web.ts` is a no-op.
 - No QR scanning. The web app shows `pairing.scan.webUnavailableTitle` on non-native platforms.
 - The webview suspends when the app is backgrounded, so streams pause.
-- Nothing here has been exercised on a device yet: no hap has been installed, and
-  no daemon connection has been made from a phone. `window.isSecureContext`,
-  IndexedDB, the mic permission prompt, and the file picker are all unverified.
+- Verified on the Windows DevEco emulator (HarmonyOS 7.0.0, API 26): the hap
+  installs unsigned, renders, and holds a daemon WebSocket over `hdc rport`. A
+  physical phone is unverified, including whether it accepts a hap built from
+  the public OpenHarmony SDK, `window.isSecureContext`, IndexedDB, the mic
+  permission prompt, and the file picker.
 - Downloads are not implemented. `onDownloadStart` only logs; there is no
   `@ohos.request` handler writing into a user-visible directory.
 - `entry/oh-package.json5` pins a placeholder `1.0.0` because hvigor's SemVer

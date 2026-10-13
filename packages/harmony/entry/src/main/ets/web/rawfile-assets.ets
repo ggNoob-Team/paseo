@@ -13,7 +13,9 @@ import resourceManager from "@ohos.resourceManager";
 export const PASEO_SCHEME: string = "paseo";
 export const PASEO_ORIGIN: string = "paseo://app";
 export const ENTRY_PATH: string = "index.html";
-export const ENTRY_URL: string = `${PASEO_ORIGIN}/${ENTRY_PATH}`;
+// Load the origin root, not /index.html: Expo Router matches routes against the
+// document path, and /index.html matches no route ("Unmatched Route" page).
+export const ENTRY_URL: string = `${PASEO_ORIGIN}/`;
 
 const MIME_TYPES: Map<string, string> = new Map<string, string>([
   ["html", "text/html"],
