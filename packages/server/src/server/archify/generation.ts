@@ -271,7 +271,6 @@ export class ArchifyGenerationService {
         ...(record.input.modeId ? { mode: record.input.modeId } : {}),
         unattended: true,
         promptFailure: "return-error",
-        background: true,
         notifyOnFinish: false,
       });
       agentId = created.snapshot.id;
