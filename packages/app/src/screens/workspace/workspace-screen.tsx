@@ -3363,6 +3363,13 @@ function WorkspaceScreenContent({
           explorerToggleLabel={explorerSidebarToggleLabel}
           explorerToggleAccessibilityState={explorerSidebarToggleAccessibilityState}
         >
+          {workspaceDescriptor ? (
+            <NotesHeaderButton
+              serverId={normalizedServerId}
+              projectId={workspaceDescriptor.projectId}
+              projectName={workspaceDescriptor.projectDisplayName}
+            />
+          ) : null}
           <MobileWorkspaceTabSwitcher
             tabs={tabs}
             activeTabKey={activeTabKey}
@@ -3435,6 +3442,7 @@ function WorkspaceScreenContent({
       showCreateBrowserTab,
       showWorkspaceSetup,
       tabs,
+      workspaceDescriptor,
       workspaceDirectory,
       workspaceHeaderSubtitle,
       workspaceHeaderTitle,
