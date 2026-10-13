@@ -71,47 +71,41 @@
         border-radius: 4px;
         word-break: break-all;
       }
-      .download {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        background: linear-gradient(135deg, rgba(34, 211, 167, 0.1), rgba(56, 189, 248, 0.06));
-        border: 1px solid rgba(34, 211, 167, 0.35);
-        border-radius: 12px;
-        padding: 16px 18px;
-        margin: 0 0 26px;
+      .card-actions {
+        margin-top: 12px;
       }
-      .download-title {
-        font-size: 15px;
+      .primary-button {
+        display: inline-block;
+        background: var(--todo);
+        color: #06111c;
+        font-size: 13.5px;
         font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .download-meta {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--dim);
-        line-height: 1.7;
-        margin-top: 6px;
-        word-break: break-all;
-      }
-      .download-button {
-        flex-shrink: 0;
-        background: var(--live);
-        color: #04231b;
-        font-weight: 600;
-        font-size: 14px;
-        padding: 11px 22px;
+        padding: 9px 20px;
         border-radius: 9px;
         text-decoration: none;
-        white-space: nowrap;
         transition: 0.15s;
       }
-      .download-button:hover {
+      .primary-button:hover {
         filter: brightness(1.08);
         transform: translateY(-1px);
+      }
+      .apk-detail {
+        display: grid;
+        gap: 7px;
+      }
+      .apk-detail > div {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .apk-detail span {
+        flex: 0 0 82px;
+        color: var(--faint);
+      }
+      .apk-detail code {
+        font-family: var(--mono);
+        color: #7dd3fc;
+        word-break: break-all;
       }
       section {
         margin-bottom: 30px;
@@ -358,28 +352,6 @@
       .tab.on .c {
         color: rgba(6, 17, 28, 0.62);
       }
-      .apk-detail {
-        display: grid;
-        gap: 7px;
-        margin-top: 14px;
-      }
-      .apk-detail > div {
-        display: flex;
-        align-items: baseline;
-        gap: 12px;
-        font-size: 12.5px;
-        color: var(--dim);
-      }
-      .apk-detail span {
-        flex: 0 0 86px;
-        color: var(--faint);
-      }
-      .apk-detail code {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: #7dd3fc;
-        word-break: break-all;
-      }
       .pane {
         display: none;
       }
@@ -461,12 +433,11 @@
         .grid {
           grid-template-columns: 1fr;
         }
-        .download {
-          flex-direction: column;
-          align-items: stretch;
+        .apk-detail > div {
+          display: block;
         }
-        .download-button {
-          text-align: center;
+        .apk-detail span {
+          display: block;
         }
         .tab {
           padding: 9px 16px;
@@ -1045,28 +1016,34 @@
       <div class="pane" id="pane-download">
         <section>
           <h2>下载 <span class="n">ANDROID APK · 发布脚本会替换为最新构建</span></h2>
-          <div class="download">
-            <div>
-              <div class="download-title">
-                下载最新 Android 安装包<span class="badge b-live">APK</span>
+          <div class="grid">
+            <div class="card">
+              <div class="t">下载最新 Android 安装包<span class="badge b-live">APK</span></div>
+              <div class="d" id="apk-meta">正在读取最新版本信息…</div>
+              <div class="card-actions">
+                <a class="primary-button" id="apk-download" href="/apk/paseo-latest.apk" download
+                  >下载 APK</a
+                >
               </div>
-              <div class="download-meta" id="apk-meta">正在读取最新版本信息…</div>
+              <div class="src">
+                固定直链 https://paseo.zxyz.app/apk/paseo-latest.apk · 版本信息 /apk/latest.json
+              </div>
             </div>
-            <a class="download-button" id="apk-download" href="/apk/paseo-latest.apk" download
-              >下载 APK</a
-            >
-          </div>
-          <div class="apk-detail">
-            <div><span>固定直链</span><code>https://paseo.zxyz.app/apk/paseo-latest.apk</code></div>
-            <div><span>版本信息</span><code>https://paseo.zxyz.app/apk/latest.json</code></div>
-            <div><span>完整 sha256</span><code id="apk-sha">读取中…</code></div>
-            <div><span>构建时间</span><code id="apk-built">读取中…</code></div>
-            <div><span>ABI</span><code>arm64-v8a + x86_64（真机与 MuMu 等模拟器都可用）</code></div>
-            <div>
-              <span>安装方式</span
-              ><code>把 APK 传到手机点开安装；Android 12+ 需允许「安装未知应用 / 此来源」</code>
+            <div class="card">
+              <div class="t">包信息<span class="tag g-release">构建发布</span></div>
+              <div class="d apk-detail">
+                <div><span>完整 sha256</span><code id="apk-sha">读取中…</code></div>
+                <div><span>构建时间</span><code id="apk-built">读取中…</code></div>
+                <div>
+                  <span>ABI</span><code>arm64-v8a + x86_64（真机与 MuMu 等模拟器都可用）</code>
+                </div>
+                <div>
+                  <span>安装方式</span
+                  ><code>把 APK 传到手机点开安装；Android 12+ 需允许「安装未知应用 / 此来源」</code>
+                </div>
+              </div>
+              <div class="src">重新发布：./scripts/publish-android-apk.sh</div>
             </div>
-            <div><span>重新发布</span><code>./scripts/publish-android-apk.sh</code></div>
           </div>
         </section>
       </div>
