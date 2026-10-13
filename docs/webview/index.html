@@ -184,7 +184,8 @@
         margin-top: 10px;
         word-break: break-all;
       }
-      .badge {
+      .badge,
+      .tag {
         font-size: 10px;
         font-family: var(--mono);
         padding: 1.5px 8px;
@@ -192,6 +193,9 @@
         border: 1px solid;
         font-weight: 400;
         white-space: nowrap;
+      }
+      .tag {
+        font-family: var(--cn);
       }
       .b-live {
         color: var(--live);
@@ -217,6 +221,80 @@
         color: var(--bug);
         border-color: rgba(248, 113, 113, 0.45);
         background: rgba(248, 113, 113, 0.1);
+      }
+      .g-notes {
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(56, 189, 248, 0.1);
+      }
+      .g-task {
+        color: #22d3a7;
+        border-color: rgba(34, 211, 167, 0.45);
+        background: rgba(34, 211, 167, 0.1);
+      }
+      .g-collab {
+        color: #a78bfa;
+        border-color: rgba(167, 139, 250, 0.45);
+        background: rgba(167, 139, 250, 0.1);
+      }
+      .g-session {
+        color: #f59e0b;
+        border-color: rgba(245, 158, 11, 0.45);
+        background: rgba(245, 158, 11, 0.1);
+      }
+      .g-workspace {
+        color: #7dd3fc;
+        border-color: rgba(125, 211, 252, 0.45);
+        background: rgba(125, 211, 252, 0.1);
+      }
+      .g-voice {
+        color: #f472b6;
+        border-color: rgba(244, 114, 182, 0.45);
+        background: rgba(244, 114, 182, 0.1);
+      }
+      .g-archify {
+        color: #8b93a7;
+        border-color: rgba(139, 147, 167, 0.45);
+        background: rgba(139, 147, 167, 0.1);
+      }
+      .g-release {
+        color: #34d399;
+        border-color: rgba(52, 211, 153, 0.45);
+        background: rgba(52, 211, 153, 0.1);
+      }
+      .g-agent {
+        color: #c084fc;
+        border-color: rgba(192, 132, 252, 0.45);
+        background: rgba(192, 132, 252, 0.1);
+      }
+      .tagbar {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin: -6px 0 22px;
+      }
+      .tagf {
+        font-family: var(--cn);
+        font-size: 12.5px;
+        color: var(--dim);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 4px 13px;
+        cursor: pointer;
+        transition: 0.15s;
+      }
+      .tagf:hover {
+        color: var(--txt);
+        border-color: rgba(56, 189, 248, 0.45);
+      }
+      .tagf.on {
+        color: #06111c;
+        background: var(--todo);
+        border-color: var(--todo);
+      }
+      .card.off {
+        display: none;
       }
       .tabs {
         display: flex;
@@ -273,8 +351,34 @@
         background: var(--bug);
         border-color: var(--bug);
       }
+      .tab.on.download {
+        background: var(--todo);
+        border-color: var(--todo);
+      }
       .tab.on .c {
         color: rgba(6, 17, 28, 0.62);
+      }
+      .apk-detail {
+        display: grid;
+        gap: 7px;
+        margin-top: 14px;
+      }
+      .apk-detail > div {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      .apk-detail span {
+        flex: 0 0 86px;
+        color: var(--faint);
+      }
+      .apk-detail code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: #7dd3fc;
+        word-break: break-all;
       }
       .pane {
         display: none;
@@ -381,44 +485,52 @@
         站点根 <code>index.html</code> 软链至
         <code>/home/workspace/code/paseo/docs/webview/index.html</code
         >，改仓库文件即时生效，无需重新发布。<br />
-        APK 发布：<code>./scripts/publish-android-apk.sh</code> 把
-        <code>~/paseo-artifacts</code> 里最新的包复制成
-        <code>/apk/paseo-latest.apk</code>（软链站点根
-        <code>apk → ~/paseo-artifacts/published</code>）并刷新 <code>latest.json</code>。<br />
+        APK 下载：<a href="#download" style="color: var(--todo)">「下载」Tab</a>（固定直链
+        <code>https://paseo.zxyz.app/apk/paseo-latest.apk</code>，也可直接访问
+        <code>…#download</code>）；发布用 <code>./scripts/publish-android-apk.sh</code>，它把
+        <code>~/paseo-artifacts</code> 里最新的包复制到站点 <code>apk/</code> 目录并刷新
+        <code>latest.json</code>。<br />
         状态口径：<b style="color: var(--live)">已实现</b>=能跑、有入口或后台在运行；
         <b style="color: var(--wip)">计划中 / 未开发</b
         >=待办（计划中=需求已整理、待排期；未开发=明确暂缓或尚无方案）；条目内标「已做」的部分已经落地；<b
           style="color: var(--bug)"
           >Bug</b
-        >=已知缺陷，待修。
-      </div>
-
-      <div class="download" id="download">
-        <div>
-          <div class="download-title">
-            下载最新 Android 安装包<span class="badge b-live">APK</span>
-          </div>
-          <div class="download-meta" id="apk-meta">正在读取最新版本信息…</div>
-        </div>
-        <a class="download-button" id="apk-download" href="/apk/paseo-latest.apk" download
-          >下载 APK</a
-        >
+        >=已知缺陷，待修。<br />
+        标签口径：卡片标签表示<b>功能域</b>（笔记 / 任务 / 协作 / 会话 / 工作区 / 语音 / Archify /
+        构建发布 / Agent），与状态徽章相互独立；下方标签栏可按功能域筛选卡片。
       </div>
 
       <div class="tabs" id="tabs">
         <button class="tab backlog on" data-tab="backlog">
-          计划中 / 未开发<span class="c">7</span>
+          计划中 / 未开发<span class="c">13</span>
         </button>
         <button class="tab live" data-tab="done">已实现<span class="c">6</span></button>
-        <button class="tab bug" data-tab="bugs">Bug<span class="c">2</span></button>
+        <button class="tab bug" data-tab="bugs">Bug<span class="c">4</span></button>
+        <button class="tab download" data-tab="download">下载<span class="c">APK</span></button>
+      </div>
+
+      <div class="tagbar" id="tagbar">
+        <button class="tagf on" data-tagf="all">全部</button>
+        <button class="tagf" data-tagf="notes">笔记</button>
+        <button class="tagf" data-tagf="task">任务</button>
+        <button class="tagf" data-tagf="collab">协作</button>
+        <button class="tagf" data-tagf="session">会话</button>
+        <button class="tagf" data-tagf="workspace">工作区</button>
+        <button class="tagf" data-tagf="voice">语音</button>
+        <button class="tagf" data-tagf="archify">Archify</button>
+        <button class="tagf" data-tagf="release">构建发布</button>
+        <button class="tagf" data-tagf="agent">Agent</button>
       </div>
 
       <div class="pane" id="pane-done">
         <section>
           <h2>已实现 <span class="n">6 项 · fork 相对上游的增量</span></h2>
           <div class="grid">
-            <div class="card">
-              <div class="t">Archify 架构图集成<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="archify">
+              <div class="t">
+                Archify 架构图集成<span class="tag g-archify">Archify</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 内置 <b>paseo-archify</b> skill（vendored 渲染运行时 + 五类图表 schema）、工作区
                 Archify 面板、<code>archify_render</code> MCP
@@ -430,8 +542,11 @@
               </div>
             </div>
 
-            <div class="card">
-              <div class="t">Archify 生成体验重构<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="archify">
+              <div class="t">
+                Archify 生成体验重构<span class="tag g-archify">Archify</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 生成运行改由 daemon 托管：先做无模型的确定性预扫描，产出 ≤40KB
                 证据包并按仓库版本缓存；候选锚点确认后，每张图一个后台 worker
@@ -444,8 +559,11 @@
                 35e62255b · bf0101797 · 619094ff9 · 7697c0f38
               </div>
             </div>
-            <div class="card">
-              <div class="t">项目笔记 + 最近工作区<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="notes">
+              <div class="t">
+                项目笔记 + 最近工作区<span class="tag g-notes">笔记</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 一条捕获一条笔记：标题 / 正文 /
                 备注独立编辑、删除，按项目浏览，列表显示所属项目；消息块
@@ -456,16 +574,22 @@
                 2f884242d · 965c796de · 618bda30b
               </div>
             </div>
-            <div class="card">
-              <div class="t">口述实时转写 + 本地 STT<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="voice">
+              <div class="t">
+                口述实时转写 + 本地 STT<span class="tag g-voice">语音</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 输入框内实时显示口述转写；接入 SenseVoice 本地语音识别模型，覆盖中文、日文、韩文。
               </div>
               <div class="src">c83482f8b · 2615294a8</div>
             </div>
 
-            <div class="card">
-              <div class="t">工作区文件上传<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="workspace">
+              <div class="t">
+                工作区文件上传<span class="tag g-workspace">工作区</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 资源管理器工具栏与目录右键菜单都能把本地文件上传到工作区目录；daemon
                 侧流式写入，重名先确认再替换，上传过程有进度提示。
@@ -475,8 +599,11 @@
                 packages/protocol/src/messages.ts · 983f93b65
               </div>
             </div>
-            <div class="card">
-              <div class="t">打包与发布链路<span class="badge b-live">已实现</span></div>
+            <div class="card" data-tag="release">
+              <div class="t">
+                打包与发布链路<span class="tag g-release">构建发布</span
+                ><span class="badge b-live">已实现</span>
+              </div>
               <div class="d">
                 Android APK 构建脚本与 CI（可裁剪 ABI、缓存、磁盘清理）、未签名 macOS
                 桌面构建、Windows 安装包拆分上传、HarmonyOS ArkTS 外壳（web 资源导出 / 校验 / 构建 /
@@ -494,11 +621,11 @@
 
       <div class="pane on" id="pane-backlog">
         <section>
-          <h2>计划中 / 未开发 <span class="n">7 项 · 待办；标「已做」的部分已落地</span></h2>
+          <h2>计划中 / 未开发 <span class="n">13 项 · 待办；标「已做」的部分已落地</span></h2>
           <div class="grid">
-            <div class="card req">
+            <div class="card req" data-tag="notes">
               <div class="t">
-                笔记增强<span class="badge b-plan">计划中</span
+                笔记增强<span class="tag g-notes">笔记</span><span class="badge b-plan">计划中</span
                 ><span class="badge b-live">部分已做</span>
               </div>
               <div class="d">
@@ -549,8 +676,11 @@
               </div>
             </div>
 
-            <div class="card req">
-              <div class="t">Agent 开发模式<span class="badge b-plan">计划中</span></div>
+            <div class="card req" data-tag="agent">
+              <div class="t">
+                Agent 开发模式<span class="tag g-agent">Agent</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
               <div class="d">把"新建一个 Agent"从裸配置改成有结构的三件事。</div>
               <div class="rq">
                 <span class="k">需求</span>
@@ -563,8 +693,11 @@
               </div>
             </div>
 
-            <div class="card req">
-              <div class="t">会话气泡图<span class="badge b-plan">计划中</span></div>
+            <div class="card req" data-tag="session">
+              <div class="t">
+                会话气泡图<span class="tag g-session">会话</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
               <div class="d">
                 会话列表往下滑进入一个新的气泡视图，把常用的会话摊开，解决项目 /
                 会话变多后列表不好管理的问题。
@@ -574,7 +707,10 @@
                 <div class="v">
                   <ul>
                     <li>入口：会话列表界面往下滑，进入任务气泡图。</li>
-                    <li>默认只显示 10 个使用最频繁的气泡；一个气泡 = 一个任务 = 一个会话。</li>
+                    <li>
+                      默认只显示 10 个使用最频繁的气泡；一个气泡 =
+                      一个常用会话（任务与会话是多对多，见「任务 ↔ 会话多对多」）。
+                    </li>
                     <li>点气泡进入对应会话界面。气泡只做展示，不承载其他操作。</li>
                     <li>动机：有些会话要留着但不马上用，有些要频繁用，列表难以兼顾。</li>
                   </ul>
@@ -582,22 +718,28 @@
               </div>
             </div>
 
-            <div class="card">
-              <div class="t">Archify 骨架直出 IR<span class="badge b-todo">未开发</span></div>
+            <div class="card" data-tag="archify">
+              <div class="t">
+                Archify 骨架直出 IR<span class="tag g-archify">Archify</span
+                ><span class="badge b-todo">未开发</span>
+              </div>
               <div class="d">
                 由脚本从导入关系直接拼出架构图初稿、模型只做精修。当前定为不做——图形质量受限，先只把仓库事实喂给模型。
               </div>
             </div>
-            <div class="card">
-              <div class="t">草稿替换式交付<span class="badge b-todo">未开发</span></div>
+            <div class="card" data-tag="archify">
+              <div class="t">
+                草稿替换式交付<span class="tag g-archify">Archify</span
+                ><span class="badge b-todo">未开发</span>
+              </div>
               <div class="d">
                 先秒级出一个轻量草稿、随后被完整版替换。当前定为不做——每张图都应是成品，避免图"变形"造成困惑。
               </div>
             </div>
-            <div class="card req">
+            <div class="card req" data-tag="archify">
               <div class="t">
-                单张独立重跑 / 换模型重跑<span class="badge b-todo">未开发</span
-                ><span class="badge b-live">部分已做</span>
+                单张独立重跑 / 换模型重跑<span class="tag g-archify">Archify</span
+                ><span class="badge b-todo">未开发</span><span class="badge b-live">部分已做</span>
               </div>
               <div class="rq">
                 <span class="k">已做</span>
@@ -610,9 +752,165 @@
                 </div>
               </div>
             </div>
-            <div class="card">
-              <div class="t">笔记跨项目全文检索<span class="badge b-todo">未开发</span></div>
+            <div class="card" data-tag="notes">
+              <div class="t">
+                笔记跨项目全文检索<span class="tag g-notes">笔记</span
+                ><span class="badge b-todo">未开发</span>
+              </div>
               <div class="d">尚无方案。当前笔记只按项目汇总，没有跨项目的全文搜索能力。</div>
+            </div>
+
+            <div class="card req" data-tag="notes">
+              <div class="t">
+                个人笔记收件箱<span class="tag g-notes">笔记</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">链接 / 图片 / 地址这类碎片的随手捕获，独立于按项目汇总的笔记。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>内容以链接、图片、地址等碎片为主，不一定跟代码有关。</li>
+                    <li>默认私有，可主动分享给团队。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>"私有"只靠软规则（默认不展示），不做强制读取隔离。</li>
+                    <li>分享之后变成什么：一条能读的笔记，还是一件要跟进的事？</li>
+                    <li>与按项目笔记的关系：归入项目，还是并行两套？</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="task">
+              <div class="t">
+                团队任务与需求录入<span class="tag g-task">任务</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">把团队要做的事变成可跟踪的任务，需求先成形再派活。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>把原始需求描述整理成 1 / 2 / 3 / 4 / 5。</li>
+                    <li>任务可以先于会话独立存在，之后再关联会话。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>需求录入入口：会话里顺手整理，还是单开一个入口先手写再整理？</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="task">
+              <div class="t">
+                任务流转<span class="tag g-task">任务</span><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">任务状态按开发流程推进，改状态时留一句说明。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>创建 → 开始开发 → 开始测试 → 自测完成 → 等待验收 → 通过 / 打回。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>是否加"已部署 / 已上线"这类交付终态？</li>
+                    <li>是否加"阻塞 / 挂起 / 取消"这类非终态分支？</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="task">
+              <div class="t">
+                任务 ↔ 会话多对多<span class="tag g-task">任务</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">任务和会话不是一对一；这取代了早先"一个任务 = 一个会话"的说法。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>一个任务可关联多个会话，一个会话可承载多个任务。</li>
+                    <li>能回答"哪个任务和哪个会话挂钩"。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>任务归属边界：跟着项目走，还是团队一个池子？</li>
+                    <li>指派方式：自己认领、别人指派，还是都要？</li>
+                    <li>负责人 / 测试 / 验收通常是同一个人，还是不同的人？</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="collab">
+              <div class="t">
+                进度留痕与 AI 转述<span class="tag g-collab">协作</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">开发者在改状态时补一句，别人问进度由 AI 转述。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>不卡人，只留痕：谁、何时、为什么改状态。</li>
+                    <li>别人问进度时，AI 读任务和关联会话，替你转述。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>别人开口的方式：问人、问 AI，还是自己看板？</li>
+                    <li>进度摘要由 AI 定时维护，还是即问即答？</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="collab">
+              <div class="t">
+                团队共用一台 daemon<span class="tag g-collab">协作</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">小团队共用一台团队 daemon，先自用、后产品化。</div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>面向 3–8 人的小团队，成员共享同一台团队 daemon。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">开放问题</span>
+                <div class="v">
+                  <ul>
+                    <li>团队边界是否等于项目成员，还是跨多个项目？</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -620,11 +918,12 @@
 
       <div class="pane" id="pane-bugs">
         <section>
-          <h2>Bug <span class="n">2 项 · 已知缺陷，待修</span></h2>
+          <h2>Bug <span class="n">4 项 · 已知缺陷，待修</span></h2>
           <div class="grid">
-            <div class="card req">
+            <div class="card req" data-tag="session">
               <div class="t">
-                手机端会话列表展开 / 收起后跳回顶部<span class="badge b-bug">Bug</span>
+                手机端会话列表展开 / 收起后跳回顶部<span class="tag g-session">会话</span
+                ><span class="badge b-bug">Bug</span>
               </div>
               <div class="d">
                 手机端展开会话列表再收起，重新打开时列表总是回到最顶部，之前滑到的位置丢失。
@@ -643,9 +942,10 @@
               </div>
             </div>
 
-            <div class="card req">
+            <div class="card req" data-tag="notes">
               <div class="t">
-                笔记里的链接没用外部浏览器打开<span class="badge b-bug">Bug</span>
+                笔记里的链接没用外部浏览器打开<span class="tag g-notes">笔记</span
+                ><span class="badge b-bug">Bug</span>
               </div>
               <div class="d">
                 笔记里的链接点开后应该走手机的外部浏览器，目前的表现像是在 App 内打开了。
@@ -669,18 +969,121 @@
                 </div>
               </div>
             </div>
+            <div class="card req" data-tag="session">
+              <div class="t">
+                手机端自己发的消息复制按钮点不到<span class="tag g-session">会话</span
+                ><span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                手机端自己发送的消息，复制按钮原来一直显示；现在只有点中 /
+                选中时才出现，手指一离开又消失，导致点不到，无法复制自己发的消息。
+              </div>
+              <div class="rq">
+                <span class="k">复现</span>
+                <div class="v">
+                  手机端打开含自己消息的会话 → 消息下方复制按钮不常显 → 点一下消息，按钮短暂出现 →
+                  手指离开即消失 → 点不到。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">期望</span>
+                <div class="v">
+                  恢复常显；或点击消息后保持显示，直到再次点击 / 完成复制，不能依赖手指停留。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">疑似原因</span>
+                <div class="v">
+                  可见性走了 hover / 按压态。见
+                  <code>packages/app/src/components/message.tsx:459</code>
+                  （<code
+                    >showTrailingRow = !isPending &amp;&amp; hasText &amp;&amp; (isCompact ||
+                    isNative || isHovered)</code
+                  >） 与 <code>message.tsx:552-580</code> 的 trailing row。需确认该平台
+                  <code>isNative</code> / <code>isCompact</code> 是否为 true；按
+                  <code>docs/hover.md</code>，触屏控件应常显，不能依赖 hover。
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="session">
+              <div class="t">
+                手机端会话列表时间覆盖三点菜单<span class="tag g-session">会话</span
+                ><span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                会话 /
+                工作区列表行新增了时间显示，但时间占用了原来三点菜单（kebab）的位置，三点菜单被覆盖、点不到。
+              </div>
+              <div class="rq">
+                <span class="k">复现</span>
+                <div class="v">
+                  手机端打开会话列表 → 观察行尾：时间与三点菜单重叠 / 冲突，三点菜单无法正常点击。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">建议</span>
+                <div class="v">把时间放到服务器（host）名称后面，保留原来的三点菜单在行尾。</div>
+              </div>
+              <div class="rq">
+                <span class="k">疑似原因</span>
+                <div class="v">
+                  <code>sidebarWorkspaceTrailing</code> 默认改成
+                  <code>"timestamp"</code
+                  >（<code>packages/app/src/hooks/use-settings/storage.ts:153</code>），
+                  时间与触屏常驻 kebab 争用同一个 trailing slot。相关：
+                  <code>packages/app/src/components/sidebar/workspace-trailing/index.tsx</code>、
+                  <code>packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx</code>
+                  的 <code>resolveTrailingActionVisibility</code>。
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="pane" id="pane-download">
+        <section>
+          <h2>下载 <span class="n">ANDROID APK · 发布脚本会替换为最新构建</span></h2>
+          <div class="download">
+            <div>
+              <div class="download-title">
+                下载最新 Android 安装包<span class="badge b-live">APK</span>
+              </div>
+              <div class="download-meta" id="apk-meta">正在读取最新版本信息…</div>
+            </div>
+            <a class="download-button" id="apk-download" href="/apk/paseo-latest.apk" download
+              >下载 APK</a
+            >
+          </div>
+          <div class="apk-detail">
+            <div><span>固定直链</span><code>https://paseo.zxyz.app/apk/paseo-latest.apk</code></div>
+            <div><span>版本信息</span><code>https://paseo.zxyz.app/apk/latest.json</code></div>
+            <div><span>完整 sha256</span><code id="apk-sha">读取中…</code></div>
+            <div><span>构建时间</span><code id="apk-built">读取中…</code></div>
+            <div><span>ABI</span><code>arm64-v8a + x86_64（真机与 MuMu 等模拟器都可用）</code></div>
+            <div>
+              <span>安装方式</span
+              ><code>把 APK 传到手机点开安装；Android 12+ 需允许「安装未知应用 / 此来源」</code>
+            </div>
+            <div><span>重新发布</span><code>./scripts/publish-android-apk.sh</code></div>
           </div>
         </section>
       </div>
 
       <footer>
-        更新于 <code>2026-10-13 15:45 CST</code> · 仓库 revision <code>484658bcb</code><br />
-        新增页面顶部 <b>APK 下载入口</b>（最新包 + 版本 / 大小 / sha256，发布脚本
-        <code>scripts/publish-android-apk.sh</code>）；修复手机端从 agent 返回侧边栏时未定位到当前
-        workspace。<br />
-        Bug 新增「笔记里的链接没用外部浏览器打开」（含期望：默认外部浏览器，另有外部浏览器 / App 内
-        webview 的偏好项）。早前：Bug Tab 记录「手机端会话列表展开 /
-        收起后跳回顶部」；待办新增「会话气泡图」。
+        更新于 <code>2026-10-13 15:52 CST</code> · 仓库 revision <code>bdd8c9ab7</code><br />
+        门户新增<b>功能域标签分类</b>（笔记 / 任务 / 协作 / 会话 / 工作区 / 语音 / Archify /
+        构建发布 / Agent）与标签筛选栏；记录本会话的企业化需求 6
+        条（个人笔记收件箱、团队任务与需求录入、 任务流转、任务 ↔ 会话多对多、进度留痕与 AI
+        转述、团队共用一台 daemon），已定结论标
+        「计划中」、未定项列「开放问题」。修正「会话气泡图」里"一个任务 = 一个会话"的旧口径。<br />
+        早前：Bug 新增「手机端自己发的消息复制按钮点不到」与「手机端会话列表时间覆盖三点菜单」（2 →
+        4 项）；新增页面顶部 <b>APK 下载入口</b>；修复手机端从 agent 返回侧边栏时未定位到当前
+        workspace；Bug 记录「笔记里的链接没用外部浏览器打开」；待办新增「会话气泡图」。<br />
+        新增 <b>「下载」Tab</b>：默认仍停在「计划中 / 未开发」，点 Tab 或访问
+        <code>#download</code> 查看最新 APK（版本 / 大小 / 完整 sha256 / 构建时间 + 下载按钮），
+        发布脚本 <code>scripts/publish-android-apk.sh</code>。
       </footer>
     </div>
     <script>
@@ -709,6 +1112,10 @@
               String(info.sha256 || "").slice(0, 12) +
               "…";
             if (info.sizeLabel) button.textContent = "下载 APK（" + info.sizeLabel + "）";
+            var sha = document.getElementById("apk-sha");
+            if (sha) sha.textContent = info.sha256 || "未知";
+            var built = document.getElementById("apk-built");
+            if (built) built.textContent = info.builtAt || info.publishedAt || "未知";
           })
           .catch(function () {
             meta.textContent = "版本信息暂时读取失败，点击右侧按钮仍可直接下载最新安装包。";
@@ -716,7 +1123,40 @@
       })();
       (function () {
         var tabs = document.getElementById("tabs");
-        if (!tabs) return;
+        var tagbar = document.getElementById("tagbar");
+
+        function applyTag() {
+          var active = tagbar && tagbar.querySelector(".tagf.on");
+          var tag = active ? active.getAttribute("data-tagf") : "all";
+          document.querySelectorAll(".card").forEach(function (card) {
+            var match = tag === "all" || card.getAttribute("data-tag") === tag;
+            card.classList.toggle("off", !match);
+          });
+        }
+
+        function resetTag() {
+          if (!tagbar) return;
+          tagbar.querySelectorAll(".tagf").forEach(function (button) {
+            button.classList.toggle("on", button.getAttribute("data-tagf") === "all");
+          });
+        }
+
+        if (tagbar) {
+          tagbar.addEventListener("click", function (event) {
+            var button = event.target.closest(".tagf");
+            if (!button) return;
+            tagbar.querySelectorAll(".tagf").forEach(function (other) {
+              other.classList.remove("on");
+            });
+            button.classList.add("on");
+            applyTag();
+          });
+        }
+
+        if (!tabs) {
+          applyTag();
+          return;
+        }
         tabs.addEventListener("click", function (event) {
           var button = event.target.closest(".tab");
           if (!button) return;
@@ -731,13 +1171,19 @@
           });
           button.classList.add("on");
           pane.classList.add("on");
+          if (tagbar) tagbar.style.display = name === "download" ? "none" : "";
+          resetTag();
+          applyTag();
           if (history.replaceState) history.replaceState(null, "", "#" + name);
         });
-        var initial = (location.hash || "").replace("#", "");
-        if (initial) {
-          var target = tabs.querySelector('.tab[data-tab="' + initial + '"]');
-          if (target) target.click();
+        function selectByHash() {
+          var name = (location.hash || "").replace("#", "");
+          if (!name) return;
+          var target = tabs.querySelector('.tab[data-tab="' + name + '"]');
+          if (target && !target.classList.contains("on")) target.click();
         }
+        window.addEventListener("hashchange", selectByHash);
+        selectByHash();
       })();
     </script>
   </body>
