@@ -11,6 +11,7 @@ workspace.
 npm run harmony:web       # export the web app and sync it into rawfile/
 npm run harmony:verify    # check the synced assets resolve
 npm run harmony:build     # build a .hap
+npm run harmony:export    # package the project for DevEco Studio
 npm run harmony:install   # hdc install -r
 ```
 

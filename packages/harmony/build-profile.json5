@@ -8,7 +8,10 @@
       {
         name: "default",
         compileSdkVersion: "26.0.0",
-        compatibleSdkVersion: "26.0.0",
+        // 12 is the lowest API the shell's ArkWeb calls need, and a low minimum
+        // is what lets the hap install on older emulator images. Keep it bare
+        // (hvigor wants a number below API 26, a dotted string from 26 on).
+        compatibleSdkVersion: 12,
         targetSdkVersion: "26.0.0",
         runtimeOS: "OpenHarmony",
         buildOption: {

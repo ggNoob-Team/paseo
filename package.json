@@ -65,6 +65,7 @@
     "harmony:web": "node packages/harmony/scripts/build-harmony.mjs --assets-only",
     "harmony:build": "node packages/harmony/scripts/build-harmony.mjs",
     "harmony:verify": "node packages/harmony/scripts/build-harmony.mjs --verify-assets",
+    "harmony:export": "node packages/harmony/scripts/export-harmony-project.mjs",
     "harmony:install": "node packages/harmony/scripts/build-harmony.mjs --install-only",
     "build:app-deps": "npm run build:highlight && npm run build:client && npm run build:plugin && npm run build --workspace=@getpaseo/expo-two-way-audio",
     "build:app-deps:clean": "npm run build:highlight:clean && npm run build:client:clean && npm run build:plugin:clean && npm run build --workspace=@getpaseo/expo-two-way-audio",

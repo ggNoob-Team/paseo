@@ -1,6 +1,7 @@
 import web_webview from "@ohos.web.webview";
 import common from "@ohos.app.ability.common";
 import resourceManager from "@ohos.resourceManager";
+import type { BusinessError } from "@ohos.base";
 import hilog from "@ohos.hilog";
 import {
   ENTRY_PATH,
@@ -67,6 +68,27 @@ struct Index {
     return response;
   }
 
+  /**
+   * Logs the web-platform facts that decide whether the shell works. Without a
+   * debugger this is the only way to read them on device; DevEco Studio shows
+   * hilog in its Log panel. See docs/harmonyos.md.
+   */
+  private logWebPlatformDiagnostics(): void {
+    const script = `JSON.stringify({
+      secure: window.isSecureContext,
+      idb: typeof indexedDB !== "undefined",
+      origin: location.origin,
+      ua: navigator.userAgent,
+    })`;
+    this.controller.runJavaScript(script, (error: BusinessError, result: string) => {
+      if (error) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, "diagnostics failed: %{public}s", `${error.message}`);
+        return;
+      }
+      hilog.info(LOG_DOMAIN, LOG_TAG, "[paseo] %{public}s", result);
+    });
+  }
+
   build() {
     Column() {
       Web({ src: ENTRY_URL, controller: this.controller })
@@ -78,6 +100,9 @@ struct Index {
         .mixedMode(MixedMode.All)
         .onInterceptRequest((event) => {
           return this.serveRawFile(event);
+        })
+        .onPageEnd(() => {
+          this.logWebPlatformDiagnostics();
         })
         // The web app records audio with getUserMedia; ArkWeb routes those
         // requests through here.
