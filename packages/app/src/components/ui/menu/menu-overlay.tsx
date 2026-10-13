@@ -18,6 +18,7 @@ import {
   View,
   type StyleProp,
   type ViewStyle,
+  type PointerEvent,
 } from "react-native";
 import { Keyframe, runOnJS } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
@@ -236,8 +237,8 @@ export interface AnchoredSurfaceProps {
    * Hover tracking for the surface box, per docs/hover.md: plain View, pointer events, never
    * a Pressable. Web-only by nature, which is all a flyout needs.
    */
-  onPointerEnter?: () => void;
-  onPointerLeave?: () => void;
+  onPointerEnter?: (event: PointerEvent) => void;
+  onPointerLeave?: (event: PointerEvent) => void;
   testID?: string;
   keyboardFocusScope?: KeyboardFocusScope;
   children: ReactElement;

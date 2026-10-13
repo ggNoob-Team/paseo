@@ -176,6 +176,10 @@ its own.
 
 ## Gotchas
 
+- **Hover intent follows a mouse, not a finger.** A touch fires the same enter/leave pair a mouse
+  does — enter on press, leave on release — so a flyout opened by a tap was scheduled for closing
+  inside the same tap and only flashed. `isPointerHover` gates both the trigger and the flyout;
+  a tap opens a page by press, and nothing closes it until a selection or an outside tap.
 - **Released height.** Reanimated's web entering animation leaves an inline height snapshot on
   the surface. `AnchoredSurface` clears it, and a `revision` prop re-clears it when content
   identity changes — a pushed page taller than the one it replaced is clipped without that.

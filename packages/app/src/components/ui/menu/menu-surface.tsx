@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View, useWindowDimensions, type PointerEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { ChevronLeft } from "lucide-react-native";
@@ -23,6 +23,7 @@ import { SPACING, type Theme } from "@/styles/theme";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
 import { MenuPage } from "./menu-item";
+import { isPointerHover } from "./menu-hover";
 import { currentPageId, isSubPageOpen } from "./menu-navigation";
 import { AnchoredSurface, MenuOverlay } from "./menu-overlay";
 import { getMenuSheetBottomPadding } from "./menu-sheet-layout";
@@ -309,7 +310,20 @@ function MenuFlyout({
   const menu = useMenuContext("MenuFlyout");
   const { hoverClose, cancelHoverClose } = useMenuSurface("MenuFlyout");
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
-  const handleHoverOut = useCallback(() => hoverClose(depth), [hoverClose, depth]);
+  const handleHoverIn = useCallback(
+    (event: PointerEvent) => {
+      if (!isPointerHover(event)) return;
+      cancelHoverClose();
+    },
+    [cancelHoverClose],
+  );
+  const handleHoverOut = useCallback(
+    (event: PointerEvent) => {
+      if (!isPointerHover(event)) return;
+      hoverClose(depth);
+    },
+    [hoverClose, depth],
+  );
 
   if (!anchorRef) return null;
 
@@ -327,7 +341,7 @@ function MenuFlyout({
       scrollable={scrollable}
       backdrop={false}
       revision={page.id}
-      onPointerEnter={cancelHoverClose}
+      onPointerEnter={handleHoverIn}
       onPointerLeave={handleHoverOut}
       testID={testID}
     >
