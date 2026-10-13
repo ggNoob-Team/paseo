@@ -20,6 +20,7 @@
         --todo: #38bdf8;
         --plan: #8b93a7;
         --test: #a78bfa;
+        --bug: #f87171;
         --mono: ui-monospace, "SF Mono", Menlo, monospace;
         --cn: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
@@ -69,6 +70,48 @@
         padding: 1px 6px;
         border-radius: 4px;
         word-break: break-all;
+      }
+      .download {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        background: linear-gradient(135deg, rgba(34, 211, 167, 0.1), rgba(56, 189, 248, 0.06));
+        border: 1px solid rgba(34, 211, 167, 0.35);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin: 0 0 26px;
+      }
+      .download-title {
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .download-meta {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--dim);
+        line-height: 1.7;
+        margin-top: 6px;
+        word-break: break-all;
+      }
+      .download-button {
+        flex-shrink: 0;
+        background: var(--live);
+        color: #04231b;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 11px 22px;
+        border-radius: 9px;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: 0.15s;
+      }
+      .download-button:hover {
+        filter: brightness(1.08);
+        transform: translateY(-1px);
       }
       section {
         margin-bottom: 30px;
@@ -170,6 +213,11 @@
         border-color: rgba(139, 147, 167, 0.45);
         background: rgba(139, 147, 167, 0.1);
       }
+      .b-bug {
+        color: var(--bug);
+        border-color: rgba(248, 113, 113, 0.45);
+        background: rgba(248, 113, 113, 0.1);
+      }
       .tabs {
         display: flex;
         gap: 8px;
@@ -216,6 +264,14 @@
       .tab.on.todo {
         background: var(--todo);
         border-color: var(--todo);
+      }
+      .tab.on.backlog {
+        background: var(--wip);
+        border-color: var(--wip);
+      }
+      .tab.on.bug {
+        background: var(--bug);
+        border-color: var(--bug);
       }
       .tab.on .c {
         color: rgba(6, 17, 28, 0.62);
@@ -301,6 +357,13 @@
         .grid {
           grid-template-columns: 1fr;
         }
+        .download {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .download-button {
+          text-align: center;
+        }
         .tab {
           padding: 9px 16px;
           font-size: 13.5px;
@@ -318,21 +381,41 @@
         站点根 <code>index.html</code> 软链至
         <code>/home/workspace/code/paseo/docs/webview/index.html</code
         >，改仓库文件即时生效，无需重新发布。<br />
-        状态口径：<b style="color: var(--live)">已实现</b>=能跑、有入口或后台在运行；<b
-          style="color: var(--plan)"
-          >计划中</b
-        >=需求已整理、待排期；<b style="color: var(--todo)">未开发</b>=明确暂缓或尚无方案。
+        APK 发布：<code>./scripts/publish-android-apk.sh</code> 把
+        <code>~/paseo-artifacts</code> 里最新的包复制成
+        <code>/apk/paseo-latest.apk</code>（软链站点根
+        <code>apk → ~/paseo-artifacts/published</code>）并刷新 <code>latest.json</code>。<br />
+        状态口径：<b style="color: var(--live)">已实现</b>=能跑、有入口或后台在运行；
+        <b style="color: var(--wip)">计划中 / 未开发</b
+        >=待办（计划中=需求已整理、待排期；未开发=明确暂缓或尚无方案）；条目内标「已做」的部分已经落地；<b
+          style="color: var(--bug)"
+          >Bug</b
+        >=已知缺陷，待修。
+      </div>
+
+      <div class="download" id="download">
+        <div>
+          <div class="download-title">
+            下载最新 Android 安装包<span class="badge b-live">APK</span>
+          </div>
+          <div class="download-meta" id="apk-meta">正在读取最新版本信息…</div>
+        </div>
+        <a class="download-button" id="apk-download" href="/apk/paseo-latest.apk" download
+          >下载 APK</a
+        >
       </div>
 
       <div class="tabs" id="tabs">
-        <button class="tab live on" data-tab="done">已实现<span class="c">4</span></button>
-        <button class="tab plan" data-tab="plan">计划中<span class="c">3</span></button>
-        <button class="tab todo" data-tab="todo">未开发<span class="c">4</span></button>
+        <button class="tab backlog on" data-tab="backlog">
+          计划中 / 未开发<span class="c">7</span>
+        </button>
+        <button class="tab live" data-tab="done">已实现<span class="c">6</span></button>
+        <button class="tab bug" data-tab="bugs">Bug<span class="c">2</span></button>
       </div>
 
-      <div class="pane on" id="pane-done">
+      <div class="pane" id="pane-done">
         <section>
-          <h2>已实现 <span class="n">4 项 · fork 相对上游的增量</span></h2>
+          <h2>已实现 <span class="n">6 项 · fork 相对上游的增量</span></h2>
           <div class="grid">
             <div class="card">
               <div class="t">Archify 架构图集成<span class="badge b-live">已实现</span></div>
@@ -346,15 +429,31 @@
                 packages/app/src/panels/archify-panel.tsx
               </div>
             </div>
+
+            <div class="card">
+              <div class="t">Archify 生成体验重构<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                生成运行改由 daemon 托管：先做无模型的确定性预扫描，产出 ≤40KB
+                证据包并按仓库版本缓存；候选锚点确认后，每张图一个后台 worker
+                并行生成、交付即出。阶段、每张图状态与用时、实时动作行、失败原因主动推送，不再轮询；可取消、失败隔离、一个"重跑未完成"入口，worker
+                完成后自动归档。新工作区首次打开自动生成一张架构总览，单张图可删除。
+              </div>
+              <div class="src">
+                packages/server/src/server/archify/{evidence,generation}.ts ·
+                packages/app/src/panels/archify-panel.tsx · 0cabaceb2 · 0d7c34902 · fcab8422d ·
+                35e62255b · bf0101797 · 619094ff9 · 7697c0f38
+              </div>
+            </div>
             <div class="card">
               <div class="t">项目笔记 + 最近工作区<span class="badge b-live">已实现</span></div>
               <div class="d">
-                按项目保存的笔记（原始片段 +
-                后台整理的正文），消息块与头部剪贴板两种捕获入口，笔记列表与详情页；以及最近工作区入口。
+                一条捕获一条笔记：标题 / 正文 /
+                备注独立编辑、删除，按项目浏览，列表显示所属项目；消息块
+                多选与头部剪贴板两种捕获入口，笔记内链接可点开、长按或按钮复制；另含最近工作区入口。
               </div>
               <div class="src">
                 packages/app/src/notes · packages/server/src/server/notes · 9e20414f9 · f77844e67 ·
-                2f884242d
+                2f884242d · 965c796de · 618bda30b
               </div>
             </div>
             <div class="card">
@@ -364,121 +463,89 @@
               </div>
               <div class="src">c83482f8b · 2615294a8</div>
             </div>
+
+            <div class="card">
+              <div class="t">工作区文件上传<span class="badge b-live">已实现</span></div>
+              <div class="d">
+                资源管理器工具栏与目录右键菜单都能把本地文件上传到工作区目录；daemon
+                侧流式写入，重名先确认再替换，上传过程有进度提示。
+              </div>
+              <div class="src">
+                packages/app/src/hooks/use-file-upload.ts · packages/server/src/server/file-upload ·
+                packages/protocol/src/messages.ts · 983f93b65
+              </div>
+            </div>
             <div class="card">
               <div class="t">打包与发布链路<span class="badge b-live">已实现</span></div>
               <div class="d">
                 Android APK 构建脚本与 CI（可裁剪 ABI、缓存、磁盘清理）、未签名 macOS
-                桌面构建、Windows 安装包拆分上传、daemon 包发布到 GitHub Packages、web 客户端部署到
-                fork 的 Cloudflare 账号。
+                桌面构建、Windows 安装包拆分上传、HarmonyOS ArkTS 外壳（web 资源导出 / 校验 / 构建 /
+                hdc 安装）、daemon 包发布到 GitHub Packages、web 客户端部署到 fork 的 Cloudflare
+                账号。
               </div>
               <div class="src">
-                .github/workflows · scripts · 2d2ec8e9a · 1bd56d870 · 6af70fded · 87d2708fe ·
-                3e135931a
+                .github/workflows · scripts · packages/harmony · 2d2ec8e9a · 1bd56d870 · 6af70fded ·
+                87d2708fe · 3e135931a · df4c1bcf6
               </div>
             </div>
           </div>
         </section>
       </div>
 
-      <div class="pane" id="pane-plan">
+      <div class="pane on" id="pane-backlog">
         <section>
-          <h2>计划中 <span class="n">3 项 · 需求已整理，待排期</span></h2>
+          <h2>计划中 / 未开发 <span class="n">7 项 · 待办；标「已做」的部分已落地</span></h2>
           <div class="grid">
             <div class="card req">
-              <div class="t">Archify 生成体验重构<span class="badge b-plan">计划中</span></div>
+              <div class="t">
+                笔记增强<span class="badge b-plan">计划中</span
+                ><span class="badge b-live">部分已做</span>
+              </div>
               <div class="d">
-                把"等 4 分钟黑盒"变成"几十秒有产出、全程看得见"。速度、透明、随时能停是一体的。
+                笔记已经拆成一条捕获一条记录，但还回不到现场 —— 缺锚点跳转与"待处理"。
               </div>
               <div class="rq">
-                <span class="k">痛点</span>
+                <span class="k">已做</span>
                 <div class="v">
                   <ul>
                     <li>
-                      生成要等非常久 —— 实测 3 张图约 4 分钟，耗时全在模型侧（渲染仅 <b>93ms</b>）。
+                      一条捕获 = 一条笔记（标题 / 正文 / 备注），可单独编辑、删除，按项目浏览。
                     </li>
                     <li>
-                      过程不可见 —— 只有一个转圈 + 2.5
-                      秒轮询产物，不知道在读什么、第几张图、第几轮修复。
+                      后台整理的正文整条移除：不再有 AI 合成正文，以及随之而来的 pending / failed
+                      状态。
                     </li>
-                    <li>无法聚焦 —— 系统很大，只想看某一个点/某一部分，没有指定范围的交互。</li>
-                    <li>出图与意图不符 —— 要的那张图没出来，出来的是另一种，且"完全不对"。</li>
+                    <li>笔记里的链接可点击打开、长按或按钮复制。</li>
                   </ul>
                 </div>
               </div>
               <div class="rq">
-                <span class="k">已定方向</span>
+                <span class="k">待做</span>
                 <div class="v">
                   <ul>
                     <li>
-                      确定性预扫描产出"仓库事实清单 + ≤40KB
-                      精简摘要"直接喂模型，砍掉探索轮次（模型想三四次即可出结果）。
-                    </li>
-                    <li>流水线由 daemon 接管，阶段真实上报：扫描 / 出图 / 校验 / 交付。</li>
-                    <li>
-                      多张图并行，以"父任务 + 子 agent"层级呈现，侧边栏不散落；worker
-                      交付后自动归档。
-                    </li>
-                    <li>渐进交付：每张都是成品、按序先出，架构图先可见，其余后台继续。</li>
-                    <li>可取消（停掉未完成项、保留已交付）；失败隔离；一个"重跑未完成"入口。</li>
-                    <li>证据包新鲜度：仓库版本或工作区有变化才重扫，否则复用。</li>
-                    <li>先扫出候选锚点（模块/入口/链路）让你确认，再动笔出图。</li>
-                    <li>进度展示：阶段 + 每张图状态与用时 + 实时动作行 + 失败原因。</li>
-                  </ul>
-                </div>
-              </div>
-              <div class="rq">
-                <span class="k">明确排除 v1</span>
-                <div class="v out">
-                  <ul>
-                    <li>骨架直出 IR、草稿先出后替换、单张独立按钮、换模型重跑。</li>
-                    <li>渲染链路优化（93ms，没有优化价值）、改动产物存储格式。</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div class="card req">
-              <div class="t">笔记增强<span class="badge b-plan">计划中</span></div>
-              <div class="d">现在的笔记是"内容摘要器"，要的是"书签 + 待办收件箱"。</div>
-              <div class="rq">
-                <span class="k">痛点</span>
-                <div class="v">
-                  <ul>
-                    <li>记的是文本内容，不是位置。</li>
-                    <li>
-                      记完回不去 —— <code>source</code> 存了
-                      workspaceId/agentId，界面却从不渲染、点不了，跳转能力为 0。
+                      记完回不去 —— <code>source</code> 存了 workspaceId /
+                      agentId，界面仍不渲染、点不了， 跳转能力为 0。锚点要扩到会话 / 消息 / 文件+行
+                      / 那张图 / PR。
                     </li>
                     <li>
-                      没有"待处理" ——
-                      <code>organizedAt</code>
-                      是"已并入正文"，不是"已处理"，笔记只会堆积，不能当清单清空。
-                    </li>
-                    <li>重心错位在 AI 合成正文，带来失败态、重试、状态行这些复杂度。</li>
-                  </ul>
-                </div>
-              </div>
-              <div class="rq">
-                <span class="k">已定方向</span>
-                <div class="v">
-                  <ul>
-                    <li>
-                      一条笔记 = 锚点（会话 / 消息 / 文件+行 / 那张图 / PR）+
-                      一句自述；文本降级为附件。
+                      没有"待处理"状态 ——
+                      笔记只会堆积，不能当清单清空；收件箱默认只看未处理，处理完勾掉。
                     </li>
                     <li>
                       条目主操作是"回去"，走 <code>navigateToAgent</code> 落到会话，有 messageId
-                      则落到该条消息。
+                      则落到该条消息；文本降级为附件。
                     </li>
-                    <li>新增"待处理"状态，收件箱默认只看未处理，处理完勾掉。</li>
                     <li>会话内一个按钮 → 弹窗预填当前位置，补一句话即存。</li>
-                    <li>AI 正文降级为可选的后台附加，不挡在"记"和"跳"中间。</li>
                     <li>
                       目标闭环：开发 → 反馈的工作台（随手记问题点 → 收工逐条跳回确认 → 汇成反馈）。
                     </li>
                     <li>先做"可跳转 + 待处理"这一件。</li>
                   </ul>
                 </div>
+              </div>
+              <div class="src">
+                965c796de · 618bda30b · packages/app/src/notes · packages/server/src/server/notes
               </div>
             </div>
 
@@ -495,14 +562,26 @@
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
 
-      <div class="pane" id="pane-todo">
-        <section>
-          <h2>未开发 <span class="n">4 项 · 明确暂缓或尚无方案</span></h2>
-          <div class="grid">
+            <div class="card req">
+              <div class="t">会话气泡图<span class="badge b-plan">计划中</span></div>
+              <div class="d">
+                会话列表往下滑进入一个新的气泡视图，把常用的会话摊开，解决项目 /
+                会话变多后列表不好管理的问题。
+              </div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>入口：会话列表界面往下滑，进入任务气泡图。</li>
+                    <li>默认只显示 10 个使用最频繁的气泡；一个气泡 = 一个任务 = 一个会话。</li>
+                    <li>点气泡进入对应会话界面。气泡只做展示，不承载其他操作。</li>
+                    <li>动机：有些会话要留着但不马上用，有些要频繁用，列表难以兼顾。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
             <div class="card">
               <div class="t">Archify 骨架直出 IR<span class="badge b-todo">未开发</span></div>
               <div class="d">
@@ -515,10 +594,20 @@
                 先秒级出一个轻量草稿、随后被完整版替换。当前定为不做——每张图都应是成品，避免图"变形"造成困惑。
               </div>
             </div>
-            <div class="card">
-              <div class="t">单张独立重跑 / 换模型重跑<span class="badge b-todo">未开发</span></div>
-              <div class="d">
-                当前只保留一个"重跑未完成"入口，不做每行的独立按钮，也不支持为单张图换模型重跑。
+            <div class="card req">
+              <div class="t">
+                单张独立重跑 / 换模型重跑<span class="badge b-todo">未开发</span
+                ><span class="badge b-live">部分已做</span>
+              </div>
+              <div class="rq">
+                <span class="k">已做</span>
+                <div class="v">单张图删除已支持。</div>
+              </div>
+              <div class="rq">
+                <span class="k">待做</span>
+                <div class="v">
+                  重跑仍只保留一个"重跑未完成"入口，没有单张重跑按钮，也不支持为单张图换模型重跑。
+                </div>
               </div>
             </div>
             <div class="card">
@@ -529,13 +618,102 @@
         </section>
       </div>
 
+      <div class="pane" id="pane-bugs">
+        <section>
+          <h2>Bug <span class="n">2 项 · 已知缺陷，待修</span></h2>
+          <div class="grid">
+            <div class="card req">
+              <div class="t">
+                手机端会话列表展开 / 收起后跳回顶部<span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                手机端展开会话列表再收起，重新打开时列表总是回到最顶部，之前滑到的位置丢失。
+              </div>
+              <div class="rq">
+                <span class="k">复现</span>
+                <div class="v">手机端打开会话列表 → 往下滑 → 收起列表 → 再展开，列表回到顶部。</div>
+              </div>
+              <div class="rq">
+                <span class="k">疑似原因</span>
+                <div class="v">
+                  <code>SessionsScreen</code> 失焦时直接返回空容器，
+                  <code>SessionsScreenContent</code> 随之卸载，列表滚动位置丢失。见
+                  <code>packages/app/src/screens/sessions-screen.tsx:64</code>。
+                </div>
+              </div>
+            </div>
+
+            <div class="card req">
+              <div class="t">
+                笔记里的链接没用外部浏览器打开<span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                笔记里的链接点开后应该走手机的外部浏览器，目前的表现像是在 App 内打开了。
+              </div>
+              <div class="rq">
+                <span class="k">期望</span>
+                <div class="v">
+                  默认用手机浏览器打开；另加一个偏好项选择打开方式——外部浏览器（默认）或 App 内
+                  webview（内容浏览）。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">涉及位置</span>
+                <div class="v">
+                  笔记链接统一走 <code>openExternalUrl</code>（
+                  <code>packages/app/src/utils/open-external-url.ts</code>），native 下调
+                  <code>Linking.openURL</code>；详情页内联链接见
+                  <code>packages/app/src/components/markdown/renderer.tsx:476</code>，链接列表见
+                  <code>packages/app/src/notes/note-links-section.tsx:54</code
+                  >。需在真机确认实际打开位置。
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <footer>
-        生成时间 <code>2026-10-04 16:48 CST</code> · 仓库 revision <code>2f884242d</code><br />
-        内容来源：本次需求整理（Archify 生成体验 / 笔记增强 / Agent 开发模式）+ fork 相对上游
-        <code>getpaseo/paseo</code> 的提交记录。
+        更新于 <code>2026-10-13 15:45 CST</code> · 仓库 revision <code>484658bcb</code><br />
+        新增页面顶部 <b>APK 下载入口</b>（最新包 + 版本 / 大小 / sha256，发布脚本
+        <code>scripts/publish-android-apk.sh</code>）；修复手机端从 agent 返回侧边栏时未定位到当前
+        workspace。<br />
+        Bug 新增「笔记里的链接没用外部浏览器打开」（含期望：默认外部浏览器，另有外部浏览器 / App 内
+        webview 的偏好项）。早前：Bug Tab 记录「手机端会话列表展开 /
+        收起后跳回顶部」；待办新增「会话气泡图」。
       </footer>
     </div>
     <script>
+      (function () {
+        var meta = document.getElementById("apk-meta");
+        var button = document.getElementById("apk-download");
+        if (!meta || !button) return;
+        fetch("/apk/latest.json?t=" + Date.now(), { cache: "no-store" })
+          .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
+          })
+          .then(function (info) {
+            var version = info.version || "unknown";
+            if (info.downloadPath) {
+              button.setAttribute("href", info.downloadPath + "?v=" + encodeURIComponent(version));
+            }
+            meta.textContent =
+              "版本 " +
+              version +
+              " · " +
+              (info.sizeLabel || "") +
+              " · 发布 " +
+              (info.publishedAt || "") +
+              " · sha256 " +
+              String(info.sha256 || "").slice(0, 12) +
+              "…";
+            if (info.sizeLabel) button.textContent = "下载 APK（" + info.sizeLabel + "）";
+          })
+          .catch(function () {
+            meta.textContent = "版本信息暂时读取失败，点击右侧按钮仍可直接下载最新安装包。";
+          });
+      })();
       (function () {
         var tabs = document.getElementById("tabs");
         if (!tabs) return;
