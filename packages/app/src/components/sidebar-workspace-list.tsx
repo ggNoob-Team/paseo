@@ -94,6 +94,7 @@ import {
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import {
+  SidebarRowNodeRegistrationProvider,
   useSidebarScrollRestore,
   type SidebarScrollView,
 } from "@/components/sidebar/use-sidebar-scroll-restore";
@@ -238,6 +239,8 @@ interface SidebarWorkspaceListProps {
   /** Gesture ref for coordinating with parent gestures (e.g., sidebar close) */
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   dragGestureHostActive?: boolean;
+  /** False while the sidebar panel is off screen on compact layouts. */
+  isPanelActive?: boolean;
 }
 
 interface ProjectHeaderRowProps {
@@ -1905,10 +1908,26 @@ export function SidebarWorkspaceList({
   listHeaderComponent,
   parentGestureRef,
   dragGestureHostActive,
+  isPanelActive = true,
 }: SidebarWorkspaceListProps) {
   const pathname = usePathname();
   const hosts = useHosts();
   const rowItems = useSidebarRowItems();
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  // The row key the sidebar reveals when the panel comes back: the workspace the
+  // reader is inside, which is not always the row they scrolled to.
+  const activeRowKey = useMemo(() => {
+    if (!activeWorkspaceSelection) return null;
+    for (const [workspaceKey, entry] of workspaceEntriesByKey) {
+      if (
+        entry.serverId === activeWorkspaceSelection.serverId &&
+        entry.workspaceId === activeWorkspaceSelection.workspaceId
+      ) {
+        return workspaceKey;
+      }
+    }
+    return null;
+  }, [activeWorkspaceSelection, workspaceEntriesByKey]);
   // Host badge visibility is a lattice, not three competing switches: this gate is the global
   // "off", `shouldShowSidebarHostLabels` is the automatic "there is only one host so it says
   // nothing", and each host's own `badgeDisplay` decides name vs icon vs hidden. Turning the
@@ -1994,6 +2013,8 @@ export function SidebarWorkspaceList({
         scrollScopeKey={scrollScopeKey}
         parentGestureRef={parentGestureRef}
         dragGestureHostActive={dragGestureHostActive}
+        isPanelActive={isPanelActive}
+        activeRowKey={activeRowKey}
       />
     ) : (
       <ProjectModeList
@@ -2020,6 +2041,8 @@ export function SidebarWorkspaceList({
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
+        isPanelActive={isPanelActive}
+        activeRowKey={activeRowKey}
       />
     );
 
@@ -2048,6 +2071,8 @@ function SidebarGroupedModeList({
   scrollScopeKey,
   parentGestureRef,
   dragGestureHostActive,
+  isPanelActive,
+  activeRowKey,
 }: {
   workspaceGroups: SidebarWorkspaceGroup[];
   pinnedGroups: PinnedSidebarGroups;
@@ -2065,6 +2090,8 @@ function SidebarGroupedModeList({
   scrollScopeKey: string;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   dragGestureHostActive?: boolean;
+  isPanelActive: boolean;
+  activeRowKey: string | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
   const pinnedWorkspaces = useMemo(
@@ -2093,6 +2120,8 @@ function SidebarGroupedModeList({
       scrollScopeKey={scrollScopeKey}
       parentGestureRef={parentGestureRef}
       dragGestureHostActive={dragGestureHostActive}
+      isPanelActive={isPanelActive}
+      activeRowKey={activeRowKey}
     />
   );
 }
@@ -2121,6 +2150,8 @@ function ProjectModeList({
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
+  isPanelActive,
+  activeRowKey,
 }: Omit<
   SidebarWorkspaceListProps,
   | "workspaceGroups"
@@ -2141,9 +2172,14 @@ function ProjectModeList({
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
+  isPanelActive: boolean;
+  activeRowKey: string | null;
 }) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
-  const scrollRestore = useSidebarScrollRestore<SidebarScrollView>(scrollScopeKey);
+  const scrollRestore = useSidebarScrollRestore<SidebarScrollView>(scrollScopeKey, {
+    active: isPanelActive,
+    activeRowKey,
+  });
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
   const creatingWorkspaceTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
@@ -2488,38 +2524,40 @@ function ProjectModeList({
   );
 
   return (
-    <View style={styles.container}>
-      {platformIsNative ? (
-        <NestableScrollContainer
-          {...nativeScrollGestureProps}
-          ref={scrollRestore.scrollRef}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-project-workspace-list-scroll"
-          onScroll={scrollRestore.onScroll}
-          onContentSizeChange={scrollRestore.onContentSizeChange}
-          onLayout={scrollRestore.onLayout}
-          scrollEventThrottle={scrollRestore.scrollEventThrottle}
-        >
-          {content}
-        </NestableScrollContainer>
-      ) : (
-        <ScrollView
-          ref={scrollRestore.scrollRef}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-project-workspace-list-scroll"
-          onScroll={scrollRestore.onScroll}
-          onContentSizeChange={scrollRestore.onContentSizeChange}
-          onLayout={scrollRestore.onLayout}
-          scrollEventThrottle={scrollRestore.scrollEventThrottle}
-        >
-          {content}
-        </ScrollView>
-      )}
-    </View>
+    <SidebarRowNodeRegistrationProvider value={scrollRestore.registerRowNode}>
+      <View ref={scrollRestore.viewportRef} style={styles.container} collapsable={false}>
+        {platformIsNative ? (
+          <NestableScrollContainer
+            {...nativeScrollGestureProps}
+            ref={scrollRestore.scrollRef}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            testID="sidebar-project-workspace-list-scroll"
+            onScroll={scrollRestore.onScroll}
+            onContentSizeChange={scrollRestore.onContentSizeChange}
+            onLayout={scrollRestore.onLayout}
+            scrollEventThrottle={scrollRestore.scrollEventThrottle}
+          >
+            {content}
+          </NestableScrollContainer>
+        ) : (
+          <ScrollView
+            ref={scrollRestore.scrollRef}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            testID="sidebar-project-workspace-list-scroll"
+            onScroll={scrollRestore.onScroll}
+            onContentSizeChange={scrollRestore.onContentSizeChange}
+            onLayout={scrollRestore.onLayout}
+            scrollEventThrottle={scrollRestore.scrollEventThrottle}
+          >
+            {content}
+          </ScrollView>
+        )}
+      </View>
+    </SidebarRowNodeRegistrationProvider>
   );
 }
 

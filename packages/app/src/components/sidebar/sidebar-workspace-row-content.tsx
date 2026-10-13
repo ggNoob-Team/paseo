@@ -1,5 +1,6 @@
-import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
+import { memo, useMemo, useCallback, useRef, useState, type ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
+import { useSidebarRowNodeRegistration } from "@/components/sidebar/use-sidebar-scroll-restore";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
@@ -67,6 +68,14 @@ export function SidebarWorkspaceRowFrame({
     () => ({ onPointerEnter: handlePointerEnter, onPointerLeave: handlePointerLeave }),
     [handlePointerEnter, handlePointerLeave],
   );
+  const registerRowNode = useSidebarRowNodeRegistration();
+  const rowNodeToken = useRef<object>({}).current;
+  const handleRowRef = useCallback(
+    (node: View | null) => {
+      registerRowNode?.(workspace.workspaceKey, rowNodeToken, node);
+    },
+    [registerRowNode, rowNodeToken, workspace.workspaceKey],
+  );
 
   return (
     <WorkspaceHoverCard
@@ -75,12 +84,14 @@ export function SidebarWorkspaceRowFrame({
       isDragging={isDragging}
       disabled={contextMenuOpen}
     >
-      {children({
-        isHovered: isHovered && !contextMenuOpen && !isDragging,
-        contextMenuOpen,
-        onContextMenuOpenChange: handleContextMenuOpenChange,
-        hoverHandlers,
-      })}
+      <View ref={handleRowRef} collapsable={false}>
+        {children({
+          isHovered: isHovered && !contextMenuOpen && !isDragging,
+          contextMenuOpen,
+          onContextMenuOpenChange: handleContextMenuOpenChange,
+          hoverHandlers,
+        })}
+      </View>
     </WorkspaceHoverCard>
   );
 }

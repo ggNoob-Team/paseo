@@ -604,6 +604,7 @@ function MobileSidebar({
             onImportSession={handleImportSession}
             parentGestureRef={closeGestureRef}
             dragGestureHostActive={active}
+            isPanelActive={active}
             listHeaderComponent={workspacesSectionHeaderElement}
           />
         )}
@@ -778,6 +779,7 @@ function DesktopSidebar({
             onRefresh={handleRefresh}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
+            isPanelActive={active}
             listHeaderComponent={workspacesSectionHeaderElement}
           />
         )}

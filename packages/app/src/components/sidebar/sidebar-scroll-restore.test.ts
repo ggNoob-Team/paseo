@@ -8,6 +8,7 @@ import {
   recordSidebarScrollContentHeight,
   recordSidebarScrollViewportHeight,
   reduceSidebarScroll,
+  sidebarScrollRevealTarget,
   sidebarScrollRestoreTarget,
   writeSidebarScrollOffset,
   type SidebarScrollRestoreState,
@@ -109,6 +110,16 @@ describe("sidebar scroll restore", () => {
     expect(result.rememberedOffset).toBeNull();
     expect(result.state.pendingOffset).toBeNull();
     expect(sidebarScrollRestoreTarget(result.state)).toBeNull();
+  });
+
+  it("turns a row's current position into the offset that tops the list with it", () => {
+    expect(sidebarScrollRevealTarget({ currentOffset: 400, rowViewportY: 260 })).toBe(660);
+    expect(sidebarScrollRevealTarget({ currentOffset: 400, rowViewportY: -260 })).toBe(140);
+  });
+
+  it("clamps a reveal above the start of the list and skips a row already at the top", () => {
+    expect(sidebarScrollRevealTarget({ currentOffset: 120, rowViewportY: -400 })).toBe(0);
+    expect(sidebarScrollRevealTarget({ currentOffset: 400, rowViewportY: 0 })).toBeNull();
   });
 
   it("remembers a scroll the user made while a restore was pending", () => {

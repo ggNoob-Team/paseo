@@ -117,7 +117,23 @@ export function markSidebarScrollRestoreIssued(
   state: SidebarScrollRestoreState,
   offset: number,
 ): SidebarScrollRestoreState {
-  return { ...state, echoOffset: offset };
+  return { ...state, pendingOffset: null, echoOffset: offset };
+}
+
+/**
+ * Offset that puts a row back at the top of the list. The row reports where its
+ * top currently sits relative to the list's own top, so the same call works
+ * whether the rows above it grew, shrank, or moved while the list was away.
+ * `null` means the row is already where it should be.
+ */
+export function sidebarScrollRevealTarget(input: {
+  currentOffset: number;
+  rowViewportY: number;
+}): number | null {
+  if (Math.abs(input.rowViewportY) <= OFFSET_EPSILON) {
+    return null;
+  }
+  return Math.max(0, input.currentOffset + input.rowViewportY);
 }
 
 export interface SidebarScrollResult {

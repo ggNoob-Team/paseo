@@ -87,6 +87,7 @@ import { DraggableList, type DraggableRenderItemInfo } from "@/components/dragga
 import type { DraggableListDragHandleProps } from "@/components/draggable-list.types";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import {
+  SidebarRowNodeRegistrationProvider,
   useSidebarScrollRestore,
   type SidebarScrollView,
 } from "@/components/sidebar/use-sidebar-scroll-restore";
@@ -143,6 +144,10 @@ interface StatusWorkspaceListProps {
   scrollScopeKey: string;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   dragGestureHostActive?: boolean;
+  /** False while the sidebar panel is off screen on compact layouts. */
+  isPanelActive?: boolean;
+  /** Workspace row of the workspace the reader is inside, revealed when the panel returns. */
+  activeRowKey?: string | null;
 }
 
 export function SidebarStatusWorkspaceList({
@@ -161,8 +166,13 @@ export function SidebarStatusWorkspaceList({
   scrollScopeKey,
   parentGestureRef,
   dragGestureHostActive,
+  isPanelActive = true,
+  activeRowKey = null,
 }: StatusWorkspaceListProps) {
-  const scrollRestore = useSidebarScrollRestore<SidebarScrollView>(scrollScopeKey);
+  const scrollRestore = useSidebarScrollRestore<SidebarScrollView>(scrollScopeKey, {
+    active: isPanelActive,
+    activeRowKey,
+  });
   const collapsedWorkspaceGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedWorkspaceGroupKeys,
   );
@@ -265,37 +275,39 @@ export function SidebarStatusWorkspaceList({
   );
 
   return (
-    <View style={styles.container}>
-      {platformIsNative ? (
-        <NestableScrollContainer
-          ref={scrollRestore.scrollRef}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-status-list-scroll"
-          onScroll={scrollRestore.onScroll}
-          onContentSizeChange={scrollRestore.onContentSizeChange}
-          onLayout={scrollRestore.onLayout}
-          scrollEventThrottle={scrollRestore.scrollEventThrottle}
-        >
-          {content}
-        </NestableScrollContainer>
-      ) : (
-        <ScrollView
-          ref={scrollRestore.scrollRef}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-status-list-scroll"
-          onScroll={scrollRestore.onScroll}
-          onContentSizeChange={scrollRestore.onContentSizeChange}
-          onLayout={scrollRestore.onLayout}
-          scrollEventThrottle={scrollRestore.scrollEventThrottle}
-        >
-          {content}
-        </ScrollView>
-      )}
-    </View>
+    <SidebarRowNodeRegistrationProvider value={scrollRestore.registerRowNode}>
+      <View ref={scrollRestore.viewportRef} style={styles.container} collapsable={false}>
+        {platformIsNative ? (
+          <NestableScrollContainer
+            ref={scrollRestore.scrollRef}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            testID="sidebar-status-list-scroll"
+            onScroll={scrollRestore.onScroll}
+            onContentSizeChange={scrollRestore.onContentSizeChange}
+            onLayout={scrollRestore.onLayout}
+            scrollEventThrottle={scrollRestore.scrollEventThrottle}
+          >
+            {content}
+          </NestableScrollContainer>
+        ) : (
+          <ScrollView
+            ref={scrollRestore.scrollRef}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            testID="sidebar-status-list-scroll"
+            onScroll={scrollRestore.onScroll}
+            onContentSizeChange={scrollRestore.onContentSizeChange}
+            onLayout={scrollRestore.onLayout}
+            scrollEventThrottle={scrollRestore.scrollEventThrottle}
+          >
+            {content}
+          </ScrollView>
+        )}
+      </View>
+    </SidebarRowNodeRegistrationProvider>
   );
 }
 
