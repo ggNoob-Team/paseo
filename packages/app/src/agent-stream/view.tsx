@@ -18,6 +18,7 @@ import {
   Text,
   Pressable,
   Platform,
+  type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -68,6 +69,7 @@ import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./mode
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import { resolveChatOutlineRailLayout } from "@/agent-stream/chat-outline/model";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
@@ -322,6 +324,41 @@ const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
 
 function resolveBottomOverlayControlOffset(clearance: number | undefined): number {
   return Math.max(16, clearance ?? 0);
+}
+
+/** Renders the rail only when the pane gave it room; the hook decides the room. */
+function ChatOutlineRailSlot({
+  layout,
+  ...railProps
+}: { layout: { visible: boolean; compact: boolean } } & ComponentProps<typeof ChatOutlineRail>) {
+  if (!layout.visible) return null;
+  return <ChatOutlineRail {...railProps} compact={layout.compact} />;
+}
+
+/**
+ * Tracks the pane's width and reports where the prompt rail may sit. Kept out of
+ * the stream component so its own layout rules stay in one small place.
+ */
+function useChatOutlineRailLayout(input: {
+  supportsOutline: boolean;
+  enabled: boolean;
+  promptCount: number;
+}): {
+  visible: boolean;
+  compact: boolean;
+  leadingInset: number;
+  onLayout: (event: LayoutChangeEvent) => void;
+} {
+  const [paneWidth, setPaneWidth] = useState(0);
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setPaneWidth(event.nativeEvent.layout.width);
+  }, []);
+  const layout = resolveChatOutlineRailLayout({
+    supportsRail: isWeb && input.supportsOutline && input.enabled,
+    paneWidth,
+    promptCount: input.promptCount,
+  });
+  return { ...layout, onLayout };
 }
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
@@ -629,6 +666,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onJumpError: handleTimelineHistoryLoadError,
       visibleMessageIds,
       revealLoadedMessage: revealLoadedHistory,
+    });
+    const chatOutlineRailLayout = useChatOutlineRailLayout({
+      supportsOutline: supportsChatOutline,
+      enabled: chatOutlineEnabled,
+      promptCount: chatOutline.prompts.length,
     });
 
     useImperativeHandle(
@@ -1114,49 +1156,57 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             workspaceId={context.workspaceId}
             agentId={agentId}
           >
-            <AssistantSelectionCopySurface style={stylesheet.container}>
-              <MessageOuterSpacingProvider disableOuterSpacing>
-                {streamRenderStrategy.render({
-                  agentId,
-                  segments: renderModel.segments,
-                  historyRowRevision,
-                  liveHeadRowRevision: expandedToolCallGroupIds,
-                  boundary,
-                  renderers,
-                  listEmptyComponent,
-                  viewportRef,
-                  routeBottomAnchorRequest,
-                  isAuthoritativeHistoryReady,
-                  onNearBottomChange: setIsNearBottom,
-                  onReadingPositionChange: handleReadingPositionChange,
-                  onNearHistoryStart: loadOlder,
-                  isLoadingOlderHistory: isLoadingOlder,
-                  hasOlderHistory: hasOlder,
-                  olderHistoryProgressKey: progressKey,
-                  scrollEnabled: streamScrollEnabled,
-                  listStyle: stylesheet.list,
-                  baseListContentContainerStyle: stylesheet.listContentContainer,
-                  forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
-                  contentMaxWidth,
-                  imageContext: { serverId: resolvedServerId, workspaceRoot },
-                })}
-              </MessageOuterSpacingProvider>
-              <ChatOutlineRail
-                prompts={chatOutline.prompts}
-                activePrompt={chatOutline.activePrompt}
-                onJumpToPrompt={chatOutline.jumpToPrompt}
-              />
-              {(!isNearBottom || isTimelineDetached) && (
-                <ScrollToBottomIndicator
-                  containerStyle={scrollToBottomContainerStyle}
-                  buttonStyle={stylesheet.scrollToBottomButton}
-                  iconColor={stylesheet.scrollToBottomIcon.color}
-                  entering={scrollIndicatorFadeIn}
-                  exiting={scrollIndicatorFadeOut}
-                  onPress={scrollToBottom}
+            <View
+              style={stylesheet.streamBody}
+              onLayout={chatOutlineRailLayout.onLayout}
+              collapsable={false}
+            >
+              <AssistantSelectionCopySurface style={stylesheet.container}>
+                <MessageOuterSpacingProvider disableOuterSpacing>
+                  {streamRenderStrategy.render({
+                    agentId,
+                    segments: renderModel.segments,
+                    historyRowRevision,
+                    liveHeadRowRevision: expandedToolCallGroupIds,
+                    boundary,
+                    renderers,
+                    listEmptyComponent,
+                    viewportRef,
+                    routeBottomAnchorRequest,
+                    isAuthoritativeHistoryReady,
+                    onNearBottomChange: setIsNearBottom,
+                    onReadingPositionChange: handleReadingPositionChange,
+                    onNearHistoryStart: loadOlder,
+                    isLoadingOlderHistory: isLoadingOlder,
+                    hasOlderHistory: hasOlder,
+                    olderHistoryProgressKey: progressKey,
+                    scrollEnabled: streamScrollEnabled,
+                    listStyle: stylesheet.list,
+                    baseListContentContainerStyle: stylesheet.listContentContainer,
+                    forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+                    contentMaxWidth,
+                    contentLeadingInset: chatOutlineRailLayout.leadingInset,
+                    imageContext: { serverId: resolvedServerId, workspaceRoot },
+                  })}
+                </MessageOuterSpacingProvider>
+                <ChatOutlineRailSlot
+                  layout={chatOutlineRailLayout}
+                  prompts={chatOutline.prompts}
+                  activePrompt={chatOutline.activePrompt}
+                  onJumpToPrompt={chatOutline.jumpToPrompt}
                 />
-              )}
-            </AssistantSelectionCopySurface>
+                {(!isNearBottom || isTimelineDetached) && (
+                  <ScrollToBottomIndicator
+                    containerStyle={scrollToBottomContainerStyle}
+                    buttonStyle={stylesheet.scrollToBottomButton}
+                    iconColor={stylesheet.scrollToBottomIcon.color}
+                    entering={scrollIndicatorFadeIn}
+                    exiting={scrollIndicatorFadeOut}
+                    onPress={scrollToBottom}
+                  />
+                )}
+              </AssistantSelectionCopySurface>
+            </View>
           </NotesCaptureProvider>
         </ToolCallSheetProvider>
       </ChatFind>
@@ -1659,6 +1709,10 @@ function PermissionRequestCard({
 }
 
 const stylesheet = StyleSheet.create((theme) => ({
+  streamBody: {
+    flex: 1,
+    minHeight: 0,
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface0,

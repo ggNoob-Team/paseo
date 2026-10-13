@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_OUTLINE_INSET_PX,
   createActivePromptPublisher,
+  resolveChatOutlineRailLayout,
   shouldAcceptPromptIndexEpoch,
   promptTickMagnification,
   resolveActivePromptSeq,
@@ -68,5 +70,36 @@ describe("createActivePromptPublisher", () => {
 
     expect(notifications).toBe(2);
     expect(publisher.getActiveSeq()).toBeNull();
+  });
+});
+
+describe("resolveChatOutlineRailLayout", () => {
+  it("stays away from a phone-wide pane", () => {
+    expect(
+      resolveChatOutlineRailLayout({ supportsRail: true, paneWidth: 600, promptCount: 4 }),
+    ).toEqual({ visible: false, compact: true, leadingInset: 0 });
+  });
+
+  it("reserves a gutter for the rail on a tablet-wide pane", () => {
+    expect(
+      resolveChatOutlineRailLayout({ supportsRail: true, paneWidth: 700, promptCount: 4 }),
+    ).toEqual({ visible: true, compact: true, leadingInset: CHAT_OUTLINE_INSET_PX });
+  });
+
+  it("uses the transcript's own gutter once the pane is wide", () => {
+    expect(
+      resolveChatOutlineRailLayout({ supportsRail: true, paneWidth: 1_200, promptCount: 4 }),
+    ).toEqual({ visible: true, compact: false, leadingInset: 0 });
+  });
+
+  it("needs a host that indexes prompts and more than one prompt", () => {
+    expect(
+      resolveChatOutlineRailLayout({ supportsRail: false, paneWidth: 1_200, promptCount: 4 })
+        .visible,
+    ).toBe(false);
+    expect(
+      resolveChatOutlineRailLayout({ supportsRail: true, paneWidth: 1_200, promptCount: 1 })
+        .visible,
+    ).toBe(false);
   });
 });

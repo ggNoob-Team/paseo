@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useState, useSyncExternalStore }
 import { Pressable, Text, View, type PointerEvent as RNPointerEvent } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useReducedMotion } from "react-native-reanimated";
-import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { createChatOutlineHoverIntent } from "./hover-intent";
 import { promptTickMagnification } from "./model";
@@ -12,7 +11,6 @@ import type { ChatOutlineRailProps } from "./rail";
 // magnifying a slot must not move the box the pointer is resting on. See docs/hover.md.
 const RAIL_WIDTH = 36;
 const SLOT_HEIGHT = 8;
-const MIN_PANEL_WIDTH = 918;
 const RESTING_PILL_HEIGHT = 2;
 const MAGNIFIED_PILL_HEIGHT = 4;
 const RESTING_PILL_WIDTH = 10;
@@ -26,12 +24,12 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
   prompts,
   activePrompt,
   onJumpToPrompt,
+  compact = false,
 }: ChatOutlineRailProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const activeSeq = useSyncExternalStore(activePrompt.subscribe, activePrompt.getActiveSeq);
   const prefersReducedMotion = useReducedMotion();
-  const { onLayout, isBelow: isPanelNarrow } = useContainerWidthBelow(MIN_PANEL_WIDTH);
 
   const hoverIntent = useMemo(
     () =>
@@ -61,8 +59,8 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
   const handlePointerLeaveRail = useCallback(() => hoverIntent.leave(), [hoverIntent]);
   useEffect(() => () => hoverIntent.dispose(), [hoverIntent]);
   useEffect(() => {
-    if (isPanelNarrow) hoverIntent.leave();
-  }, [hoverIntent, isPanelNarrow]);
+    if (compact) hoverIntent.leave();
+  }, [compact, hoverIntent]);
   const handleFocusChange = useCallback((index: number, focused: boolean) => {
     setFocusedIndex((current) => {
       if (focused) return index;
@@ -71,43 +69,42 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
   }, []);
 
   // The pointer owns the magnified band while it is on the rail; keyboard focus drives the
-  // same band and the same preview once the pointer leaves.
-  const attentionIndex = hoveredIndex ?? focusedIndex;
+  // same band and the same preview once the pointer leaves. A compact rail sits in the
+  // transcript's reserved gutter, where a magnified band or a preview would cover text.
+  const attentionIndex = compact ? null : (hoveredIndex ?? focusedIndex);
 
   if (prompts.length < 2) return null;
 
   return (
-    <View style={styles.panelMeasure} pointerEvents="box-none" onLayout={onLayout}>
-      {isPanelNarrow ? null : (
-        <View
-          style={styles.rail}
-          role="tablist"
-          testID="chat-outline-rail"
-          onPointerEnter={handlePointerEnterRail}
-          onPointerMove={handlePointerMoveRail}
-          onPointerLeave={handlePointerLeaveRail}
-        >
-          {prompts.map((prompt, index) => (
-            <ChatOutlineTick
-              key={prompt.seq}
-              index={index}
-              seq={prompt.seq}
-              preview={prompt.preview}
-              label={`${index + 1} of ${prompts.length}: ${prompt.preview}`}
-              isActive={prompt.seq === activeSeq}
-              hasAttention={index === attentionIndex}
-              magnification={
-                prefersReducedMotion || attentionIndex === null
-                  ? 0
-                  : promptTickMagnification(index - attentionIndex)
-              }
-              onHover={handlePointerEnterTick}
-              onFocusChange={handleFocusChange}
-              onJumpToPrompt={onJumpToPrompt}
-            />
-          ))}
-        </View>
-      )}
+    <View style={styles.panelMeasure} pointerEvents="box-none">
+      <View
+        style={styles.rail}
+        role="tablist"
+        testID="chat-outline-rail"
+        onPointerEnter={handlePointerEnterRail}
+        onPointerMove={handlePointerMoveRail}
+        onPointerLeave={handlePointerLeaveRail}
+      >
+        {prompts.map((prompt, index) => (
+          <ChatOutlineTick
+            key={prompt.seq}
+            index={index}
+            seq={prompt.seq}
+            preview={prompt.preview}
+            label={`${index + 1} of ${prompts.length}: ${prompt.preview}`}
+            isActive={prompt.seq === activeSeq}
+            hasAttention={index === attentionIndex}
+            magnification={
+              prefersReducedMotion || attentionIndex === null
+                ? 0
+                : promptTickMagnification(index - attentionIndex)
+            }
+            onHover={handlePointerEnterTick}
+            onFocusChange={handleFocusChange}
+            onJumpToPrompt={onJumpToPrompt}
+          />
+        ))}
+      </View>
     </View>
   );
 });

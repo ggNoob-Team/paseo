@@ -95,6 +95,11 @@ export interface StreamRenderInput {
   forwardListContentContainerStyle: StyleProp<ViewStyle>;
   // The chat column's max width. The web viewport estimates unmeasured row heights with it.
   contentMaxWidth: number;
+  /**
+   * Extra padding before the transcript, so a pane narrower than the rail's
+   * comfortable width still has room for it. Web viewports only.
+   */
+  contentLeadingInset?: number;
   imageContext?: AssistantImageContext;
 }
 

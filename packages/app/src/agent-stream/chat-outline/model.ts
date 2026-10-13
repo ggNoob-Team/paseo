@@ -83,3 +83,35 @@ export function createActivePromptPublisher(): ActivePromptPublisher {
     },
   };
 }
+
+/**
+ * Pane widths that decide whether the outline can sit beside the transcript.
+ * Below `CHAT_OUTLINE_MIN_PANE_WIDTH` the pane is a phone; from
+ * `CHAT_OUTLINE_FULL_PANE_WIDTH` the transcript's own gutter fits the rail, and
+ * in between the transcript reserves room for it.
+ */
+export const CHAT_OUTLINE_MIN_PANE_WIDTH = 640;
+export const CHAT_OUTLINE_FULL_PANE_WIDTH = 918;
+export const CHAT_OUTLINE_INSET_PX = 48;
+
+export interface ChatOutlineRailLayout {
+  visible: boolean;
+  compact: boolean;
+  leadingInset: number;
+}
+
+/**
+ * Where the prompt rail may sit: a web affordance, shown from tablet width up.
+ * A compact rail has no pointer, so it drops magnification and previews and
+ * lives in the gutter the transcript reserves with `leadingInset`.
+ */
+export function resolveChatOutlineRailLayout(input: {
+  supportsRail: boolean;
+  paneWidth: number;
+  promptCount: number;
+}): ChatOutlineRailLayout {
+  const visible =
+    input.supportsRail && input.paneWidth >= CHAT_OUTLINE_MIN_PANE_WIDTH && input.promptCount > 1;
+  const compact = input.paneWidth < CHAT_OUTLINE_FULL_PANE_WIDTH;
+  return { visible, compact, leadingInset: visible && compact ? CHAT_OUTLINE_INSET_PX : 0 };
+}
