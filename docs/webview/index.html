@@ -476,7 +476,7 @@
           计划中 / 未开发<span class="c">13</span>
         </button>
         <button class="tab live" data-tab="done">已实现<span class="c">6</span></button>
-        <button class="tab bug" data-tab="bugs">Bug<span class="c">4</span></button>
+        <button class="tab bug" data-tab="bugs">Bug<span class="c">5</span></button>
         <button class="tab download" data-tab="download">下载<span class="c">APK</span></button>
       </div>
 
@@ -889,7 +889,7 @@
 
       <div class="pane" id="pane-bugs">
         <section>
-          <h2>Bug <span class="n">4 项 · 已知缺陷，待修</span></h2>
+          <h2>Bug <span class="n">5 项 · 已知缺陷，待修</span></h2>
           <div class="grid">
             <div class="card req" data-tag="session">
               <div class="t">
@@ -1044,12 +1044,42 @@
               </div>
               <div class="src">重新发布：./scripts/publish-android-apk.sh</div>
             </div>
+            <div class="card req">
+              <div class="t">笔记界面没有返回按钮<span class="badge b-bug">Bug</span></div>
+              <div class="d">
+                进入笔记列表或笔记详情后，界面顶部没有返回按钮，只能依赖系统返回手势 /
+                返回键或侧边栏，路径不明确。
+              </div>
+              <div class="rq">
+                <span class="k">复现</span>
+                <div class="v">
+                  打开笔记界面（列表或详情） → 顶部没有返回入口 → 无法用界面按钮回到进入前的界面。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">期望</span>
+                <div class="v">顶部提供明确的返回按钮，返回到进入前的界面（侧边栏 / 工作区）。</div>
+              </div>
+              <div class="rq">
+                <span class="k">疑似原因</span>
+                <div class="v">
+                  笔记列表与详情都用 <code>StackScreenHeader</code>（
+                  <code>packages/app/src/screens/notes-screen.tsx:62</code>、
+                  <code>packages/app/src/screens/note-detail-screen.tsx:49</code>）； 该组件只在
+                  <code>isCompact</code> 时渲染 <code>BackHeader</code>，宽屏走
+                  <code>MenuHeader</code>（无返回）。需确认出问题的平台与
+                  <code>useIsCompactFormFactor()</code> 的实际取值，以及
+                  <code>router.canGoBack()</code> / <code>BackHeader</code> 是否正常。
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
 
       <footer>
-        更新于 <code>2026-10-13 15:52 CST</code> · 仓库 revision <code>bdd8c9ab7</code><br />
+        更新于 <code>2026-10-13 16:04 CST</code> · 仓库 revision <code>bf14b5c7d</code><br />
+        Bug 新增「笔记界面没有返回按钮」（4 → 5 项）。<br />
         门户新增<b>功能域标签分类</b>（笔记 / 任务 / 协作 / 会话 / 工作区 / 语音 / Archify /
         构建发布 / Agent）与标签筛选栏；记录本会话的企业化需求 6
         条（个人笔记收件箱、团队任务与需求录入、 任务流转、任务 ↔ 会话多对多、进度留痕与 AI
