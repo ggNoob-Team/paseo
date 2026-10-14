@@ -144,6 +144,37 @@ To bake a daemon endpoint into the bundle (see below):
 PASEO_HARMONY_DAEMON=localhost:6767 npm run harmony:build
 ```
 
+## Building in DevEco Studio
+
+DevEco Studio has no Linux build, and its SDK and emulator both live behind a
+Huawei account inside the IDE. On Windows or Mac, build there instead of with
+the command-line tools:
+
+```bash
+npm run harmony:web      # refresh rawfile/; the export copies it as-is
+npm run harmony:export   # → packages/harmony/build/paseo-harmony-<version>.zip
+```
+
+The script copies the project, adds the hvigor wrapper a DevEco project carries,
+and rewrites **only the copy**: `runtimeOS: "HarmonyOS"` (what AGC automatic
+signing requires), `compatibleSdkVersion: 12` so any emulator image from API 12
+up can install it, and `compileSdkVersion`/`targetSdkVersion` from `--api`
+(default `26.0.0`). Caches, `build/`, and signing material are stripped. The repo
+copy stays on `OpenHarmony` for the local smoke build.
+
+Then, on the DevEco machine:
+
+1. Unzip it and open the folder with **File > Open**.
+2. **File > Project Structure > Signing Configs**, tick **Automatically generate
+   signature** and log in with a Huawei account. That creates the AGC app
+   (`sh.paseo.app`), the certificate, and a debug profile covering the emulator's
+   UDID — no manual AGC work.
+3. Run `entry` — the signed hap lands in
+   `entry/build/default/outputs/default/`.
+
+If SDK Manager has no API 26, re-export with the highest it does have:
+`npm run harmony:export -- --api 20`.
+
 ## Signing
 
 There is no "install from unknown sources" switch. A hap installs only when its
@@ -205,12 +236,16 @@ The `hdc` binary ships in the SDK toolchains, not in `command-line-tools/bin`.
 ### Emulator (Windows)
 
 WSL reaches a DevEco Studio emulator on the same Windows machine when
-`.wslconfig` sets `networkingMode=mirrored`: the SDK's Linux `hdc` lists it as
+`.wslconfig` sets `networkingMode=mirrored` (run `wsl --shutdown` from Windows
+after the edit, then relaunch the distro): the SDK's Linux `hdc` lists it as
 `127.0.0.1:5555` on its own, and `npm run harmony:install` installs to it with
-no `tconn` step. The HarmonyOS 7.0.0 emulator image also installs unsigned
-haps, so emulator debugging needs no AGC material — `npm run harmony:build
---skip-sign`, then `npm run harmony:install`. Physical devices need a profile
-that covers them: a debug profile with their UDID, or a release profile.
+no `tconn` step. Building happens here too — this is the route that does not
+need [an export](#building-in-deveco-studio).
+
+The HarmonyOS 7.0.0 emulator image also installs unsigned haps, so emulator
+debugging needs no AGC material — `npm run harmony:build --skip-sign`, then
+`npm run harmony:install`. Physical devices need a profile that covers them: a
+debug profile with their UDID, or a release profile.
 
 ## Connecting to the daemon
 
@@ -221,7 +256,9 @@ when you press Connect:
   enter `localhost:6767` in the app. `localhost` is a potentially trustworthy
   origin, so the secure `paseo://app` document is not blocked from opening an
   insecure WebSocket to it. The forward survives hap reinstalls but not an
-  emulator or hdc server restart; re-run it after either.
+  emulator or hdc server restart; re-run it after either. It terminates on the
+  machine running the hdc server, so a daemon that runs elsewhere needs an
+  extra tunnel (e.g. `ssh -L`) or a pairing link.
 - **LAN address.** `PASEO_LISTEN=0.0.0.0:6767`, then enter `192.168.1.77:6767`.
   A `ws://` socket to a non-loopback host from a secure origin is mixed content
   and may be refused; prefer the reverse forward.
@@ -230,7 +267,8 @@ when you press Connect:
 
 Pairing links work as they do on the web: the welcome screen offers a direct
 connection and a paste-a-link field. Scanning a pairing QR is native-only and
-is not wired up in the shell.
+is not wired up in the shell; `npm run cli -- pair` prints the daemon's QR code
+and link to paste.
 
 ## Known gaps
 
@@ -242,6 +280,10 @@ is not wired up in the shell.
   physical phone is unverified, including whether it accepts a hap built from
   the public OpenHarmony SDK, `window.isSecureContext`, IndexedDB, the mic
   permission prompt, and the file picker.
+- The shell logs the page's `secure`, `idb`, `origin`, and `ua` facts on every
+  page load (hilog tag `PaseoHarmony`); read them in DevEco Studio's Log panel
+  or with `hdc shell hilog` to check `window.isSecureContext` and IndexedDB on a
+  device without a debugger.
 - Downloads are not implemented. `onDownloadStart` only logs; there is no
   `@ohos.request` handler writing into a user-visible directory.
 - `entry/oh-package.json5` pins a placeholder `1.0.0` because hvigor's SemVer

@@ -10,6 +10,7 @@ sync_prebuild=false
 skip_deps=false
 use_daemon=true
 install_apk=false
+publish_apk=true
 workers=""
 heap_mb=""
 gradle_zip=""
@@ -35,6 +36,8 @@ Options:
   --skip-deps             Skip npm run build:app-deps
   --no-daemon             Disable the Gradle daemon
   --install               Install the APK after building
+  --publish               Publish the APK to the download page (default)
+  --no-publish            Keep the APK local; skip the download page
   -h, --help              Show this help
 EOF
 }
@@ -93,6 +96,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --install)
       install_apk=true
+      shift
+      ;;
+    --publish)
+      publish_apk=true
+      shift
+      ;;
+    --no-publish)
+      publish_apk=false
       shift
       ;;
     -h|--help)
@@ -300,4 +311,17 @@ log "build time: $((elapsed_seconds / 60))m $((elapsed_seconds % 60))s"
 if [[ "$install_apk" == true ]]; then
   log "installing APK"
   adb install -r "$apk_path"
+fi
+
+if [[ "$publish_apk" == true ]]; then
+  publish_script="$repo_root/scripts/publish-android-apk.sh"
+  publish_web_root="${PASEO_APK_WEB_ROOT:-/www/wwwroot/paseo.zxyz.app}"
+  publish_site="${PASEO_APK_SITE_URL:-https://paseo.zxyz.app}"
+  if [[ -x "$publish_script" && -d "$publish_web_root" ]]; then
+    log "publishing APK to $publish_site/#download"
+    "$publish_script" --apk "$apk_path"
+  else
+    log "publish skipped (no site at $publish_web_root); publish later with:"
+    log "  $publish_script --apk $apk_path"
+  fi
 fi

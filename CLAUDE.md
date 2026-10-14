@@ -60,7 +60,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md)       | Isolated in-process daemon test harness                                                                                        |
 | [docs/browser-capture-harness.md](docs/browser-capture-harness.md)   | Real-Electron browser screenshot harness and compositor-surface gotcha                                                         |
 | [docs/android.md](docs/android.md)                                   | App variants, local/cloud builds, EAS workflows, version codes, F-Droid source builds and store metadata                       |
-| [docs/harmonyos.md](docs/harmonyos.md)                               | HarmonyOS packaging: ArkTS web shell, toolchain, signing, install, connection, known gaps                                      |
+| [docs/harmonyos.md](docs/harmonyos.md)                               | HarmonyOS packaging: ArkTS web shell, toolchain, DevEco export, signing, install, connection, known gaps                       |
 | [docs/docker.md](docs/docker.md)                                     | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                                   | Release playbook, draft releases, completion checklist                                                                         |
 | [docs/manual-packaging.md](docs/manual-packaging.md)                 | Manual Actions triggers for Windows, macOS, APK, and web packaging                                                             |

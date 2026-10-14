@@ -136,6 +136,8 @@ The output path is printed at the end of the run. The default path is:
 $HOME/paseo-artifacts/paseo-<version>-android-<abi>.apk
 ```
 
+Every local build publishes itself to the fork's download page. The new APK replaces `https://paseo.zxyz.app/apk/paseo-latest.apk`, and `/apk/latest.json` gets its version, size, sha256, and timestamps; `https://paseo.zxyz.app/#download` renders that JSON. Pass `--no-publish` for a local-only build, or run `./scripts/publish-android-apk.sh` to publish an older artifact later. When the site root (`/www/wwwroot/paseo.zxyz.app`, override with `PASEO_APK_WEB_ROOT`) is missing, the build logs the publish command instead of failing.
+
 ## Web
 
 Use **Deploy App** for the browser app. It deploys the current `packages/app` web export to the fork's Cloudflare Pages project `paseo-app`.
