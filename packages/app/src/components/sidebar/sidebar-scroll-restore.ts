@@ -136,6 +136,22 @@ export function sidebarScrollRevealTarget(input: {
   return Math.max(0, input.currentOffset + input.rowViewportY);
 }
 
+/**
+ * Whether any part of the row is inside the viewport. A row the reader can see is
+ * the position they left the list at, so the reveal leaves it alone; only a row
+ * that scrolled out of view while the panel was away moves the list.
+ */
+export function sidebarScrollRowInView(input: {
+  rowViewportY: number;
+  rowHeight: number;
+  viewportHeight: number;
+}): boolean {
+  const { rowViewportY, rowHeight, viewportHeight } = input;
+  return (
+    rowViewportY + rowHeight > OFFSET_EPSILON && rowViewportY < viewportHeight - OFFSET_EPSILON
+  );
+}
+
 export interface SidebarScrollResult {
   state: SidebarScrollRestoreState;
   /** Offset worth remembering, or null for an echo of our own scroll. */

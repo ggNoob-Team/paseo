@@ -9,6 +9,7 @@ import {
   recordSidebarScrollViewportHeight,
   reduceSidebarScroll,
   sidebarScrollRevealTarget,
+  sidebarScrollRowInView,
   sidebarScrollRestoreTarget,
   writeSidebarScrollOffset,
   type SidebarScrollRestoreState,
@@ -120,6 +121,28 @@ describe("sidebar scroll restore", () => {
   it("clamps a reveal above the start of the list and skips a row already at the top", () => {
     expect(sidebarScrollRevealTarget({ currentOffset: 120, rowViewportY: -400 })).toBe(0);
     expect(sidebarScrollRevealTarget({ currentOffset: 400, rowViewportY: 0 })).toBeNull();
+  });
+
+  it("counts a row the viewport shows at all as in view", () => {
+    expect(sidebarScrollRowInView({ rowViewportY: 300, rowHeight: 64, viewportHeight: 600 })).toBe(
+      true,
+    );
+    // Hanging off the top edge by 20px still leaves the row on screen.
+    expect(sidebarScrollRowInView({ rowViewportY: -20, rowHeight: 64, viewportHeight: 600 })).toBe(
+      true,
+    );
+    expect(sidebarScrollRowInView({ rowViewportY: 560, rowHeight: 64, viewportHeight: 600 })).toBe(
+      true,
+    );
+  });
+
+  it("counts a row past either edge as out of view", () => {
+    expect(sidebarScrollRowInView({ rowViewportY: -64, rowHeight: 64, viewportHeight: 600 })).toBe(
+      false,
+    );
+    expect(sidebarScrollRowInView({ rowViewportY: 600, rowHeight: 64, viewportHeight: 600 })).toBe(
+      false,
+    );
   });
 
   it("remembers a scroll the user made while a restore was pending", () => {

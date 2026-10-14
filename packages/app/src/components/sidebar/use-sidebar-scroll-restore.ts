@@ -14,8 +14,9 @@ import {
   recordSidebarScrollContentHeight,
   recordSidebarScrollViewportHeight,
   reduceSidebarScroll,
-  sidebarScrollRevealTarget,
   sidebarScrollRestoreTarget,
+  sidebarScrollRevealTarget,
+  sidebarScrollRowInView,
   writeSidebarScrollOffset,
   type SidebarScrollRestoreState,
 } from "./sidebar-scroll-restore";
@@ -30,6 +31,12 @@ export type SidebarScrollView = GestureScrollView;
 /** Bounded wait for the panel to lay out and for the row to render itself. */
 const REVEAL_MAX_ATTEMPTS = 20;
 const REVEAL_RETRY_MS = 32;
+
+/**
+ * Bounded correction window after a reveal lands. Each pass re-measures, so one or
+ * two are normal and the cap is only there to stop chasing a list that keeps moving.
+ */
+const REVEAL_MAX_CORRECTIONS = 6;
 
 /** The slice of a scroll view's imperative surface this hook needs. */
 export interface SidebarScrollHandle {
@@ -62,11 +69,14 @@ export const SidebarRowNodeRegistrationProvider = SidebarRowNodeRegistrationCont
 
 export interface SidebarScrollRestoreOptions {
   /**
-   * Whether the list's panel is on screen. A reveal waits for the panel: a list
-   * that is hidden cannot be measured on every platform.
+   * Whether the list's panel is on screen. A row is only revealed for a panel that
+   * comes back on screen: a hidden list cannot be measured on every platform.
    */
   active?: boolean;
-  /** The workspace row the reader is inside; it is what a reveal tops the list with. */
+  /**
+   * The workspace row the reader is inside. It is what the list scrolls to when that
+   * row is off screen; a row the reader can already see keeps its place.
+   */
   activeRowKey?: string | null;
 }
 
@@ -185,10 +195,16 @@ export function useSidebarScrollRestore<T extends SidebarScrollHandle>(
   );
 
   /**
-   * A reveal waits for the panel and for the row, then scrolls the row to the
-   * top of the list. Rows that are not rendered yet (a collapsed project, a
-   * filter, a list still measuring) end the wait; the stored offset then owns
-   * the position, which is what a plain re-open wants anyway.
+   * Coming back on screen, the list stays where the user left it. The reveal exists
+   * for the one row that is not on screen: an active workspace the reader cannot see
+   * is what makes the sidebar feel like it lost them, so that row — and only that
+   * row — is scrolled to the top. A row that is already in view keeps the position
+   * the user chose; moving it there would be the very jump this reveal prevents for
+   * a row they can already see.
+   *
+   * Rows that are not rendered yet (a collapsed project, a filter, a list still
+   * measuring) end the wait; the stored offset then owns the position, which is what
+   * a plain re-open wants anyway.
    */
   useEffect(() => {
     const wasActive = previousActiveRef.current;
@@ -201,10 +217,60 @@ export function useSidebarScrollRestore<T extends SidebarScrollHandle>(
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
+    let corrections = 0;
+    let lastTarget: number | null = null;
+
     const stop = () => {
       if (timer !== null) clearTimeout(timer);
       timer = null;
     };
+
+    const measureRow = (
+      onMeasured: (
+        measured: { rowViewportY: number; rowHeight: number; viewportHeight: number } | null,
+      ) => void,
+    ) => {
+      const rowKey = activeRowKeyRef.current;
+      const rowNodes = rowKey ? rowNodesRef.current.get(rowKey) : undefined;
+      const row = rowNodes?.values().next().value as SidebarMeasurable | undefined;
+      const viewport = viewportRef.current;
+      if (!row || !viewport) {
+        onMeasured(null);
+        return;
+      }
+      row.measureInWindow((_x, rowY, _width, rowHeight) => {
+        if (cancelled) return;
+        if (rowHeight <= 0) {
+          onMeasured(null);
+          return;
+        }
+        viewport.measureInWindow((_viewportX, viewportY, _viewportWidth, viewportHeight) => {
+          if (cancelled) return;
+          if (viewportHeight <= 0) {
+            onMeasured(null);
+            return;
+          }
+          onMeasured({ rowViewportY: rowY - viewportY, rowHeight, viewportHeight });
+        });
+      });
+    };
+
+    const revealTargetFor = (rowViewportY: number): number | null =>
+      sidebarScrollRevealTarget({
+        currentOffset: scrollOffsetRef.current,
+        rowViewportY,
+      });
+
+    const applyReveal = (target: number) => {
+      const current = stateRef.current;
+      if (current) {
+        stateRef.current = markSidebarScrollRestoreIssued(current, target);
+      }
+      scrollOffsetRef.current = target;
+      writeSidebarScrollOffset(scopeKey, target);
+      scrollRef.current?.scrollTo({ y: target, animated: false });
+    };
+
     const retry = () => {
       if (cancelled) return;
       attempts += 1;
@@ -215,48 +281,52 @@ export function useSidebarScrollRestore<T extends SidebarScrollHandle>(
       }
       timer = setTimeout(attempt, REVEAL_RETRY_MS);
     };
+
+    /**
+     * The rows above the active row can settle after the scroll was issued — a group
+     * header, a project section, a re-ordered row — and leave it a few pixels off the
+     * top. Re-measuring closes that gap instead of trusting the first measurement.
+     */
+    const correct = () => {
+      if (cancelled) return;
+      measureRow((measured) => {
+        if (cancelled) return;
+        if (!measured) {
+          stop();
+          return;
+        }
+        const target = revealTargetFor(measured.rowViewportY);
+        // `null` means the row reached the top. The same target twice means the list
+        // cannot move any further (the end of a short list), so aiming again is noise.
+        if (target === null || target === lastTarget || corrections >= REVEAL_MAX_CORRECTIONS) {
+          stop();
+          return;
+        }
+        corrections += 1;
+        applyReveal(target);
+        lastTarget = target;
+        timer = setTimeout(correct, REVEAL_RETRY_MS);
+      });
+    };
+
     const attempt = () => {
       if (cancelled) return;
-      const rowKey = activeRowKeyRef.current;
-      const rowNodes = rowKey ? rowNodesRef.current.get(rowKey) : undefined;
-      const row = rowNodes?.values().next().value as SidebarMeasurable | undefined;
-      const viewport = viewportRef.current;
-      const scrollView = scrollRef.current;
-      if (!row || !viewport || !scrollView) {
-        retry();
-        return;
-      }
-      row.measureInWindow((_x, rowY, _width, rowHeight) => {
+      measureRow((measured) => {
         if (cancelled) return;
-        if (rowHeight <= 0) {
+        const scrollView = scrollRef.current;
+        if (!measured || !scrollView) {
           retry();
           return;
         }
-        viewport.measureInWindow((_viewportX, viewportY, _viewportWidth, viewportHeight) => {
-          if (cancelled) return;
-          if (viewportHeight <= 0) {
-            retry();
-            return;
-          }
-          const target = sidebarScrollRevealTarget({
-            currentOffset: scrollOffsetRef.current,
-            rowViewportY: rowY - viewportY,
-          });
-          stop();
-          const current = stateRef.current;
-          // Either way the stored offset is settled: the row is now what the
-          // position means, so a late content-size event must not scroll away.
-          if (current) {
-            stateRef.current =
-              target === null
-                ? { ...current, pendingOffset: null, echoOffset: null }
-                : markSidebarScrollRestoreIssued(current, target);
-          }
-          if (target === null) return;
-          scrollOffsetRef.current = target;
-          writeSidebarScrollOffset(scopeKey, target);
-          scrollView.scrollTo({ y: target, animated: false });
-        });
+        stop();
+        // A row the reader can see keeps the position they left the list at; the
+        // stored offset stays in charge, so a restore still pending lands too.
+        if (sidebarScrollRowInView(measured)) return;
+        const target = revealTargetFor(measured.rowViewportY);
+        if (target === null) return;
+        applyReveal(target);
+        lastTarget = target;
+        timer = setTimeout(correct, REVEAL_RETRY_MS);
       });
     };
 
