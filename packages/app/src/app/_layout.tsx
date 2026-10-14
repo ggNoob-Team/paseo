@@ -357,6 +357,12 @@ function useDaemonStartIsRunning(): boolean {
 
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
 
+// Mobile has no managed daemon to wait on. Without one, the only host that can
+// appear without user action is the localhost bootstrap probe, which fails fast
+// when nothing is listening. Waiting the desktop timeout just pins the splash
+// screen onto the cold start, so give up almost immediately instead.
+const MOBILE_STARTUP_GIVE_UP_TIMEOUT_MS = 500;
+
 async function shouldStartBuiltInDaemon(): Promise<boolean> {
   if (!shouldUseDesktopDaemon()) {
     return false;
@@ -405,17 +411,21 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     hasGivenUpWaitingForHost,
   });
 
+  const giveUpTimeoutMs = isDesktopRuntime
+    ? STARTUP_GIVE_UP_TIMEOUT_MS
+    : MOBILE_STARTUP_GIVE_UP_TIMEOUT_MS;
+
   useEffect(() => {
     if (!shouldRunGiveUpTimer) {
       return;
     }
     const handle = setTimeout(() => {
       setHasGivenUpWaitingForHost(true);
-    }, STARTUP_GIVE_UP_TIMEOUT_MS);
+    }, giveUpTimeoutMs);
     return () => {
       clearTimeout(handle);
     };
-  }, [shouldRunGiveUpTimer]);
+  }, [shouldRunGiveUpTimer, giveUpTimeoutMs]);
 
   const retry = useCallback(() => {
     const daemonStartService = getDaemonStartService({ store: getHostRuntimeStore() });
