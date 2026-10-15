@@ -523,9 +523,10 @@ async function main() {
   }
 
   if (options.installOnly) {
-    // Emulator images install unsigned haps, so fall back to the newest hap
-    // when nothing went through signing.
-    const existing = (await findLatestHap({ signed: true })) ?? (await findLatestHap());
+    // The newest hap, signed or not: emulator images install unsigned haps, and
+    // a signed hap left over from an earlier build must not shadow the one the
+    // last build just produced.
+    const existing = await findLatestHap();
     if (!existing) {
       fail("no built hap found; run npm run harmony:build first");
     }
