@@ -1,8 +1,40 @@
 import * as Clipboard from "expo-clipboard";
 
 interface HarmonyClipboardBridge {
-  readText(): string;
-  writeText(text: string): boolean;
+  readText(callback: (text: string) => void): void;
+  writeText(text: string, callback: (copied: boolean) => void): void;
+}
+
+/** A bridge call that never answers is treated as no bridge at all. */
+const BRIDGE_TIMEOUT_MS = 600;
+
+/**
+ * The last text this app put on the clipboard. A host that refuses to let the
+ * page read the system clipboard still lets the app remember what it copied
+ * itself, which is the case the notes capture is asked about.
+ */
+let lastCopiedText: string | null = null;
+
+/** Runs a bridge call that answers through a callback, or gives up quietly. */
+function bridgeRequest<T>(start: (done: (value: T) => void) => void, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const settle = (value: T) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => settle(fallback), BRIDGE_TIMEOUT_MS);
+    try {
+      start((value) => {
+        clearTimeout(timer);
+        settle(value);
+      });
+    } catch {
+      clearTimeout(timer);
+      settle(fallback);
+    }
+  });
 }
 
 /**
@@ -26,9 +58,16 @@ function harmonyClipboardBridge(): HarmonyClipboardBridge | null {
 
 /** Copies text, preferring the shell's pasteboard where the platform has one. */
 export async function copyToClipboard(text: string): Promise<void> {
+  lastCopiedText = text;
   const bridge = harmonyClipboardBridge();
-  if (bridge?.writeText(text) === true) {
-    return;
+  if (bridge) {
+    const copied = await bridgeRequest<boolean>(
+      (done) => bridge.writeText(text, (ok) => done(ok === true)),
+      false,
+    );
+    if (copied) {
+      return;
+    }
   }
   await Clipboard.setStringAsync(text);
 }
@@ -41,12 +80,19 @@ export async function copyToClipboard(text: string): Promise<void> {
 export async function readClipboardText(): Promise<string> {
   const bridge = harmonyClipboardBridge();
   if (bridge) {
-    const text = bridge.readText();
+    const text = await bridgeRequest<string>(
+      (done) => bridge.readText((value) => done(typeof value === "string" ? value : "")),
+      "",
+    );
     if (text.length > 0) {
       return text;
     }
   }
-  return Clipboard.getStringAsync();
+  const systemText = await Clipboard.getStringAsync();
+  if (systemText.length > 0) {
+    return systemText;
+  }
+  return lastCopiedText ?? "";
 }
 
 /** Whether a paste has anything to paste. A refused read counts as nothing. */

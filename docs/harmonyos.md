@@ -77,6 +77,12 @@ shell without the bridge is harmless: the helper falls back to the browser API.
 `expo prebuild` writes them into the Android manifest. Do not edit those fields
 by hand.
 
+**Every install needs a new version.** HarmonyOS treats a hap whose `versionCode`
+matches the installed one as a no-op: the previous rawfile and the previous
+compiled ArkTS keep running, so a change that appears to do nothing on the device
+usually was never installed. Bump `packages/app/package.json` before the install
+you want to land — the build stamps both fields from it.
+
 `bundleName` defaults to `sh.paseo.app`. It has to match the app you create in
 AppGallery Connect, and it needs at least three dot-separated segments — the
 Android/iOS id `sh.paseo` is rejected by hvigor's schema. Override with

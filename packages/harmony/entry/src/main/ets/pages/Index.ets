@@ -24,23 +24,32 @@ const LOG_TAG: string = "PaseoHarmony";
  * such gate, and it is what the injected `window.paseoClipboard` exposes.
  */
 class ClipboardBridge {
-  readText(): string {
+  /**
+   * ArkWeb does not hand a proxy method's return value back to the page, so the
+   * result travels through the callback the page passes in. Both methods are
+   * registered in asyncMethodList for the same reason.
+   */
+  readText(callback: (text: string) => void): void {
     try {
-      return pasteboard.getSystemPasteboard().getDataSync().getPrimaryText();
+      const board = pasteboard.getSystemPasteboard();
+      const value: string | undefined = board.hasDataSync()
+        ? board.getDataSync().getPrimaryText()
+        : "";
+      callback(typeof value === "string" ? value : "");
     } catch (error) {
-      hilog.warn(LOG_DOMAIN, LOG_TAG, "clipboard read failed: %{public}s", `${error}`);
-      return "";
+      hilog.warn(LOG_DOMAIN, LOG_TAG, "[clip-read] failed: %{public}s", `${error}`);
+      callback("");
     }
   }
 
-  writeText(text: string): boolean {
+  writeText(text: string, callback: (copied: boolean) => void): void {
     try {
       const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text);
       pasteboard.getSystemPasteboard().setDataSync(data);
-      return true;
+      callback(true);
     } catch (error) {
       hilog.warn(LOG_DOMAIN, LOG_TAG, "clipboard write failed: %{public}s", `${error}`);
-      return false;
+      callback(false);
     }
   }
 }
@@ -57,6 +66,13 @@ class ClipboardBridge {
 struct Index {
   private controller: web_webview.WebviewController = new web_webview.WebviewController();
   private resources: resourceManager.ResourceManager | null = null;
+  /**
+   * A unique document URL per launch. The bundle and its document are served from
+   * this hap, but ArkWeb's cache and its restored page both kept handing back the
+   * bundle of an earlier install after an update; a query string the cache has
+   * never seen forces the document to be fetched and re-parsed every start.
+   */
+  private entryUrl: string = `${ENTRY_URL}?launch=${Date.now()}`;
 
   aboutToAppear(): void {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -142,15 +158,22 @@ struct Index {
 
   build() {
     Column() {
-      Web({ src: ENTRY_URL, controller: this.controller })
+      Web({ src: this.entryUrl, controller: this.controller })
         .javaScriptAccess(true)
         .domStorageAccess(true)
+        // The app is served from this hap's rawfile, so the HTTP cache can only
+        // ever hand back the bundle of a previous install: an updated hap kept
+        // running its old JavaScript after an install until this was disabled.
+        .cacheMode(CacheMode.None)
         // Copy buttons in the web app write here instead of through ArkWeb's
         // gated clipboard API. See ClipboardBridge.
         .javaScriptProxy({
           object: new ClipboardBridge(),
           name: "paseoClipboard",
-          methodList: ["readText", "writeText"],
+          // Async-only registration: a method listed in methodList is treated as
+          // synchronous and never receives the page's callback.
+          methodList: [],
+          asyncMethodList: ["readText", "writeText"],
           controller: this.controller,
         })
         // IndexedDB backs the replica row store on web (row-store.web.ts).
