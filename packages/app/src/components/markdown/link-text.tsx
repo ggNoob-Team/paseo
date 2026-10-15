@@ -7,6 +7,7 @@ interface MarkdownLinkTextProps {
   style: StyleProp<TextStyle>;
   dataSet?: Record<string, string>;
   onPress(): void;
+  onLongPress?(): void;
   onHoverIn?(): void;
   children?: ReactNode;
 }
@@ -15,6 +16,7 @@ export function MarkdownLinkText({
   style,
   dataSet,
   onPress,
+  onLongPress,
   onHoverIn,
   children,
 }: MarkdownLinkTextProps) {
@@ -30,6 +32,7 @@ export function MarkdownLinkText({
     <Pressable
       accessibilityRole="link"
       onPress={onPress}
+      onLongPress={onLongPress}
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
     >

@@ -13,7 +13,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { openExternalUrl } from "@/utils/open-external-url";
 import type { Theme } from "@/styles/theme";
 import { extractNoteLinks } from "./note-links";
-import { useCopyNoteLink } from "./use-copy-note-link";
+import { useCopyLink } from "@/hooks/use-copy-link";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedCopy = withUnistyles(Copy);
@@ -28,7 +28,7 @@ const ThemedCopy = withUnistyles(Copy);
 export function NoteLinksSection({ text }: { text: string }): ReactElement | null {
   const { t } = useTranslation();
   const links = useMemo(() => extractNoteLinks(text), [text]);
-  const copyLink = useCopyNoteLink();
+  const copyLink = useCopyLink();
 
   if (links.length === 0) return null;
 

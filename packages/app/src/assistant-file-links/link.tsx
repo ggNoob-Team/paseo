@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Platform, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { isNative, isWeb } from "@/constants/platform";
@@ -8,6 +8,7 @@ import { AssistantLinkPressProvider, type AssistantLinkPress } from "./link-pres
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
+import { useCopyLink } from "@/hooks/use-copy-link";
 import { useAssistantFileLinkResolverContext } from "./provider";
 import type { AssistantFileLinkSource } from "./resolver";
 import { formatFileLinkTooltipPath } from "./tooltip-path";
@@ -32,6 +33,7 @@ export function AssistantMarkdownLink({
   children,
 }: AssistantMarkdownLinkProps) {
   const { target, onHoverIn, onPress } = useFileLink(source);
+  const copyLink = useCopyLink();
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -42,6 +44,10 @@ export function AssistantMarkdownLink({
     () => ({ onPress, accessibilityRole: "link" }),
     [onPress],
   );
+  const handleLongPress = useCallback(() => {
+    if (!source.href) return;
+    copyLink(source.href);
+  }, [copyLink, source.href]);
   const unwrapForMarkdownCopy = source.sourceType === "inline-code" || source.markup === "linkify";
 
   if (isNative) {
@@ -63,6 +69,7 @@ export function AssistantMarkdownLink({
         accessibilityRole="link"
         monoSurface={monoSurface}
         onPress={onPress}
+        onLongPress={handleLongPress}
         style={style}
       >
         {children}
@@ -92,6 +99,7 @@ export function AssistantMarkdownLink({
         dataSet={monoSurface ? MARKDOWN_CODE_LINK_DATASET : undefined}
         style={style}
         onPress={onPress}
+        onLongPress={handleLongPress}
         onHoverIn={onHoverIn}
       >
         {children}

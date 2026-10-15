@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { useCopyNoteLink } from "./use-copy-note-link";
+import { useCopyLink } from "@/hooks/use-copy-link";
 import { noteDisplayTitle, type HostNote } from "./notes-model";
 import { buildNotePreviewSegments, type NotePreviewSegment } from "./note-preview";
 
@@ -29,7 +29,7 @@ export const NoteListRow = memo(function NoteListRow({ note }: { note: HostNote 
   const { t } = useTranslation();
   const timeLabel = useCompactTimeAgo(new Date(note.updatedAt));
   const preview = useMemo(() => buildNotePreviewSegments(note.text), [note.text]);
-  const copyLink = useCopyNoteLink();
+  const copyLink = useCopyLink();
 
   const handleOpen = useCallback(() => {
     router.push({ pathname: "/notes/[noteId]", params: { noteId: note.noteId } });

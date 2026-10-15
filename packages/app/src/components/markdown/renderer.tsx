@@ -46,6 +46,7 @@ import {
 import { groupMarkdownParts, type MarkdownPartGroup } from "./part-groups";
 import { colorMarkdownLinkChildren } from "./link-children";
 import { MarkdownLinkText } from "./link-text";
+import { useCopyLink } from "@/hooks/use-copy-link";
 
 export type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
 
@@ -405,6 +406,7 @@ interface MarkdownInheritedTextProps {
   style?: TextStyle;
   monoSurface?: boolean;
   onPress?: TextProps["onPress"];
+  onLongPress?: TextProps["onLongPress"];
   accessibilityRole?: TextProps["accessibilityRole"];
   children: ReactNode;
 }
@@ -415,6 +417,7 @@ export function MarkdownInheritedText({
   style: overrideStyle,
   monoSurface,
   onPress,
+  onLongPress,
   accessibilityRole,
   children,
 }: MarkdownInheritedTextProps) {
@@ -426,6 +429,7 @@ export function MarkdownInheritedText({
     <MarkdownTextSpan
       monoSurface={monoSurface}
       onPress={onPress}
+      onLongPress={onLongPress}
       accessibilityRole={accessibilityRole}
       style={style}
     >
@@ -470,16 +474,21 @@ function SharedMarkdownLink({
   onLinkPress,
   children,
 }: SharedMarkdownLinkProps) {
+  const copyLink = useCopyLink();
   const handlePress = useCallback(() => {
     if (!href) return;
     if (onLinkPress?.(href) === false) return;
     void openExternalUrl(href);
   }, [href, onLinkPress]);
+  const handleLongPress = useCallback(() => {
+    if (!href) return;
+    copyLink(href);
+  }, [copyLink, href]);
   const style = useMemo(() => [inheritedStyles, linkStyle], [inheritedStyles, linkStyle]);
 
   if (!isNative) {
     return (
-      <MarkdownLinkText style={style} onPress={handlePress}>
+      <MarkdownLinkText style={style} onPress={handlePress} onLongPress={handleLongPress}>
         {children}
       </MarkdownLinkText>
     );
@@ -491,6 +500,7 @@ function SharedMarkdownLink({
       textStyle={linkStyle}
       accessibilityRole="link"
       onPress={handlePress}
+      onLongPress={handleLongPress}
     >
       {children}
     </MarkdownInheritedText>

@@ -28,6 +28,10 @@ interface MarkdownTextSpanProps {
   // recognizer dispatches to. The link's handler reaches these leaf spans via
   // AssistantLinkPressProvider (see assistant-file-links/link-press-context).
   onPress?: TextProps["onPress"];
+  // Accepted for prop-shape parity with Android: iOS's native selection menu
+  // owns the long press inside a UITextView and already offers Copy, so the
+  // handler is not attached here.
+  onLongPress?: TextProps["onLongPress"];
   accessibilityRole?: TextProps["accessibilityRole"];
 }
 
