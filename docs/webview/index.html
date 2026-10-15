@@ -458,9 +458,11 @@
         >，改仓库文件即时生效，无需重新发布。<br />
         APK 下载：<a href="#download" style="color: var(--todo)">「下载」Tab</a>（固定直链
         <code>https://paseo.zxyz.app/apk/paseo-latest.apk</code>，也可直接访问
-        <code>…#download</code>）；发布用 <code>./scripts/publish-android-apk.sh</code>，它把
-        <code>~/paseo-artifacts</code> 里最新的包复制到站点 <code>apk/</code> 目录并刷新
-        <code>latest.json</code>。<br />
+        <code>…#download</code>）；本地打包默认自动发布（<code>./scripts/build-android-apk.sh</code>
+        跑完就把包复制到站点 <code>apk/</code> 并刷新 <code>latest.json</code>，加
+        <code>--no-publish</code> 可跳过），也可单独跑
+        <code>./scripts/publish-android-apk.sh</code> 补发
+        <code>~/paseo-artifacts</code> 里最新的包。<br />
         状态口径：<b style="color: var(--live)">已实现</b>=能跑、有入口或后台在运行；
         <b style="color: var(--wip)">计划中 / 未开发</b
         >=待办（计划中=需求已整理、待排期；未开发=明确暂缓或尚无方案）；条目内标「已做」的部分已经落地；<b
@@ -473,10 +475,10 @@
 
       <div class="tabs" id="tabs">
         <button class="tab backlog on" data-tab="backlog">
-          计划中 / 未开发<span class="c">13</span>
+          计划中 / 未开发<span class="c">14</span>
         </button>
-        <button class="tab live" data-tab="done">已实现<span class="c">6</span></button>
-        <button class="tab bug" data-tab="bugs">Bug<span class="c">5</span></button>
+        <button class="tab live" data-tab="done">已实现<span class="c">7</span></button>
+        <button class="tab bug" data-tab="bugs">Bug<span class="c">6</span></button>
         <button class="tab download" data-tab="download">下载<span class="c">APK</span></button>
       </div>
 
@@ -495,7 +497,7 @@
 
       <div class="pane" id="pane-done">
         <section>
-          <h2>已实现 <span class="n">6 项 · fork 相对上游的增量</span></h2>
+          <h2>已实现 <span class="n">7 项 · fork 相对上游的增量</span></h2>
           <div class="grid">
             <div class="card" data-tag="archify">
               <div class="t">
@@ -586,13 +588,27 @@
                 87d2708fe · 3e135931a · df4c1bcf6
               </div>
             </div>
+
+            <div class="card" data-tag="release">
+              <div class="t">
+                二开门户站点<span class="tag g-release">构建发布</span
+                ><span class="badge b-live">已实现</span>
+              </div>
+              <div class="d">
+                paseo.zxyz.app：宝塔 nginx 站点指向仓库 docs/webview/，软链即时生效；页面用「计划中
+                / 未开发 / 已实现 / Bug / 下载」分类索引需求与状态，带功能域标签筛选。
+              </div>
+              <div class="src">
+                docs/webview/index.html · /www/server/panel/vhost/nginx/paseo.zxyz.app.conf
+              </div>
+            </div>
           </div>
         </section>
       </div>
 
       <div class="pane on" id="pane-backlog">
         <section>
-          <h2>计划中 / 未开发 <span class="n">13 项 · 待办；标「已做」的部分已落地</span></h2>
+          <h2>计划中 / 未开发 <span class="n">14 项 · 待办；标「已做」的部分已落地</span></h2>
           <div class="grid">
             <div class="card req" data-tag="notes">
               <div class="t">
@@ -685,6 +701,38 @@
                     <li>点气泡进入对应会话界面。气泡只做展示，不承载其他操作。</li>
                     <li>动机：有些会话要留着但不马上用，有些要频繁用，列表难以兼顾。</li>
                   </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="session">
+              <div class="t">
+                会话 / 工作区收纳<span class="tag g-session">会话</span
+                ><span class="badge b-plan">计划中</span>
+              </div>
+              <div class="d">
+                会话越堆越多：paseo 项目实测未归档会话 13 条（全是根会话）、已归档 11 条，落在 6
+                个未归档工作区，其中一个塞了 7 条。
+              </div>
+              <div class="rq">
+                <span class="k">已弄清</span>
+                <div class="v">
+                  <ul>
+                    <li>
+                      侧栏一行 = 一个工作区，只显示未归档；会话挂在工作区里。History
+                      列表按时间平铺，默认包含已归档（只加归档徽章）。
+                    </li>
+                    <li>归档：侧栏少一行，History 仍在、可恢复；减的是工作区，不是单条会话。</li>
+                    <li>同一工作区可容纳多条会话，减行不减会话。</li>
+                    <li>父 + 子会话能把多条收成一个侧栏入口，但要求由父来创建子会话。</li>
+                    <li>把两条已有会话的内容合并成一条没有这个能力，只有 fork（复制历史）。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">待定</span>
+                <div class="v">
+                  先做归档 + 气泡 / 置顶分组；任务系统（父 + 子）改变的是以后怎么开任务。
                 </div>
               </div>
             </div>
@@ -867,6 +915,14 @@
               </div>
               <div class="d">小团队共用一台团队 daemon，先自用、后产品化。</div>
               <div class="rq">
+                <span class="k">前提</span>
+                <div class="v">
+                  <ul>
+                    <li>本轮只做需求探索，暂不进入落地 / 实现。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
                 <span class="k">需求</span>
                 <div class="v">
                   <ul>
@@ -889,7 +945,7 @@
 
       <div class="pane" id="pane-bugs">
         <section>
-          <h2>Bug <span class="n">5 项 · 已知缺陷，待修</span></h2>
+          <h2>Bug <span class="n">6 项 · 已知缺陷，待修</span></h2>
           <div class="grid">
             <div class="card req" data-tag="session">
               <div class="t">
@@ -1009,6 +1065,65 @@
                 </div>
               </div>
             </div>
+
+            <div class="card req" data-tag="session">
+              <div class="t">
+                移动端每次回前台都要重连、等得久<span class="tag g-session">会话</span
+                ><span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                手机端退出（切后台 / 锁屏）再回来必定重连，而且等很久，过程中看不到在做什么。
+              </div>
+              <div class="rq">
+                <span class="k">现状</span>
+                <div class="v">
+                  断开是手机系统的必然（后台会冻结 / 杀进程）。慢在三段叠加：回前台先做 3
+                  秒存活探测（
+                  <code>packages/client/src/daemon-client.ts:1593</code>）、重连退避 1.5s→30s（
+                  <code>packages/client/src/daemon-client.ts:6677</code>）、建连超时
+                  15s；连上后还要重新拉服务器信息 / 会话列表 / 时间线。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">期望</span>
+                <div class="v">
+                  重连有可见进度，别只是一直转圈；把连上后重新加载数据这段的等待降下来。
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="notes">
+              <div class="t">
+                笔记界面没有返回按钮<span class="tag g-notes">笔记</span
+                ><span class="badge b-bug">Bug</span>
+              </div>
+              <div class="d">
+                进入笔记列表或笔记详情后，界面顶部没有返回按钮，只能依赖系统返回手势 /
+                返回键或侧边栏，路径不明确。
+              </div>
+              <div class="rq">
+                <span class="k">复现</span>
+                <div class="v">
+                  打开笔记界面（列表或详情） → 顶部没有返回入口 → 无法用界面按钮回到进入前的界面。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">期望</span>
+                <div class="v">顶部提供明确的返回按钮，返回到进入前的界面（侧边栏 / 工作区）。</div>
+              </div>
+              <div class="rq">
+                <span class="k">疑似原因</span>
+                <div class="v">
+                  笔记列表与详情都用 <code>StackScreenHeader</code>（
+                  <code>packages/app/src/screens/notes-screen.tsx:62</code>、
+                  <code>packages/app/src/screens/note-detail-screen.tsx:49</code>）； 该组件只在
+                  <code>isCompact</code> 时渲染 <code>BackHeader</code>，宽屏走
+                  <code>MenuHeader</code>（无返回）。需确认出问题的平台与
+                  <code>useIsCompactFormFactor()</code> 的实际取值，以及
+                  <code>router.canGoBack()</code> / <code>BackHeader</code> 是否正常。
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -1042,35 +1157,8 @@
                   ><code>把 APK 传到手机点开安装；Android 12+ 需允许「安装未知应用 / 此来源」</code>
                 </div>
               </div>
-              <div class="src">重新发布：./scripts/publish-android-apk.sh</div>
-            </div>
-            <div class="card req">
-              <div class="t">笔记界面没有返回按钮<span class="badge b-bug">Bug</span></div>
-              <div class="d">
-                进入笔记列表或笔记详情后，界面顶部没有返回按钮，只能依赖系统返回手势 /
-                返回键或侧边栏，路径不明确。
-              </div>
-              <div class="rq">
-                <span class="k">复现</span>
-                <div class="v">
-                  打开笔记界面（列表或详情） → 顶部没有返回入口 → 无法用界面按钮回到进入前的界面。
-                </div>
-              </div>
-              <div class="rq">
-                <span class="k">期望</span>
-                <div class="v">顶部提供明确的返回按钮，返回到进入前的界面（侧边栏 / 工作区）。</div>
-              </div>
-              <div class="rq">
-                <span class="k">疑似原因</span>
-                <div class="v">
-                  笔记列表与详情都用 <code>StackScreenHeader</code>（
-                  <code>packages/app/src/screens/notes-screen.tsx:62</code>、
-                  <code>packages/app/src/screens/note-detail-screen.tsx:49</code>）； 该组件只在
-                  <code>isCompact</code> 时渲染 <code>BackHeader</code>，宽屏走
-                  <code>MenuHeader</code>（无返回）。需确认出问题的平台与
-                  <code>useIsCompactFormFactor()</code> 的实际取值，以及
-                  <code>router.canGoBack()</code> / <code>BackHeader</code> 是否正常。
-                </div>
+              <div class="src">
+                重新发布：本地打包自动发布；补发跑 ./scripts/publish-android-apk.sh
               </div>
             </div>
           </div>
@@ -1078,12 +1166,22 @@
       </div>
 
       <footer>
-        更新于 <code>2026-10-13 16:04 CST</code> · 仓库 revision <code>bf14b5c7d</code><br />
+        更新于 <code>2026-10-14 16:05 CST</code> · 仓库 revision
+        <code>0e053bdc4</code>（0.11.3）<br />
+        下载 Tab 发布 0.11.3 通用包（sha256
+        <code>b1968b14…</code>）；本地打包改为默认自动发布：<code>build-android-apk.sh</code>
+        跑完即复制到站点 <code>apk/</code> 并刷新 <code>latest.json</code>（<code
+          >--no-publish</code
+        >
+        可跳过），站点根缺失时只打印补发命令、不再报错。<br />
+        补齐本会话遗漏：Bug 新增「移动端每次回前台都要重连、等得久」（5 → 6 项）；待办新增「会话 /
+        工作区收纳」（归档口径与"合并"能力分析，13 → 14 项）；已实现新增「二开门户站点」（6 → 7
+        项）；并把误放进「下载」Tab 的「笔记界面没有返回按钮」移回 Bug。<br />
         Bug 新增「笔记界面没有返回按钮」（4 → 5 项）。<br />
         门户新增<b>功能域标签分类</b>（笔记 / 任务 / 协作 / 会话 / 工作区 / 语音 / Archify /
         构建发布 / Agent）与标签筛选栏；记录本会话的企业化需求 6
         条（个人笔记收件箱、团队任务与需求录入、 任务流转、任务 ↔ 会话多对多、进度留痕与 AI
-        转述、团队共用一台 daemon），已定结论标
+        转述、团队共用一台 daemon），并记下探索前提（本轮只做需求探索、不进入实现）；已定结论标
         「计划中」、未定项列「开放问题」。修正「会话气泡图」里"一个任务 = 一个会话"的旧口径。<br />
         早前：Bug 新增「手机端自己发的消息复制按钮点不到」与「手机端会话列表时间覆盖三点菜单」（2 →
         4 项）；新增页面顶部 <b>APK 下载入口</b>；修复手机端从 agent 返回侧边栏时未定位到当前
@@ -1136,7 +1234,10 @@
           var active = tagbar && tagbar.querySelector(".tagf.on");
           var tag = active ? active.getAttribute("data-tagf") : "all";
           document.querySelectorAll(".card").forEach(function (card) {
-            var match = tag === "all" || card.getAttribute("data-tag") === tag;
+            var match =
+              tag === "all" ||
+              !card.hasAttribute("data-tag") ||
+              card.getAttribute("data-tag") === tag;
             card.classList.toggle("off", !match);
           });
         }
