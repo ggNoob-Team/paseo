@@ -144,6 +144,9 @@ To bake a daemon endpoint into the bundle (see below):
 PASEO_HARMONY_DAEMON=localhost:6767 npm run harmony:build
 ```
 
+The app icon comes from `packages/harmony/assets/app_icon.png`; point
+`PASEO_HARMONY_ICON` at another PNG for a one-off package.
+
 ## Signing
 
 There is no "install from unknown sources" switch. A hap installs only when its

@@ -2,19 +2,19 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "Paseo HarmonyOS shell"
+      "value": "po HarmonyOS shell"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "Paseo"
+      "value": "po"
     },
     {
       "name": "EntryAbility_label",
-      "value": "Paseo"
+      "value": "po"
     },
     {
       "name": "mic_reason",
-      "value": "Paseo uses the microphone for voice input to your agents."
+      "value": "po uses the microphone for voice input to your agents."
     }
   ]
 }

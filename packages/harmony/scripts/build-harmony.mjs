@@ -38,7 +38,10 @@ const COMMAND_LINE_TOOLS =
 const SIGNING_DIR = path.join(TOOLS_HOME, "signing");
 
 const BUNDLE_NAME = process.env.PASEO_HARMONY_BUNDLE_NAME ?? "sh.paseo.app";
-const ICON_SOURCE = path.join(APP_DIR, "assets", "images", "icon.png");
+// The harmony package carries its own icon instead of the shared one from
+// packages/app. Override with PASEO_HARMONY_ICON.
+const ICON_SOURCE =
+  process.env.PASEO_HARMONY_ICON ?? path.join(HARMONY_DIR, "assets", "app_icon.png");
 
 function fail(message) {
   process.stderr.write(`\n[harmony] ${message}\n`);
@@ -306,7 +309,7 @@ async function copyIcons() {
     await mkdir(path.dirname(target), { recursive: true });
     await cp(ICON_SOURCE, target);
   }
-  log("copied app icon from packages/app/assets/images/icon.png");
+  log(`copied app icon from ${path.relative(REPO_ROOT, ICON_SOURCE)}`);
 }
 
 function resolveHvigorw() {
