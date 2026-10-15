@@ -50,6 +50,16 @@ The `Web` component loads the origin root (`paseo://app/`), not `/index.html`:
 Expo Router matches routes against the document path, and an `/index.html`
 document path matches no route (its "Unmatched Route" page).
 
+## Links
+
+The shell owns one `Web` component and draws no browser chrome, so a page loaded
+into it would have no address bar, no back button, and no way to close it. Links
+leave the app instead: `window.open` reaches `onWindowNew`, which refuses the new
+window and hands the URL to the system browser, and `onLoadIntercept` does the
+same for anything that still tries to navigate the component itself to an
+`http(s)` page. The web app keeps its own history, so the system back key walks
+that history instead of reloading the bundle.
+
 ## Version stamping
 
 `versionCode` and `versionName` come from `packages/app/native-release-version.js`

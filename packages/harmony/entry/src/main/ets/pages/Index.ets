@@ -89,6 +89,25 @@ struct Index {
     });
   }
 
+  /**
+   * Hands a URL to whatever browser the device has. The shell owns one Web
+   * component and draws no browser chrome, so nothing on a web page can be
+   * closed, bookmarked, or copied from here — a link belongs to the system
+   * browser, not to the app.
+   */
+  private openInSystemBrowser(url: string): void {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    context
+      .startAbility({
+        action: "ohos.want.action.viewData",
+        entities: ["entity.system.browsable"],
+        uri: url,
+      })
+      .catch((error: BusinessError) => {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, "opening %{public}s failed: %{public}s", url, error.message);
+      });
+  }
+
   build() {
     Column() {
       Web({ src: ENTRY_URL, controller: this.controller })
@@ -120,6 +139,29 @@ struct Index {
           if (event) {
             hilog.info(LOG_DOMAIN, LOG_TAG, "download requested: %{public}s", event.url);
           }
+        })
+        // Links in the web app open with window.open. With no second Web
+        // component to put them in, each request goes to the system browser and
+        // ArkWeb is told no window was created: the app stays on its own page,
+        // so Back keeps walking the app's history instead of reloading it.
+        .multiWindowAccess(true)
+        .onWindowNew((event) => {
+          this.openInSystemBrowser(event.targetUrl);
+          // No second Web component exists, so the request is answered with
+          // "no window": the callback contract wants a controller here, and
+          // null is the documented way to say the app did not create one.
+          event.handler.setWebController(null);
+        })
+        // A link that still tries to navigate this component to a website (an
+        // anchor the web app did not intercept) leaves the app the same way, so
+        // the shell can never be stranded on a page with no way back.
+        .onLoadIntercept((event) => {
+          const url = event?.data.getRequestUrl();
+          if (url === undefined || !event?.data.isMainFrame() || !/^https?:/i.test(url)) {
+            return false;
+          }
+          this.openInSystemBrowser(url);
+          return true;
         })
         // Surface the web app's console in hilog; it is the only debugging
         // channel we have on device.
