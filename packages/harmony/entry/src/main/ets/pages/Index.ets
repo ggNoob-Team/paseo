@@ -1,5 +1,6 @@
 import web_webview from "@ohos.web.webview";
 import common from "@ohos.app.ability.common";
+import pasteboard from "@ohos.pasteboard";
 import resourceManager from "@ohos.resourceManager";
 import type { BusinessError } from "@ohos.base";
 import hilog from "@ohos.hilog";
@@ -13,6 +14,36 @@ import {
 
 const LOG_DOMAIN: number = 0x0000;
 const LOG_TAG: string = "PaseoHarmony";
+
+/**
+ * The system clipboard, for the web app.
+ *
+ * ArkWeb's own clipboard API asks the app for a read permission it never
+ * receives, so text the user had just copied read back empty and the notes
+ * capture told them to copy first. The pasteboard is the same clipboard with no
+ * such gate, and it is what the injected `window.paseoClipboard` exposes.
+ */
+class ClipboardBridge {
+  readText(): string {
+    try {
+      return pasteboard.getSystemPasteboard().getDataSync().getPrimaryText();
+    } catch (error) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, "clipboard read failed: %{public}s", `${error}`);
+      return "";
+    }
+  }
+
+  writeText(text: string): boolean {
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text);
+      pasteboard.getSystemPasteboard().setDataSync(data);
+      return true;
+    } catch (error) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, "clipboard write failed: %{public}s", `${error}`);
+      return false;
+    }
+  }
+}
 
 /**
  * Paseo HarmonyOS shell.
@@ -79,6 +110,7 @@ struct Index {
       idb: typeof indexedDB !== "undefined",
       origin: location.origin,
       ua: navigator.userAgent,
+      clip: typeof window.paseoClipboard?.writeText,
     })`;
     this.controller.runJavaScript(script, (error: BusinessError, result: string) => {
       if (error) {
@@ -113,6 +145,14 @@ struct Index {
       Web({ src: ENTRY_URL, controller: this.controller })
         .javaScriptAccess(true)
         .domStorageAccess(true)
+        // Copy buttons in the web app write here instead of through ArkWeb's
+        // gated clipboard API. See ClipboardBridge.
+        .javaScriptProxy({
+          object: new ClipboardBridge(),
+          name: "paseoClipboard",
+          methodList: ["readText", "writeText"],
+          controller: this.controller,
+        })
         // IndexedDB backs the replica row store on web (row-store.web.ts).
         .databaseAccess(true)
         .mediaPlayGestureAccess(true)

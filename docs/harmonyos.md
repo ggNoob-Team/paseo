@@ -60,6 +60,15 @@ same for anything that still tries to navigate the component itself to an
 `http(s)` page. The web app keeps its own history, so the system back key walks
 that history instead of reloading the bundle.
 
+## Clipboard
+
+ArkWeb's clipboard API asks for a read permission the shell is never granted, so
+text the user had just copied read back empty — the notes capture answered "copy
+first" to a clipboard that already had the text. The shell injects a pasteboard
+bridge (`window.paseoClipboard`, `readText`/`writeText`) and the web app's
+`utils/clipboard.ts` prefers it over `expo-clipboard` for both directions. A
+shell without the bridge is harmless: the helper falls back to the browser API.
+
 ## Version stamping
 
 `versionCode` and `versionName` come from `packages/app/native-release-version.js`
