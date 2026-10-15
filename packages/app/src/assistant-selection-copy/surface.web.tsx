@@ -1,4 +1,10 @@
-import { useCallback, type ClipboardEvent, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useRef,
+  type ClipboardEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useNotesCaptureOptional } from "@/notes/capture-context";
 import { createAssistantSelectionClipboardContent } from "./content.web";
@@ -15,6 +21,15 @@ export function AssistantSelectionCopySurface({
   style,
 }: AssistantSelectionCopySurfaceProps) {
   const capture = useNotesCaptureOptional();
+  // A touch long press fires contextmenu on Android-style web views too, and the
+  // gesture there is "select this text", not "keep it in a note" — intercepting
+  // it opened the note sheet and broke the copy that was about to happen. Only a
+  // mouse's right click carries the desktop intent, so track what pressed last.
+  const lastPointerTypeRef = useRef<string>("mouse");
+
+  const handlePointerDown = useCallback((event: PointerEvent) => {
+    lastPointerTypeRef.current = event.pointerType || "mouse";
+  }, []);
 
   const handleCopy = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
     const content = createAssistantSelectionClipboardContent(window.getSelection());
@@ -35,6 +50,7 @@ export function AssistantSelectionCopySurface({
   const handleContextMenu = useCallback(
     (event: MouseEvent) => {
       if (!capture) return;
+      if (lastPointerTypeRef.current !== "mouse") return;
       const selection = window.getSelection();
       const text = selection?.toString().trim() ?? "";
       if (text.length === 0) return;
@@ -47,9 +63,11 @@ export function AssistantSelectionCopySurface({
   const setRef = useCallback(
     (node: HTMLDivElement | null) => {
       node?.removeEventListener("contextmenu", handleContextMenu);
+      node?.removeEventListener("pointerdown", handlePointerDown, true);
       node?.addEventListener("contextmenu", handleContextMenu);
+      node?.addEventListener("pointerdown", handlePointerDown, true);
     },
-    [handleContextMenu],
+    [handleContextMenu, handlePointerDown],
   );
 
   return (
