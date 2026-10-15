@@ -15,6 +15,53 @@ interface ConfirmButtonConfig {
   cancelLabel: string;
 }
 
+interface PendingConfirm {
+  input: ConfirmDialogInput;
+  resolve: (confirmed: boolean) => void;
+}
+
+/**
+ * The web app draws its own confirmation dialog instead of asking the browser.
+ * A browser `confirm()` is answered as "cancelled" by some hosts before the user
+ * ever sees it (the HarmonyOS shell does exactly that), which made destructive
+ * actions look like buttons that do nothing. The dialog host subscribes here;
+ * `window.confirm` stays as the fallback for a page without the host mounted.
+ */
+let pendingConfirm: PendingConfirm | null = null;
+const confirmListeners = new Set<(pending: PendingConfirm | null) => void>();
+
+export function subscribeConfirmDialog(
+  listener: (pending: PendingConfirm | null) => void,
+): () => void {
+  confirmListeners.add(listener);
+  listener(pendingConfirm);
+  return () => {
+    confirmListeners.delete(listener);
+  };
+}
+
+/** Answers the dialog the host is showing. */
+export function resolveConfirmDialog(confirmed: boolean): void {
+  const pending = pendingConfirm;
+  pendingConfirm = null;
+  for (const listener of confirmListeners) {
+    listener(null);
+  }
+  pending?.resolve(confirmed);
+}
+
+function showAppConfirmDialog(input: ConfirmDialogInput): Promise<boolean> | null {
+  if (confirmListeners.size === 0) {
+    return null;
+  }
+  return new Promise<boolean>((resolve) => {
+    pendingConfirm = { input, resolve };
+    for (const listener of confirmListeners) {
+      listener(pendingConfirm);
+    }
+  });
+}
+
 function resolveButtonLabels(input: ConfirmDialogInput): ConfirmButtonConfig {
   return {
     confirmLabel: input.confirmLabel ?? "Confirm",
@@ -111,6 +158,11 @@ export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean>
   const desktopResult = await showDesktopConfirmDialog(input);
   if (desktopResult !== null) {
     return desktopResult;
+  }
+
+  const appResult = showAppConfirmDialog(input);
+  if (appResult !== null) {
+    return appResult;
   }
 
   return showWebConfirmDialog(input);

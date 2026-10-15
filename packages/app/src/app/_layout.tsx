@@ -1,5 +1,6 @@
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import "@/styles/unistyles";
+import { ConfirmDialogHost } from "@/components/confirm-dialog-host";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { PortalProvider } from "@gorhom/portal";
 import { LucideProvider } from "lucide-react-native";
@@ -992,6 +993,7 @@ function RootAppTree() {
           <RootProviders>
             <RuntimeProviders>
               <AppShell />
+              <ConfirmDialogHost />
             </RuntimeProviders>
           </RootProviders>
         </LucideProvider>

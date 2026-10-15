@@ -107,6 +107,7 @@ export const zhCN: TranslationResources = {
       back: "返回",
       cancel: "取消",
       close: "关闭",
+      confirm: "确定",
       copy: "复制",
       copyLine: "复制行",
       dismiss: "关闭",

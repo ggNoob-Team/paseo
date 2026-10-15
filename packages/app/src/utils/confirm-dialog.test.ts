@@ -1,129 +1,42 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+/** @vitest-environment jsdom */
+import { describe, expect, it, vi } from "vitest";
+import { confirmDialog, resolveConfirmDialog, subscribeConfirmDialog } from "./confirm-dialog";
 
-const desktopHostState = {
-  api: null as {
-    dialog?: {
-      ask?: (message: string, options?: Record<string, unknown>) => Promise<boolean>;
-    };
-  } | null,
-};
+// No desktop host in these tests: the web paths are the ones under test.
+vi.mock("@/desktop/host", () => ({ getDesktopHost: () => null }));
 
-type MockPlatform = "web" | "ios" | "android";
-
-interface AlertButton {
-  onPress?: () => void;
-}
-
-async function loadModuleForPlatform(platform: MockPlatform): Promise<{
-  confirmDialog: typeof import("./confirm-dialog").confirmDialog;
-  alertMock: ReturnType<typeof vi.fn>;
-}> {
-  vi.resetModules();
-
-  const alertMock = vi.fn();
-  vi.doMock("react-native", () => ({
-    Alert: {
-      alert: alertMock,
-    },
-    Platform: { OS: platform },
-  }));
-  vi.doMock("@/desktop/host", () => ({
-    getDesktopHost: () => desktopHostState.api,
-  }));
-
-  const module = await import("./confirm-dialog");
-  return { confirmDialog: module.confirmDialog, alertMock };
-}
-
-function clearDialogGlobals(): void {
-  desktopHostState.api = null;
-  delete (globalThis as { confirm?: unknown }).confirm;
-}
-
-describe("confirmDialog", () => {
-  afterEach(() => {
-    vi.doUnmock("react-native");
-    vi.restoreAllMocks();
-    vi.resetModules();
-    clearDialogGlobals();
-  });
-
-  it("uses the desktop dialog bridge on web when available", async () => {
-    const askMock = vi.fn(async () => true);
-    const blurMock = vi.fn();
-    (globalThis as { document?: unknown }).document = {
-      activeElement: { blur: blurMock },
-    } as unknown as Document;
-    desktopHostState.api = {
-      dialog: { ask: askMock },
-    };
-
-    const { confirmDialog, alertMock } = await loadModuleForPlatform("web");
-    const confirmed = await confirmDialog({
-      title: "Restart host",
-      message: "This will restart the daemon.",
-      confirmLabel: "Restart",
-      cancelLabel: "Cancel",
-      destructive: true,
+describe("confirmDialog on a web host", () => {
+  it("routes the question through the app's dialog host instead of the browser", async () => {
+    const question = { title: "Delete note", message: "This cannot be undone." };
+    const seen: string[] = [];
+    const unsubscribe = subscribeConfirmDialog((pending) => {
+      seen.push(pending ? pending.input.message : "closed");
     });
-
-    expect(confirmed).toBe(true);
-    expect(alertMock).not.toHaveBeenCalled();
-    expect(blurMock).toHaveBeenCalledTimes(1);
-    expect(askMock).toHaveBeenCalledWith("This will restart the daemon.", {
-      title: "Restart host",
-      okLabel: "Restart",
-      cancelLabel: "Cancel",
-      kind: "warning",
-    });
-  });
-
-  it("falls back to browser confirm on web when desktop APIs are unavailable", async () => {
     const browserConfirm = vi.fn(() => true);
-    const blurMock = vi.fn();
-    (globalThis as { document?: unknown }).document = {
-      activeElement: { blur: blurMock },
-    } as unknown as Document;
-    (globalThis as { confirm?: unknown }).confirm = browserConfirm;
+    (globalThis as { confirm?: () => boolean }).confirm = browserConfirm;
 
-    const { confirmDialog } = await loadModuleForPlatform("web");
-    const confirmed = await confirmDialog({
-      title: "Restart host",
-      message: "This will restart the daemon.",
-    });
+    const answer = confirmDialog(question);
+    // The subscription starts with whatever is pending (nothing); the question
+    // arrives once confirmDialog has looked for a desktop host.
+    await vi.waitFor(() => expect(seen).toEqual(["closed", "This cannot be undone."]));
 
-    expect(confirmed).toBe(true);
-    expect(blurMock).toHaveBeenCalledTimes(1);
-    expect(browserConfirm).toHaveBeenCalledWith("Restart host\n\nThis will restart the daemon.");
+    resolveConfirmDialog(false);
+    await expect(answer).resolves.toBe(false);
+    await vi.waitFor(() => expect(seen).toEqual(["closed", "This cannot be undone.", "closed"]));
+    // The host answered, so the browser was never asked.
+    expect(browserConfirm).not.toHaveBeenCalled();
+
+    unsubscribe();
+    delete (globalThis as { confirm?: () => boolean }).confirm;
   });
 
-  it("throws on web when no confirm backend exists", async () => {
-    const { confirmDialog } = await loadModuleForPlatform("web");
+  it("falls back to the browser when no host is mounted", async () => {
+    const browserConfirm = vi.fn(() => true);
+    (globalThis as { confirm?: () => boolean }).confirm = browserConfirm;
 
-    await expect(
-      confirmDialog({
-        title: "Restart host",
-        message: "This will restart the daemon.",
-      }),
-    ).rejects.toThrow("[ConfirmDialog] No web confirmation backend is available.");
-  });
+    await expect(confirmDialog({ title: "Title", message: "Message" })).resolves.toBe(true);
+    expect(browserConfirm).toHaveBeenCalledWith("Title\n\nMessage");
 
-  it("uses native Alert on iOS/Android", async () => {
-    const { confirmDialog, alertMock } = await loadModuleForPlatform("ios");
-    alertMock.mockImplementation((_title: string, _message: string, buttons?: AlertButton[]) => {
-      const confirmButton = buttons?.[1];
-      confirmButton?.onPress?.();
-    });
-
-    const confirmed = await confirmDialog({
-      title: "Restart host",
-      message: "This will restart the daemon.",
-      confirmLabel: "Restart",
-      cancelLabel: "Cancel",
-      destructive: true,
-    });
-
-    expect(confirmed).toBe(true);
-    expect(alertMock).toHaveBeenCalled();
+    delete (globalThis as { confirm?: () => boolean }).confirm;
   });
 });

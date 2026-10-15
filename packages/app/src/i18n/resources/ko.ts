@@ -107,6 +107,7 @@ export const ko: TranslationResources = {
       back: "뒤로",
       cancel: "취소",
       close: "닫기",
+      confirm: "확인",
       copy: "복사",
       copyLine: "줄 복사",
       dismiss: "닫기",

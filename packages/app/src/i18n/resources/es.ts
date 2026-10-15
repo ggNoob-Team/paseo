@@ -108,6 +108,7 @@ export const es: TranslationResources = {
       back: "Atrás",
       cancel: "Cancelar",
       close: "Cerrar",
+      confirm: "Confirmar",
       copy: "Copiar",
       copyLine: "Copiar línea",
       dismiss: "Despedir",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react-native";
@@ -15,6 +15,7 @@ import { findNoteById, noteDisplayTitle, type HostNote } from "@/notes/notes-mod
 import { NoteLinksSection } from "@/notes/note-links-section";
 import { useNoteActions, useNotesList } from "@/notes/use-notes";
 import type { Theme } from "@/styles/theme";
+import { confirmDialog } from "@/utils/confirm-dialog";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedTrash = withUnistyles(Trash2);
@@ -96,19 +97,21 @@ function NoteDetailBody({ note }: { note: HostNote }): ReactElement {
   }, [actions, draftComment, draftText, draftTitle, note, t, toast]);
 
   const handleDelete = useCallback(() => {
-    Alert.alert(t("notes.deleteNote"), t("notes.deleteNoteConfirm"), [
-      { text: t("common.actions.cancel"), style: "cancel" },
-      {
-        text: t("notes.deleteNote"),
-        style: "destructive",
-        onPress: () => {
-          void actions
-            .deleteNote(note)
-            .then(() => router.back())
-            .catch(() => toast.error(t("notes.deleteNoteFailed")));
-        },
-      },
-    ]);
+    void confirmDialog({
+      title: t("notes.deleteNote"),
+      message: t("notes.deleteNoteConfirm"),
+      confirmLabel: t("notes.deleteNote"),
+      cancelLabel: t("common.actions.cancel"),
+      destructive: true,
+    }).then((confirmed) => {
+      if (!confirmed) {
+        return undefined;
+      }
+      return actions
+        .deleteNote(note)
+        .then(() => router.back())
+        .catch(() => toast.error(t("notes.deleteNoteFailed")));
+    });
   }, [actions, note, t, toast]);
 
   const handleDeletePress = useCallback(() => handleDelete(), [handleDelete]);

@@ -107,6 +107,7 @@ export const ar: TranslationResources = {
       back: "خلف",
       cancel: "يلغي",
       close: "يغلق",
+      confirm: "تأكيد",
       copy: "ينسخ",
       copyLine: "نسخ السطر",
       dismiss: "رفض",

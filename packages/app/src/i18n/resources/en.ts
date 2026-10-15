@@ -103,6 +103,7 @@ export const en = {
       back: "Back",
       cancel: "Cancel",
       close: "Close",
+      confirm: "Confirm",
       copy: "Copy",
       copyLine: "Copy line",
       dismiss: "Dismiss",
