@@ -1,3 +1,4 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import Animated, {
@@ -10,7 +11,6 @@ import Animated, {
 } from "react-native-reanimated";
 import MaskedView from "@react-native-masked-view/masked-view";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react-native";
@@ -361,7 +361,7 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     const payload = daemonLogs?.logPath
       ? `${daemonLogs.logPath}\n\n${daemonLogs.contents}`
       : logsText;
-    void Clipboard.setStringAsync(payload);
+    void copyToClipboard(payload);
   }, [daemonLogs?.logPath, daemonLogs?.contents, logsText]);
 
   const copyIcon = useMemo(

@@ -131,8 +131,8 @@ vi.mock("@/contexts/toast-context", () => ({
   useToast: () => ({ show: vi.fn(), error: vi.fn(), copied: copiedToastMock }),
 }));
 
-vi.mock("expo-clipboard", () => ({
-  setStringAsync: setStringAsyncMock,
+vi.mock("@/utils/clipboard", () => ({
+  copyToClipboard: setStringAsyncMock,
 }));
 
 vi.mock("@/utils/open-external-url", () => ({

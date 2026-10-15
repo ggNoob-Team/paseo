@@ -1,6 +1,6 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import * as Clipboard from "expo-clipboard";
 import { useToast } from "@/contexts/toast-context";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 
@@ -37,7 +37,7 @@ export function useWorkspaceClipboardActions(): WorkspaceClipboardActions {
         );
         return;
       }
-      void Clipboard.setStringAsync(copyTargetDirectory);
+      void copyToClipboard(copyTargetDirectory);
       toast.copied(t("sidebar.workspace.toasts.pathCopied"));
     },
     [t, toast],
@@ -48,7 +48,7 @@ export function useWorkspaceClipboardActions(): WorkspaceClipboardActions {
       if (!workspace.currentBranch) {
         return;
       }
-      void Clipboard.setStringAsync(workspace.currentBranch);
+      void copyToClipboard(workspace.currentBranch);
       toast.copied(t("sidebar.workspace.toasts.branchNameCopied"));
     },
     [t, toast],

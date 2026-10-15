@@ -1,4 +1,4 @@
-import * as Clipboard from "expo-clipboard";
+import { copyToClipboard } from "@/utils/clipboard";
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -299,7 +299,7 @@ function DiagnosticSubSheet({
 
   const handleCopyPress = useCallback(() => {
     if (!diagnostic) return;
-    void Clipboard.setStringAsync(diagnostic)
+    void copyToClipboard(diagnostic)
       .then(() => toast.copied(t("settings.providers.diagnostic.copyLabel")))
       .catch(() => toast.error(t("settings.providers.diagnostic.copyFailed")));
   }, [diagnostic, t, toast]);

@@ -1,3 +1,4 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import {
   useCallback,
   useEffect,
@@ -26,7 +27,6 @@ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import * as Clipboard from "expo-clipboard";
 import {
   ChevronDown,
   Eye,
@@ -611,7 +611,7 @@ export function FileExplorerPane({
 
   const handleCopyPath = useCallback(
     async (path: string) => {
-      await Clipboard.setStringAsync(
+      await copyToClipboard(
         buildAbsoluteExplorerPath({
           workspaceRoot: normalizedWorkspaceRoot,
           entryPath: path,
@@ -622,7 +622,7 @@ export function FileExplorerPane({
   );
 
   const handleCopyRelativePath = useCallback(async (path: string) => {
-    await Clipboard.setStringAsync(path);
+    await copyToClipboard(path);
   }, []);
 
   const handleRevealEntry = useCallback(

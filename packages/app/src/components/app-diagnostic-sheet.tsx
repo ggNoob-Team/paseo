@@ -1,4 +1,4 @@
-import * as Clipboard from "expo-clipboard";
+import { copyToClipboard } from "@/utils/clipboard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { Copy, RotateCw } from "lucide-react-native";
@@ -145,7 +145,7 @@ export function AppDiagnosticSheet({
 
   const handleCopyPress = useCallback(() => {
     if (!diagnostic) return;
-    void Clipboard.setStringAsync(diagnostic)
+    void copyToClipboard(diagnostic)
       .then(() => toast.copied(t("settings.diagnostics.app.copyLabel")))
       .catch(() => toast.error(t("settings.diagnostics.app.copyFailed")));
   }, [diagnostic, t, toast]);

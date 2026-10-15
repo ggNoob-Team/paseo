@@ -1,7 +1,7 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
 import type { GestureResponderEvent } from "react-native";
 import { Pressable, Text, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import { useMutation } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -655,7 +655,7 @@ export function WorkspaceScriptsButton({
 
   const handleCopyUrl = useCallback(
     (url: string, label: string) => {
-      void Clipboard.setStringAsync(url);
+      void copyToClipboard(url);
       toast.copied(label);
     },
     [toast],

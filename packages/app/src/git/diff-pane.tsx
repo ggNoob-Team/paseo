@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { copyToClipboard } from "@/utils/clipboard";
 import { floatingActionsClearance } from "@/components/ui/floating-action-button";
 import { useState, useCallback, useMemo, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,7 +53,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import * as Clipboard from "expo-clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
@@ -1619,14 +1619,12 @@ export function ChangesSurface({
   const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
   const handleCopyPath = useCallback(
     (path: string) => {
-      void Clipboard.setStringAsync(
-        buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
-      );
+      void copyToClipboard(buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }));
     },
     [cwd],
   );
   const handleCopyRelativePath = useCallback((path: string) => {
-    void Clipboard.setStringAsync(path);
+    void copyToClipboard(path);
   }, []);
   const handleRevealPath = useCallback(
     async (path: string) => {

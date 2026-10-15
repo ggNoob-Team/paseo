@@ -1,9 +1,9 @@
+import { clipboardHasText, copyToClipboard, readClipboardText } from "@/utils/clipboard";
 import { TerminalFind, type TerminalPaneFindHandle } from "@/terminal/find";
 import type { TerminalFindResult } from "@/terminal/runtime/terminal-emulator-runtime";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as Clipboard from "expo-clipboard";
 import {
   Pressable,
   Text,
@@ -325,7 +325,7 @@ export function TerminalPane({
       return;
     }
     try {
-      const hasText = await Clipboard.hasStringAsync();
+      const hasText = await clipboardHasText();
       setHasClipboardText(hasText);
     } catch {
       setHasClipboardText(false);
@@ -877,7 +877,7 @@ export function TerminalPane({
   const handleTerminalPaste = useCallback(() => {
     requestTerminalReflow();
     void pasteTerminalClipboard({
-      clipboard: { readText: () => Clipboard.getStringAsync() },
+      clipboard: { readText: () => readClipboardText() },
       terminal: { paste: (text) => emulatorRef.current?.paste(text) },
     }).then(() => refreshClipboardAvailability());
   }, [requestTerminalReflow, refreshClipboardAvailability]);
@@ -886,7 +886,7 @@ export function TerminalPane({
     void emulatorRef.current
       ?.copySelection({
         writeText: async (text: string) => {
-          await Clipboard.setStringAsync(text);
+          await copyToClipboard(text);
         },
       })
       .then(() => refreshClipboardAvailability());

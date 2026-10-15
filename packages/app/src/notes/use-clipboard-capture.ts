@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
+import { readClipboardText } from "@/utils/clipboard";
 import { useNotesCaptureOptional } from "./capture-context";
 
 /**
@@ -28,7 +28,7 @@ export function useClipboardNoteCapture(): {
     setIsReadingClipboard(true);
     void (async () => {
       try {
-        const clipboardText = await Clipboard.getStringAsync();
+        const clipboardText = await readClipboardText();
         const text = clipboardText.trim();
         if (text.length === 0) {
           toast.show(t("notes.copyHint"), { variant: "warning" });

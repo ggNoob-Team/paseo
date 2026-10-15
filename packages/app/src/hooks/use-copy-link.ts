@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
+import { copyToClipboard } from "@/utils/clipboard";
 
 /**
  * Copies a link and says so. A link opens on a tap, so the long press is the
@@ -14,7 +14,7 @@ export function useCopyLink(): (url: string) => void {
 
   return useCallback(
     (url: string) => {
-      void Clipboard.setStringAsync(url)
+      void copyToClipboard(url)
         .then(() => toast.show(t("common.states.linkCopied"), { variant: "success" }))
         .catch(() => toast.error(t("common.errors.unableToCopyLink")));
     },

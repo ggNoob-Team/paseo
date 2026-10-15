@@ -1,3 +1,4 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import { WorkspaceComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { JsonValue } from "@getpaseo/protocol/agent-types";
@@ -18,7 +19,6 @@ import { useIsFocused } from "@react-navigation/native";
 import { BackHandler, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
-import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -2096,7 +2096,7 @@ function WorkspaceScreenContent({
     async (agentId: string) => {
       if (!agentId) return;
       try {
-        await Clipboard.setStringAsync(agentId);
+        await copyToClipboard(agentId);
         toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2109,7 +2109,7 @@ function WorkspaceScreenContent({
     async (terminalId: string) => {
       if (!terminalId) return;
       try {
-        await Clipboard.setStringAsync(terminalId);
+        await copyToClipboard(terminalId);
         toast.copied(t("workspace.tabs.toasts.terminalIdCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2122,7 +2122,7 @@ function WorkspaceScreenContent({
     async (path: string) => {
       if (!path) return;
       try {
-        await Clipboard.setStringAsync(path);
+        await copyToClipboard(path);
         toast.copied(t("workspace.tabs.toasts.filePathCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2154,7 +2154,7 @@ function WorkspaceScreenContent({
         return;
       }
       try {
-        await Clipboard.setStringAsync(command);
+        await copyToClipboard(command);
         toast.copied(t("workspace.tabs.toasts.resumeCommandCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2203,7 +2203,7 @@ function WorkspaceScreenContent({
     }
 
     try {
-      await Clipboard.setStringAsync(workspaceDirectory);
+      await copyToClipboard(workspaceDirectory);
       toast.copied(t("workspace.header.toasts.workspacePathCopiedLabel"));
     } catch {
       toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2217,7 +2217,7 @@ function WorkspaceScreenContent({
     }
 
     try {
-      await Clipboard.setStringAsync(currentBranchName);
+      await copyToClipboard(currentBranchName);
       toast.copied(t("workspace.header.toasts.branchNameCopiedLabel"));
     } catch {
       toast.error(t("workspace.tabs.toasts.copyFailed"));

@@ -1,8 +1,8 @@
+import { copyToClipboard } from "@/utils/clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
-import * as Clipboard from "expo-clipboard";
 import { Check, Copy, NotebookPen } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { HighlightToken } from "@getpaseo/highlight";
@@ -188,7 +188,7 @@ const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButt
   const handlePress = useCallback(async () => {
     const content = getCode();
     if (!content) return;
-    await Clipboard.setStringAsync(content);
+    await copyToClipboard(content);
     setCopied(true);
     if (resetRef.current) clearTimeout(resetRef.current);
     resetRef.current = setTimeout(() => {
