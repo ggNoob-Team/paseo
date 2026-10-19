@@ -656,6 +656,7 @@ export const en = {
       },
       upload: {
         uploading: "Uploading files",
+        tooLarge: "{{fileName}} is too large (max {{size}})",
         uploaded_one: "Uploaded {{name}}",
         uploaded_other: "Uploaded {{count}} files",
         failed: "Failed to upload {{name}}",

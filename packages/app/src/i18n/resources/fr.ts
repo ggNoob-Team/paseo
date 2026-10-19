@@ -666,6 +666,7 @@ export const fr: TranslationResources = {
       },
       upload: {
         uploading: "Import de fichiers",
+        tooLarge: "{{fileName}} est trop volumineux (maximum {{size}})",
         uploaded_one: "{{name}} importé",
         uploaded_other: "{{count}} fichiers importés",
         failed: "Échec de l’import de {{name}}",

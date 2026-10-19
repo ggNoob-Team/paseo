@@ -665,6 +665,7 @@ export const ru: TranslationResources = {
       },
       upload: {
         uploading: "Загрузка файлов",
+        tooLarge: "Файл {{fileName}} слишком большой (максимальный размер: {{size}})",
         uploaded_one: "{{name}} загружен",
         uploaded_other: "Загружено файлов: {{count}}",
         failed: "Не удалось загрузить {{name}}",

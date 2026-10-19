@@ -3,32 +3,32 @@ import {
   isRasterImageFile,
   isRasterImagePath,
 } from "@/attachments/file-types";
-import { readDesktopFileBytes, type SelectedFile } from "@/attachments/selected-file";
+import {
+  fileNameFromPath,
+  selectedFileFromWebFile,
+  type SelectedFile,
+} from "@/attachments/selected-file";
+import { readDesktopFileChunk, statDesktopFile } from "@/desktop/local-files";
 import type { DroppedItem } from "@/components/file-drop/types";
 
 interface DroppedAttachmentsRuntime {
-  readDesktopFileBytes(path: string): Promise<Uint8Array>;
+  statDesktopFile(path: string): Promise<{ size: number }>;
+  readDesktopFileChunk(input: {
+    path: string;
+    offset: number;
+    length: number;
+  }): Promise<Uint8Array>;
 }
 
 const defaultRuntime: DroppedAttachmentsRuntime = {
-  readDesktopFileBytes,
+  statDesktopFile,
+  readDesktopFileChunk,
 };
 
-function fileNameFromPath(path: string): string {
-  const segments = path.split(/[/\\]/);
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const segment = segments[index];
-    if (segment) {
-      return segment;
-    }
-  }
-  return path;
-}
-
-export function droppedItemsToSelectedFiles(
+export async function droppedItemsToSelectedFiles(
   items: DroppedItem[],
   runtime: DroppedAttachmentsRuntime = defaultRuntime,
-): SelectedFile[] {
+): Promise<SelectedFile[]> {
   const files: SelectedFile[] = [];
 
   for (const item of items) {
@@ -36,12 +36,7 @@ export function droppedItemsToSelectedFiles(
       if (isRasterImageFile(item.file)) {
         continue;
       }
-      const file = item.file;
-      files.push({
-        fileName: file.name,
-        mimeType: file.type || getMimeTypeFromPath(file.name),
-        readBytes: async () => new Uint8Array(await file.arrayBuffer()),
-      });
+      files.push(selectedFileFromWebFile(item.file));
       continue;
     }
 
@@ -49,10 +44,13 @@ export function droppedItemsToSelectedFiles(
       continue;
     }
     const path = item.path;
+    const { size } = await runtime.statDesktopFile(path);
     files.push({
       fileName: fileNameFromPath(path),
       mimeType: getMimeTypeFromPath(path),
-      readBytes: () => runtime.readDesktopFileBytes(path),
+      size,
+      readChunk: (offset, length) => runtime.readDesktopFileChunk({ path, offset, length }),
+      close: async () => {},
     });
   }
 

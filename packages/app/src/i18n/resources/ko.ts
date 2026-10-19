@@ -661,6 +661,7 @@ export const ko: TranslationResources = {
       },
       upload: {
         uploading: "파일 업로드 중",
+        tooLarge: "{{fileName}}이(가) 너무 큽니다 (최대 {{size}})",
         uploaded_one: "{{name}} 업로드됨",
         uploaded_other: "{{count}}개 파일 업로드됨",
         failed: "{{name}} 업로드 실패",

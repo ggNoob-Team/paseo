@@ -10,6 +10,7 @@ import {
   type Logger,
 } from "./daemon-client";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import { MAX_FILE_UPLOAD_BYTES } from "@getpaseo/protocol/file-upload-limits";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import {
   decodeFileTransferFrame,
@@ -2981,12 +2982,20 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
   mock.triggerOpen();
   await connectPromise;
 
+  const bytes = new TextEncoder().encode("hello world");
+  const reads: Array<[number, number]> = [];
   const responsePromise = client.uploadFileEntry({
     cwd: "/workspace",
     parentPath: "docs",
     fileName: "notes.txt",
     mimeType: "text/plain",
-    bytes: new TextEncoder().encode("hello world"),
+    source: {
+      size: bytes.byteLength,
+      readChunk: async (offset, length) => {
+        reads.push([offset, length]);
+        return bytes.subarray(offset, offset + length);
+      },
+    },
     modifiedAt: "2026-05-02T00:00:00.000Z",
     requestId: "req-entry-upload",
     chunkSize: 5,
@@ -3067,6 +3076,44 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
     error: null,
     requestId: "req-entry-upload",
   });
+  expect(reads).toEqual([
+    [0, 5],
+    [5, 5],
+    [10, 1],
+  ]);
+});
+
+test("rejects uploads larger than 2GB before reading the source", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const readChunk = vi.fn(async () => new Uint8Array([1]));
+  const source = { size: MAX_FILE_UPLOAD_BYTES + 1, readChunk };
+  await expect(
+    client.uploadFileEntry({
+      cwd: "/workspace",
+      parentPath: ".",
+      fileName: "huge.bin",
+      mimeType: "application/octet-stream",
+      source,
+    }),
+  ).rejects.toThrow("File is too large (max 2GB)");
+  await expect(
+    client.uploadFile({
+      fileName: "huge.bin",
+      mimeType: "application/octet-stream",
+      source,
+    }),
+  ).rejects.toThrow("File is too large (max 2GB)");
+  expect(readChunk).not.toHaveBeenCalled();
 });
 
 test("normalizes workspace_setup_progress into a workspace-scoped daemon event", async () => {

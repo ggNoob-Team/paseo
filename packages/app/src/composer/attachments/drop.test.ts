@@ -8,18 +8,20 @@ describe("composer dropped attachments", () => {
     });
     const imageFile = new File([new Uint8Array([0])], "screen.png", { type: "image/png" });
 
-    const files = droppedItemsToSelectedFiles([
+    const files = await droppedItemsToSelectedFiles([
       { kind: "web-file", file: jsonFile },
       { kind: "web-file", file: imageFile },
     ]);
 
-    expect(files.map(({ fileName, mimeType }) => ({ fileName, mimeType }))).toEqual([
-      { fileName: "config.json", mimeType: "application/json" },
+    expect(files.map(({ fileName, mimeType, size }) => ({ fileName, mimeType, size }))).toEqual([
+      { fileName: "config.json", mimeType: "application/json", size: jsonFile.size },
     ]);
-    expect(await files[0]?.readBytes()).toEqual(new Uint8Array(await jsonFile.arrayBuffer()));
+    expect(await files[0]?.readChunk(0, jsonFile.size)).toEqual(
+      new Uint8Array(await jsonFile.arrayBuffer()),
+    );
   });
 
-  it("reads desktop paths lazily and leaves raster images for image handling", async () => {
+  it("stats desktop paths up front, reads them lazily, and leaves raster images for image handling", async () => {
     const windowsPath = "C:\\Users\\alice\\config.json";
     const posixPath = "/Users/alice/notes/readme.txt";
     const imagePath = "C:\\Users\\alice\\screen.png";
@@ -29,20 +31,27 @@ describe("composer dropped attachments", () => {
     ]);
     const readPaths: string[] = [];
 
-    const files = droppedItemsToSelectedFiles(
+    const files = await droppedItemsToSelectedFiles(
       [
         { kind: "desktop-path", path: windowsPath },
         { kind: "desktop-path", path: imagePath },
         { kind: "desktop-path", path: posixPath },
       ],
       {
-        readDesktopFileBytes: async (path) => {
+        statDesktopFile: async (path) => {
+          const bytes = bytesByPath.get(path);
+          if (!bytes) {
+            throw new Error(`Unexpected desktop stat: ${path}`);
+          }
+          return { size: bytes.byteLength };
+        },
+        readDesktopFileChunk: async ({ path, offset, length }) => {
           readPaths.push(path);
           const bytes = bytesByPath.get(path);
           if (!bytes) {
             throw new Error(`Unexpected desktop read: ${path}`);
           }
-          return bytes;
+          return bytes.subarray(offset, offset + length);
         },
       },
     );
@@ -53,8 +62,8 @@ describe("composer dropped attachments", () => {
     ]);
     expect(readPaths).toEqual([]);
 
-    expect(await files[0]?.readBytes()).toEqual(new Uint8Array([1, 2, 3]));
-    expect(await files[1]?.readBytes()).toEqual(new Uint8Array([4, 5]));
+    expect(await files[0]?.readChunk(0, 3)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(await files[1]?.readChunk(0, 2)).toEqual(new Uint8Array([4, 5]));
     expect(readPaths).toEqual([windowsPath, posixPath]);
   });
 });

@@ -12,6 +12,10 @@ import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
 import type { ClientCapability } from "@getpaseo/protocol/client-capabilities";
+import {
+  MAX_FILE_UPLOAD_BYTES,
+  MAX_FILE_UPLOAD_LABEL,
+} from "@getpaseo/protocol/file-upload-limits";
 import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
@@ -554,25 +558,35 @@ export interface FileReadResult {
   modifiedAt: string;
   revision?: string;
 }
-export interface FileUploadInput {
+/** Random-access byte source used to stream uploads without buffering whole files. */
+export interface FileUploadSource {
+  size: number;
+  readChunk(offset: number, length: number): Promise<Uint8Array>;
+}
+interface FileUploadMetadata {
   fileName: string;
   mimeType: string;
-  bytes: Uint8Array | ArrayBuffer;
   modifiedAt?: string;
   requestId?: string;
   chunkSize?: number;
 }
+export interface FileUploadInput extends FileUploadMetadata {
+  bytes: Uint8Array | ArrayBuffer;
+}
+export interface FileUploadStreamInput extends FileUploadMetadata {
+  source: FileUploadSource;
+}
 export type FileUploadResult = FileUploadResponse["payload"];
-export interface FileEntryUploadInput {
+interface FileEntryUploadTarget {
   cwd: string;
   parentPath: string;
-  fileName: string;
-  mimeType: string;
-  bytes: Uint8Array | ArrayBuffer;
   overwrite?: boolean;
-  modifiedAt?: string;
-  requestId?: string;
-  chunkSize?: number;
+}
+export interface FileEntryUploadInput extends FileUploadMetadata, FileEntryUploadTarget {
+  bytes: Uint8Array | ArrayBuffer;
+}
+export interface FileEntryUploadStreamInput extends FileUploadMetadata, FileEntryUploadTarget {
+  source: FileUploadSource;
 }
 export type FileEntryUploadResult = FileEntryUploadResponse["payload"];
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
@@ -1021,6 +1035,33 @@ function requireFileBytes(bytes: Uint8Array | ArrayBuffer): Uint8Array {
   return resolved;
 }
 
+function resolveFileUploadSource(
+  input: { bytes: Uint8Array | ArrayBuffer } | { source: FileUploadSource },
+): FileUploadSource {
+  if ("source" in input) {
+    return input.source;
+  }
+  const bytes = requireFileBytes(input.bytes);
+  return {
+    size: bytes.byteLength,
+    readChunk: async (offset, length) => bytes.subarray(offset, offset + length),
+  };
+}
+
+function uploadTimeoutForSize(size: number): number {
+  const transferTimeMs = Math.ceil(size / MIN_UPLOAD_BYTES_PER_SECOND) * 1000;
+  return Math.max(DEFAULT_SESSION_RPC_TIMEOUT_MS, transferTimeMs);
+}
+
+function assertUploadSize(size: number): void {
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new Error("File size is invalid.");
+  }
+  if (size > MAX_FILE_UPLOAD_BYTES) {
+    throw new Error(`File is too large (max ${MAX_FILE_UPLOAD_LABEL}).`);
+  }
+}
+
 export class DaemonConnectionError extends Error {
   constructor(
     message: string,
@@ -1082,6 +1123,10 @@ const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
 // A download waits for a whole binary file transfer, not for a single
 // response, so it gets twice the default session RPC deadline.
 const FILE_DOWNLOAD_RPC_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS * 2;
+const DEFAULT_FILE_UPLOAD_CHUNK_BYTES = 1024 * 1024;
+// A 2GB upload can legitimately run for a long time. Give the response wait
+// enough headroom for a slow connection instead of the default RPC timeout.
+const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -5013,15 +5058,18 @@ export class DaemonClient {
     });
   }
 
-  async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
-    const bytes = requireFileBytes(input.bytes);
+  async uploadFile(input: FileUploadInput): Promise<FileUploadResult>;
+  async uploadFile(input: FileUploadStreamInput): Promise<FileUploadResult>;
+  async uploadFile(input: FileUploadInput | FileUploadStreamInput): Promise<FileUploadResult> {
+    const source = resolveFileUploadSource(input);
+    assertUploadSize(source.size);
     // The file frames bypass the send queue, so start only on an open connection.
     await this.whenConnected();
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
     return await this.streamFileTransfer({
       requestId: resolvedRequestId,
-      bytes,
+      source,
       fileName: input.fileName,
       mimeType: input.mimeType,
       modifiedAt,
@@ -5033,25 +5081,31 @@ export class DaemonClient {
             type: "file.upload.request",
             fileName: input.fileName,
             mimeType: input.mimeType,
-            size: bytes.byteLength,
+            size: source.size,
             modifiedAt,
             requestId: resolvedRequestId,
           },
           responseType: "file.upload.response",
+          timeout: uploadTimeoutForSize(source.size),
           options: { skipQueue: true },
         }),
     });
   }
 
   /** Uploads a file into a workspace directory through the explorer's fs.entry.upload RPC. */
-  async uploadFileEntry(input: FileEntryUploadInput): Promise<FileEntryUploadResult> {
-    const bytes = requireFileBytes(input.bytes);
+  async uploadFileEntry(input: FileEntryUploadInput): Promise<FileEntryUploadResult>;
+  async uploadFileEntry(input: FileEntryUploadStreamInput): Promise<FileEntryUploadResult>;
+  async uploadFileEntry(
+    input: FileEntryUploadInput | FileEntryUploadStreamInput,
+  ): Promise<FileEntryUploadResult> {
+    const source = resolveFileUploadSource(input);
+    assertUploadSize(source.size);
     await this.whenConnected();
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
     return await this.streamFileTransfer({
       requestId: resolvedRequestId,
-      bytes,
+      source,
       fileName: input.fileName,
       mimeType: input.mimeType,
       modifiedAt,
@@ -5064,11 +5118,12 @@ export class DaemonClient {
             cwd: input.cwd,
             parentPath: input.parentPath,
             fileName: input.fileName,
-            size: bytes.byteLength,
+            size: source.size,
             overwrite: input.overwrite,
             requestId: resolvedRequestId,
           },
           responseType: "fs.entry.upload.response",
+          timeout: uploadTimeoutForSize(source.size),
           options: { skipQueue: true },
         }),
     });
@@ -5076,7 +5131,7 @@ export class DaemonClient {
 
   private async streamFileTransfer<TResult>(input: {
     requestId: string;
-    bytes: Uint8Array;
+    source: FileUploadSource;
     fileName: string;
     mimeType: string;
     modifiedAt: string;
@@ -5103,7 +5158,7 @@ export class DaemonClient {
           requestId: input.requestId,
           metadata: {
             mime: input.mimeType,
-            size: input.bytes.byteLength,
+            size: input.source.size,
             encoding: "binary",
             modifiedAt: input.modifiedAt,
             fileName: input.fileName,
@@ -5111,8 +5166,8 @@ export class DaemonClient {
         }),
       );
 
-      const chunkSize = input.chunkSize ?? 128 * 1024;
-      for (let offset = 0; offset < input.bytes.byteLength; offset += chunkSize) {
+      const chunkSize = input.chunkSize ?? DEFAULT_FILE_UPLOAD_CHUNK_BYTES;
+      for (let offset = 0; offset < input.source.size; offset += chunkSize) {
         // Native WebSocket.send encodes binary synchronously. Let rendering and
         // incoming messages run between bounded pieces on every platform.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -5120,14 +5175,18 @@ export class DaemonClient {
         if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
           throw new DaemonConnectionError("Connection changed during file upload");
         }
+        const length = Math.min(chunkSize, input.source.size - offset);
+        const chunk = await input.source.readChunk(offset, length);
+        if (chunk.byteLength !== length) {
+          throw new Error(
+            `File changed during upload: expected ${length} bytes at ${offset}, received ${chunk.byteLength}.`,
+          );
+        }
         this.sendBinaryFrame(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileChunk,
             requestId: input.requestId,
-            payload: input.bytes.subarray(
-              offset,
-              Math.min(offset + chunkSize, input.bytes.byteLength),
-            ),
+            payload: chunk,
           }),
         );
       }

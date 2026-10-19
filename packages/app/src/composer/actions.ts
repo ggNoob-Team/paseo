@@ -1,4 +1,8 @@
 import type { SelectedFile } from "@/attachments/selected-file";
+import {
+  MAX_FILE_UPLOAD_BYTES,
+  MAX_FILE_UPLOAD_LABEL,
+} from "@getpaseo/protocol/file-upload-limits";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type {
@@ -55,7 +59,7 @@ export interface ComposerSendClient {
       attachments: ReturnType<typeof splitComposerAttachmentsForSubmit>["attachments"];
     },
   ) => Promise<void>;
-  uploadFile: (input: { fileName: string; mimeType: string; bytes: Uint8Array }) => Promise<{
+  uploadFile: (input: { fileName: string; mimeType: string; source: SelectedFile }) => Promise<{
     requestId: string;
     file: {
       type: "uploaded_file";
@@ -126,29 +130,48 @@ export async function uploadFileAttachments(input: {
   client: ComposerSendClient;
   files: SelectedFile[];
 }): Promise<Extract<ComposerAttachment, { kind: "file" }>[]> {
-  const result: Extract<ComposerAttachment, { kind: "file" }>[] = [];
-  const prepared: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }> = [];
-
   for (const file of input.files) {
-    const bytes = await file.readBytes();
-    if (bytes.byteLength > 50 * 1024 * 1024) {
+    if (file.size > MAX_FILE_UPLOAD_BYTES) {
       throw new Error(
-        i18n.t("composer.errors.fileTooLarge", { size: "50MB", fileName: file.fileName }),
+        i18n.t("composer.errors.fileTooLarge", {
+          size: MAX_FILE_UPLOAD_LABEL,
+          fileName: file.fileName,
+        }),
       );
     }
-    prepared.push({
-      fileName: file.fileName,
-      mimeType: file.mimeType,
-      bytes,
-    });
   }
 
-  for (const file of prepared) {
-    const response = await input.client.uploadFile(file);
-    if (response.error || !response.file) {
-      throw new Error(response.error ?? "Upload failed.");
+  try {
+    for (const file of input.files) {
+      if (file.size === 0) {
+        continue;
+      }
+      const probe = await file.readChunk(0, 1);
+      if (probe.byteLength === 0) {
+        throw new Error(`Could not read ${file.fileName}.`);
+      }
+      await file.close();
     }
-    result.push({ kind: "file", attachment: response.file });
+  } catch (error) {
+    await Promise.all(input.files.map((file) => file.close()));
+    throw error;
+  }
+
+  const result: Extract<ComposerAttachment, { kind: "file" }>[] = [];
+  for (const file of input.files) {
+    try {
+      const response = await input.client.uploadFile({
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        source: file,
+      });
+      if (response.error || !response.file) {
+        throw new Error(response.error ?? "Upload failed.");
+      }
+      result.push({ kind: "file", attachment: response.file });
+    } finally {
+      await file.close();
+    }
   }
 
   return result;

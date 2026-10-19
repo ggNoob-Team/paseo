@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  MAX_FILE_UPLOAD_BYTES,
+  MAX_FILE_UPLOAD_LABEL,
+} from "@getpaseo/protocol/file-upload-limits";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useToast } from "@/contexts/toast-context";
@@ -36,17 +40,12 @@ export function useFileUpload({
   const isUploadingRef = useRef(false);
 
   const uploadOne = useCallback(
-    async (
-      parentPath: string,
-      file: SelectedFile,
-      bytes: Uint8Array,
-      overwrite: boolean,
-    ): Promise<boolean> => {
+    async (parentPath: string, file: SelectedFile, overwrite: boolean): Promise<boolean> => {
       const payload = await uploadFileEntry({
         parentPath,
         fileName: file.fileName,
         mimeType: file.mimeType,
-        bytes,
+        source: file,
         overwrite,
       });
       if (payload.success) {
@@ -63,7 +62,7 @@ export function useFileUpload({
         if (!replace) {
           return false;
         }
-        return await uploadOne(parentPath, file, bytes, true);
+        return await uploadOne(parentPath, file, true);
       }
       throw new Error(
         payload.error ?? t("workspace.fileExplorer.upload.failed", { name: file.fileName }),
@@ -81,6 +80,35 @@ export function useFileUpload({
       if (!files || files.length === 0) {
         return 0;
       }
+      const oversized = files.find((file) => file.size > MAX_FILE_UPLOAD_BYTES);
+      if (oversized) {
+        await Promise.all(files.map((file) => file.close()));
+        toast.error(
+          t("workspace.fileExplorer.upload.tooLarge", {
+            fileName: oversized.fileName,
+            size: MAX_FILE_UPLOAD_LABEL,
+          }),
+        );
+        return 0;
+      }
+      try {
+        for (const file of files) {
+          if (file.size === 0) {
+            continue;
+          }
+          const probe = await file.readChunk(0, 1);
+          if (probe.byteLength === 0) {
+            throw new Error(t("workspace.fileExplorer.upload.failed", { name: file.fileName }));
+          }
+          await file.close();
+        }
+      } catch (cause) {
+        await Promise.all(files.map((file) => file.close()));
+        toast.error(
+          cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.uploadFailed"),
+        );
+        return 0;
+      }
       isUploadingRef.current = true;
       setIsUploading(true);
       let uploaded = 0;
@@ -88,11 +116,14 @@ export function useFileUpload({
       let reportedFailure = false;
       try {
         for (const file of files) {
-          const bytes = await file.readBytes();
-          const landed = await uploadOne(parentPath, file, bytes, false);
-          if (landed) {
-            uploaded += 1;
-            uploadedName ??= file.fileName;
+          try {
+            const landed = await uploadOne(parentPath, file, false);
+            if (landed) {
+              uploaded += 1;
+              uploadedName ??= file.fileName;
+            }
+          } finally {
+            await file.close();
           }
         }
       } catch (cause) {

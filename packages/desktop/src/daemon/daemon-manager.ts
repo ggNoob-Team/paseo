@@ -20,6 +20,7 @@ import {
   writeAttachmentBase64,
   writeAttachmentBytes,
 } from "../features/attachments.js";
+import { readLocalFileChunk, statLocalFile } from "../features/local-files.js";
 import {
   checkForAppUpdate,
   downloadAndInstallUpdate,
@@ -434,6 +435,8 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     write_attachment_bytes: (args) => writeAttachmentBytes(args ?? {}),
     copy_attachment_file: (args) => copyAttachmentFileToManagedStorage(args ?? {}),
     read_file_base64: (args) => readManagedFileBase64(args ?? {}),
+    stat_local_file: (args) => statLocalFile(args ?? {}),
+    read_local_file_chunk: (args) => readLocalFileChunk(args ?? {}),
     delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
     garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
     open_local_daemon_transport: async (args) => await openLocalTransportSession(args),

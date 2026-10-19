@@ -1,7 +1,11 @@
 import type pino from "pino";
-import type { SessionDelivery } from "../owned-subscriptions/index.js";
+import type { OwnedOperation, SessionDelivery } from "../owned-subscriptions/index.js";
 import type { FileVersion } from "@getpaseo/protocol/messages";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import {
+  MAX_FILE_UPLOAD_BYTES,
+  MAX_FILE_UPLOAD_LABEL,
+} from "@getpaseo/protocol/file-upload-limits";
 import {
   encodeFileTransferFrame,
   FileTransferOpcode,
@@ -386,6 +390,17 @@ export class WorkspaceFilesSession {
         message.type === "file.upload.response" && message.payload.requestId === request.requestId,
       () => cancel?.(),
     );
+    if (isUploadTooLarge(request.size)) {
+      this.emitUploadTooLarge(operation, {
+        type: "file.upload.response",
+        payload: {
+          requestId: request.requestId,
+          file: null,
+          error: uploadTooLargeMessage(),
+        },
+      });
+      return;
+    }
     cancel = this.fileUploads.beginUpload(request, operation.source, (outcome) => {
       const response = buildAttachmentUploadResponse(request, outcome);
       if (response) operation.emit(response);
@@ -403,6 +418,21 @@ export class WorkspaceFilesSession {
         message.payload.requestId === request.requestId,
       () => cancel?.(),
     );
+    if (isUploadTooLarge(request.size)) {
+      this.emitUploadTooLarge(operation, {
+        type: "fs.entry.upload.response",
+        payload: {
+          cwd: request.cwd,
+          parentPath: request.parentPath,
+          path: null,
+          success: false,
+          alreadyExists: false,
+          error: uploadTooLargeMessage(),
+          requestId: request.requestId,
+        },
+      });
+      return;
+    }
     cancel = this.fileUploads.beginFileEntryUpload(request, {
       source: operation.source,
       resolveDirectory: () =>
@@ -419,6 +449,16 @@ export class WorkspaceFilesSession {
 
   async handleFileTransferFrame(frame: FileTransferFrame, source: object): Promise<void> {
     await this.fileUploads.receiveFrame(frame, source);
+  }
+
+  private emitUploadTooLarge(
+    operation: OwnedOperation,
+    response: FileUploadResponse | FileEntryUploadResponse,
+  ): void {
+    operation.emit(response);
+    void operation
+      .release()
+      .catch((error) => this.logger.error({ err: error }, "Upload cleanup failed"));
   }
 
   async handleProjectIconRequest(
@@ -522,6 +562,14 @@ export class WorkspaceFilesSession {
       });
     }
   }
+}
+
+function isUploadTooLarge(size: number): boolean {
+  return size > MAX_FILE_UPLOAD_BYTES;
+}
+
+function uploadTooLargeMessage(): string {
+  return `File is too large (max ${MAX_FILE_UPLOAD_LABEL})`;
 }
 
 function buildAttachmentUploadResponse(

@@ -5,6 +5,7 @@ import {
   type AgentFileExplorerState,
   type ExplorerDirectory,
 } from "@/stores/session-store";
+import type { SelectedFile } from "@/attachments/selected-file";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { parentExplorerPath } from "@/utils/explorer-paths";
 
@@ -258,7 +259,7 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
       parentPath: string;
       fileName: string;
       mimeType: string;
-      bytes: Uint8Array;
+      source: SelectedFile;
       overwrite?: boolean;
     }) => {
       if (!normalizedWorkspaceRoot) {
@@ -272,7 +273,7 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
         parentPath: input.parentPath,
         fileName: input.fileName,
         mimeType: input.mimeType,
-        bytes: input.bytes,
+        source: input.source,
         overwrite: input.overwrite,
       });
     },

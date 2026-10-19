@@ -307,7 +307,8 @@ and link to paste.
   installs unsigned, renders, and holds a daemon WebSocket over `hdc rport`. A
   physical phone is unverified, including whether it accepts a hap built from
   the public OpenHarmony SDK, `window.isSecureContext`, IndexedDB, the mic
-  permission prompt, and the file picker.
+  permission prompt, the file picker, and large-file upload streaming (up to
+  2GB).
 - The shell logs the page's `secure`, `idb`, `origin`, and `ua` facts on every
   page load (hilog tag `PaseoHarmony`); read them in DevEco Studio's Log panel
   or with `hdc shell hilog` to check `window.isSecureContext` and IndexedDB on a

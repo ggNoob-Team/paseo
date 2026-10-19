@@ -667,6 +667,7 @@ export const es: TranslationResources = {
       },
       upload: {
         uploading: "Subiendo archivos",
+        tooLarge: "{{fileName}} es demasiado grande (máximo {{size}})",
         uploaded_one: "{{name}} subido",
         uploaded_other: "{{count}} archivos subidos",
         failed: "No se pudo subir {{name}}",

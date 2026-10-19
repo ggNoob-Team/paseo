@@ -260,7 +260,7 @@ export const zhCN: TranslationResources = {
       uploadFailed: "Failed to upload file",
       noClipboardImage: "当前剪贴板中没有图片。请尝试通过键盘粘贴。",
       pasteImageFailed: "无法粘贴图片",
-      fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      fileTooLarge: "{{fileName}} 过大（最大 {{size}}）",
     },
     clientCommands: {
       archiveAgent: "归档当前 Agent",
@@ -658,6 +658,7 @@ export const zhCN: TranslationResources = {
       },
       upload: {
         uploading: "正在上传文件",
+        tooLarge: "{{fileName}} 过大（最大 {{size}}）",
         uploaded_one: "已上传 {{name}}",
         uploaded_other: "已上传 {{count}} 个文件",
         failed: "上传 {{name}} 失败",

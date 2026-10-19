@@ -18,6 +18,7 @@ import {
   FileTransferOpcode,
   type FileTransferFrame,
 } from "@getpaseo/protocol/binary-frames/index";
+import { MAX_FILE_UPLOAD_BYTES } from "@getpaseo/protocol/file-upload-limits";
 import {
   WorkspaceFilesSession,
   type WorkspaceFilesSessionHost,
@@ -676,6 +677,77 @@ describe("WorkspaceFilesSession", () => {
       },
     ]);
     expect(readFileSync(join(cwd, "docs", "notes.txt"), "utf8")).toBe("hello world");
+    await ownership.close();
+  });
+
+  test("rejects an attachment upload larger than 2GB without accepting frames", async () => {
+    const { subsystem, emitted } = makeSubsystem();
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "file.upload.request",
+      fileName: "huge.bin",
+      mimeType: "application/octet-stream",
+      size: MAX_FILE_UPLOAD_BYTES + 1,
+      modifiedAt: "2026-05-02T00:00:00.000Z",
+      requestId: "req-huge-attachment",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileUploadRequest(request, ownership),
+    );
+
+    expect(emitted).toEqual([
+      {
+        type: "file.upload.response",
+        payload: {
+          requestId: "req-huge-attachment",
+          file: null,
+          error: "File is too large (max 2GB)",
+        },
+      },
+    ]);
+    await ownership.close();
+  });
+
+  test("rejects a file entry upload larger than 2GB without accepting frames", async () => {
+    const cwd = makeDir("workspace-files-entry-upload-huge-");
+    const { subsystem, emitted } = makeSubsystem();
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: ".",
+      fileName: "huge.bin",
+      size: MAX_FILE_UPLOAD_BYTES + 1,
+      requestId: "req-huge-entry",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileEntryUploadRequest(request, ownership),
+    );
+
+    expect(emitted).toEqual([
+      {
+        type: "fs.entry.upload.response",
+        payload: {
+          cwd,
+          parentPath: ".",
+          path: null,
+          success: false,
+          alreadyExists: false,
+          error: "File is too large (max 2GB)",
+          requestId: "req-huge-entry",
+        },
+      },
+    ]);
     await ownership.close();
   });
 

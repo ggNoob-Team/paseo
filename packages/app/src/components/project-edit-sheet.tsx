@@ -13,6 +13,7 @@ import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
+import { readSelectedFileBytes } from "@/attachments/selected-file";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import {
   openProjectEditForm,
@@ -81,7 +82,7 @@ export function ProjectEditSheet({
     form.setPickedImage({
       fileName: file.fileName,
       mimeType: file.mimeType,
-      data: Buffer.from(await file.readBytes()).toString("base64"),
+      data: Buffer.from(await readSelectedFileBytes(file)).toString("base64"),
     });
   }, [form, pickFiles]);
 

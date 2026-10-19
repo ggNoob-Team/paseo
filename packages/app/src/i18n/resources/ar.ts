@@ -260,7 +260,7 @@ export const ar: TranslationResources = {
       uploadFailed: "Failed to upload file",
       noClipboardImage: "لا توجد صورة في الحافظة الحالية. جرّب اللصق من لوحة المفاتيح.",
       pasteImageFailed: "تعذر لصق الصورة",
-      fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      fileTooLarge: "{{fileName}} كبير جدًا (الحد الأقصى {{size}})",
     },
     clientCommands: {
       archiveAgent: "أرشفة الوكيل الحالي",
@@ -660,6 +660,7 @@ export const ar: TranslationResources = {
       },
       upload: {
         uploading: "جارٍ رفع الملفات",
+        tooLarge: "{{fileName}} كبير جدًا (الحد الأقصى {{size}})",
         uploaded_one: "تم رفع {{name}}",
         uploaded_other: "تم رفع {{count}} ملفات",
         failed: "تعذّر رفع {{name}}",

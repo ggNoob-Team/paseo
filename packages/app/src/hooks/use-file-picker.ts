@@ -1,10 +1,15 @@
 import { useCallback, useRef } from "react";
 import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
+import { File, type FileHandle } from "expo-file-system";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isWeb } from "@/constants/platform";
 import { getMimeTypeFromPath } from "@/attachments/file-types";
-import { readDesktopFileBytes, type SelectedFile } from "@/attachments/selected-file";
+import { statDesktopFile } from "@/desktop/local-files";
+import {
+  selectedFileFromDesktopPath,
+  selectedFileFromWebFile,
+  type SelectedFile,
+} from "@/attachments/selected-file";
 
 async function pickFilesWithDesktopDialog(): Promise<SelectedFile[] | null> {
   const dialog = getDesktopHost()?.dialog;
@@ -28,11 +33,9 @@ async function pickFilesWithDesktopDialog(): Promise<SelectedFile[] | null> {
   }
 
   const result: SelectedFile[] = [];
-
   for (const filePath of paths) {
-    const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
-    const mimeType = getMimeTypeFromPath(filePath);
-    result.push({ fileName, mimeType, readBytes: () => readDesktopFileBytes(filePath) });
+    const { size } = await statDesktopFile(filePath);
+    result.push(selectedFileFromDesktopPath(filePath, size));
   }
 
   return result;
@@ -52,15 +55,7 @@ function pickFilesWithWebInput(): Promise<SelectedFile[] | null> {
         return;
       }
 
-      const result: SelectedFile[] = [];
-      for (const file of files) {
-        result.push({
-          fileName: file.name,
-          mimeType: file.type || getMimeTypeFromPath(file.name),
-          readBytes: async () => new Uint8Array(await file.arrayBuffer()),
-        });
-      }
-      resolve(result);
+      resolve(files.map(selectedFileFromWebFile));
     });
 
     input.addEventListener("cancel", () => {
@@ -77,6 +72,25 @@ function pickFilesWithWebInput(): Promise<SelectedFile[] | null> {
   });
 }
 
+function selectedFileFromDocumentAsset(asset: DocumentPicker.DocumentPickerAsset): SelectedFile {
+  const file = new File(asset.uri);
+  let handle: FileHandle | null = null;
+  return {
+    fileName: asset.name,
+    mimeType: asset.mimeType ?? getMimeTypeFromPath(asset.name),
+    size: asset.size ?? file.size,
+    readChunk: async (offset, length) => {
+      handle ??= file.open();
+      handle.offset = offset;
+      return handle.readBytes(length);
+    },
+    close: async () => {
+      handle?.close();
+      handle = null;
+    },
+  };
+}
+
 async function pickFilesWithDocumentPicker(): Promise<SelectedFile[] | null> {
   const result = await DocumentPicker.getDocumentAsync({
     multiple: true,
@@ -87,11 +101,7 @@ async function pickFilesWithDocumentPicker(): Promise<SelectedFile[] | null> {
     return null;
   }
 
-  return result.assets.map((asset) => ({
-    fileName: asset.name,
-    mimeType: asset.mimeType ?? getMimeTypeFromPath(asset.name),
-    readBytes: () => new File(asset.uri).bytes(),
-  }));
+  return result.assets.map(selectedFileFromDocumentAsset);
 }
 
 export function useFilePicker() {

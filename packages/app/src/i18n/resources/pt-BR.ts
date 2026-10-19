@@ -665,6 +665,7 @@ export const ptBR: TranslationResources = {
       },
       upload: {
         uploading: "Enviando arquivos",
+        tooLarge: "{{fileName}} é grande demais (máximo {{size}})",
         uploaded_one: "{{name}} enviado",
         uploaded_other: "{{count}} arquivos enviados",
         failed: "Falha ao enviar {{name}}",

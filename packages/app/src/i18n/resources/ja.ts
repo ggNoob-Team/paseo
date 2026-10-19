@@ -666,6 +666,7 @@ export const ja: TranslationResources = {
       },
       upload: {
         uploading: "ファイルをアップロード中",
+        tooLarge: "{{fileName}} が大きすぎます（最大 {{size}}）",
         uploaded_one: "{{name}} をアップロードしました",
         uploaded_other: "{{count}} 個のファイルをアップロードしました",
         failed: "{{name}} のアップロードに失敗しました",

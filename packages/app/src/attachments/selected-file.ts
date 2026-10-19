@@ -1,28 +1,67 @@
-import { getFileExtension } from "@/attachments/file-types";
-import { copyDesktopAttachmentFile } from "@/desktop/attachments/desktop-file-commands";
-import { readDesktopFileBase64 } from "@/desktop/attachments/desktop-preview-url";
+import { getMimeTypeFromPath } from "@/attachments/file-types";
+import { readDesktopFileChunk } from "@/desktop/local-files";
 
 export interface SelectedFile {
   fileName: string;
   mimeType: string;
-  readBytes(): Promise<Uint8Array>;
+  /** Exact byte length declared to the daemon. */
+  size: number;
+  /** Reads a bounded window so large uploads never buffer the whole file. */
+  readChunk(offset: number, length: number): Promise<Uint8Array>;
+  /** Releases any source handle; safe to call when no handle was opened. */
+  close(): Promise<void>;
 }
 
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+const READ_ALL_CHUNK_BYTES = 1024 * 1024;
+
+/** Materializes a small selected file, for callers that cannot stream. */
+export async function readSelectedFileBytes(file: SelectedFile): Promise<Uint8Array> {
+  const bytes = new Uint8Array(file.size);
+  try {
+    let offset = 0;
+    while (offset < file.size) {
+      const length = Math.min(READ_ALL_CHUNK_BYTES, file.size - offset);
+      const chunk = await file.readChunk(offset, length);
+      if (chunk.byteLength !== length) {
+        throw new Error(`Could not read ${file.fileName}.`);
+      }
+      bytes.set(chunk, offset);
+      offset += length;
+    }
+    return bytes;
+  } finally {
+    await file.close();
   }
-  return bytes;
 }
 
-export async function readDesktopFileBytes(path: string): Promise<Uint8Array> {
-  const { path: managedPath } = await copyDesktopAttachmentFile({
-    attachmentId: crypto.randomUUID(),
-    sourcePath: path,
-    extension: getFileExtension(path) || null,
-  });
-  const base64 = await readDesktopFileBase64(managedPath);
-  return base64ToUint8Array(base64);
+export function fileNameFromPath(path: string): string {
+  const segments = path.split(/[/\\]/);
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index];
+    if (segment) {
+      return segment;
+    }
+  }
+  return path;
+}
+
+export function selectedFileFromWebFile(file: File): SelectedFile {
+  return {
+    fileName: file.name,
+    mimeType: file.type || getMimeTypeFromPath(file.name),
+    size: file.size,
+    readChunk: async (offset, length) =>
+      new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+    close: async () => {},
+  };
+}
+
+export function selectedFileFromDesktopPath(path: string, size: number): SelectedFile {
+  return {
+    fileName: fileNameFromPath(path),
+    mimeType: getMimeTypeFromPath(path),
+    size,
+    readChunk: (offset, length) => readDesktopFileChunk({ path, offset, length }),
+    close: async () => {},
+  };
 }

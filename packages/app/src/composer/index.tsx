@@ -1801,7 +1801,7 @@ function ComposerContentImpl({
   const handleGenericFilesDropped = useCallback(
     async (items: DroppedItem[]) => {
       try {
-        const files = droppedItemsToSelectedFiles(items);
+        const files = await droppedItemsToSelectedFiles(items);
         if (files.length === 0) return;
         if (!client || !isConnected) {
           toastErrorRef.current(t("composer.errors.daemonClientDisconnected"));

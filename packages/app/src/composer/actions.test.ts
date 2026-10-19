@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
+import { MAX_FILE_UPLOAD_BYTES } from "@getpaseo/protocol/file-upload-limits";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -1054,17 +1055,24 @@ describe("file upload preparation", () => {
       },
     );
     const sent: string[] = [];
+    const readChunk = () => read;
     const upload = uploadFileAttachments({
       client: {
         sendAgentMessage: async () => {},
         uploadFile: async (file) => {
           sent.push(file.fileName);
-          expect(file.bytes).toEqual(new Uint8Array([1, 2]));
+          expect(file.source.readChunk).toBe(readChunk);
           return response;
         },
       },
       files: [
-        { fileName: "sample.bin", mimeType: "application/octet-stream", readBytes: () => read },
+        {
+          fileName: "sample.bin",
+          mimeType: "application/octet-stream",
+          size: 2,
+          readChunk,
+          close: async () => {},
+        },
       ],
     });
     let completed = false;
@@ -1073,9 +1081,8 @@ describe("file upload preparation", () => {
       return undefined;
     });
     expect(sent).toEqual([]);
-    resolveRead(new Uint8Array([1, 2]));
-    await Promise.resolve();
-    expect(sent).toEqual(["sample.bin"]);
+    resolveRead(new Uint8Array([1]));
+    await vi.waitFor(() => expect(sent).toEqual(["sample.bin"]));
     expect(completed).toBe(false);
     const file = {
       type: "uploaded_file" as const,
@@ -1106,15 +1113,18 @@ describe("file upload preparation", () => {
             {
               fileName: "valid.bin",
               mimeType: "application/octet-stream",
-              readBytes: async () => new Uint8Array([1]),
+              size: 1,
+              readChunk: async () => new Uint8Array([1]),
+              close: async () => {},
             },
             {
               fileName: "missing.bin",
               mimeType: "application/octet-stream",
-              readBytes: async () => {
-                if (failure === "oversized") return new Uint8Array(50 * 1024 * 1024 + 1);
+              size: failure === "oversized" ? MAX_FILE_UPLOAD_BYTES + 1 : 1,
+              readChunk: async () => {
                 throw new Error("read failed");
               },
+              close: async () => {},
             },
           ],
         }),

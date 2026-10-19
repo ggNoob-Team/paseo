@@ -117,7 +117,6 @@ test.describe("Explorer file upload", () => {
       ).resolves.toBe("folder upload");
 
       const replaceChooser = page.waitForEvent("filechooser");
-      const confirmation = page.waitForEvent("dialog");
       await explorer.getByTestId("files-upload").click();
       await (
         await replaceChooser
@@ -126,10 +125,9 @@ test.describe("Explorer file upload", () => {
         mimeType: "text/plain",
         buffer: Buffer.from("replaced upload"),
       });
-      await confirmation.then((dialog) => {
-        expect(dialog.message()).toContain("Replace file?");
-        return dialog.accept();
-      });
+      await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+      await expect(page.getByTestId("confirm-dialog")).toContainText("Replace file?");
+      await page.getByTestId("confirm-dialog-confirm").click();
       // The replacement lands after the confirmation round-trips through the daemon.
       await expect
         .poll(() => readFile(join(workspace.workspaceDirectory, "root-upload.txt"), "utf8"))
@@ -182,12 +180,9 @@ async function closeOtherExplorerTabs(page: Parameters<typeof ensureExplorerSide
     exact: true,
   });
   await files.click({ button: "right", position: { x: 12, y: 13 } });
-  const confirmation = page.waitForEvent("dialog").then((dialog) => {
-    expect(dialog.message()).toContain("close 1 tab");
-    return dialog.accept();
-  });
   await page.getByRole("menuitem", { name: "Close other tabs", exact: true }).click();
-  await confirmation;
+  await expect(page.getByTestId("confirm-dialog")).toContainText("close 1 tab");
+  await page.getByTestId("confirm-dialog-confirm").click();
 }
 
 test("Explorer keeps Files and Changes close actions in the context menu", async ({
