@@ -106,6 +106,36 @@ describe("RelayDurableObject versioning", () => {
   });
 });
 
+describe("RelayDurableObject buffered frames", () => {
+  it("drops binary upload frames while the server data socket is absent", () => {
+    const connectionId = "clt_pending_upload";
+    const client = createMockSocket({
+      version: "2",
+      role: "client",
+      connectionId,
+      serverId: "srv_test",
+      createdAt: Date.now(),
+    });
+    const { state, setTagSockets } = createMockState();
+    setTagSockets(`client:${connectionId}`, [client]);
+    setTagSockets(`server:${connectionId}`, []);
+
+    const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+    const pendingFrames = (
+      relay as unknown as {
+        pendingFrames: Map<string, string[]>;
+      }
+    ).pendingFrames;
+
+    relay.webSocketMessage(client as unknown as WebSocket, new ArrayBuffer(64 * 1024));
+    expect(pendingFrames.has(connectionId)).toBe(false);
+
+    const hello = JSON.stringify({ type: "hello", clientId: "clsk_test" });
+    relay.webSocketMessage(client as unknown as WebSocket, hello);
+    expect(pendingFrames.get(connectionId)).toEqual([hello]);
+  });
+});
+
 describe("RelayDurableObject control nudge/reset behavior", () => {
   afterEach(() => {
     vi.useRealTimers();

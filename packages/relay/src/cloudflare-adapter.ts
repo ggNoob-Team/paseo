@@ -24,6 +24,8 @@ type RelayProtocolVersion = "1" | "2";
 
 const LEGACY_RELAY_VERSION: RelayProtocolVersion = "1";
 const CURRENT_RELAY_VERSION: RelayProtocolVersion = "2";
+const MAX_PENDING_RELAY_FRAMES = 200;
+const MAX_PENDING_RELAY_TEXT_BYTES = 2 * 1024 * 1024;
 
 function resolveRelayVersion(rawValue: string | null): RelayProtocolVersion | null {
   if (rawValue == null) return LEGACY_RELAY_VERSION;
@@ -132,7 +134,7 @@ interface CFResponseInit extends ResponseInit {
 
 export class RelayDurableObject {
   private state: DurableObjectState;
-  private pendingFrames = new Map<string, Array<string | ArrayBuffer>>();
+  private pendingFrames = new Map<string, string[]>();
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -250,11 +252,24 @@ export class RelayDurableObject {
   }
 
   private bufferFrame(connectionId: string, message: string | ArrayBuffer): void {
+    // Binary frames belong to a live ordered channel. Replaying a stale file
+    // chunk after a new daemon data socket attaches can arrive before hello and
+    // tear the connection down again. Uploads advertise a resumable offset, so
+    // dropping binary while the peer is absent is safer than retaining tens of
+    // megabytes in a Durable Object.
+    if (typeof message !== "string") return;
     const existing = this.pendingFrames.get(connectionId) ?? [];
     existing.push(message);
-    // Prevent unbounded memory growth if a daemon never connects.
-    if (existing.length > 200) {
-      existing.splice(0, existing.length - 200);
+    // Keep enough text frames for reconnect/control handshakes without letting
+    // a disconnected daemon grow the relay's memory without bound.
+    let pendingBytes = existing.reduce((total, frame) => total + frame.length, 0);
+    while (
+      existing.length > MAX_PENDING_RELAY_FRAMES ||
+      pendingBytes > MAX_PENDING_RELAY_TEXT_BYTES
+    ) {
+      const removed = existing.shift();
+      if (removed === undefined) break;
+      pendingBytes -= removed.length;
     }
     this.pendingFrames.set(connectionId, existing);
   }

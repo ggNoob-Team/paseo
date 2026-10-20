@@ -2174,6 +2174,48 @@ test("an obsolete foreground probe cannot close a replacement connection", async
   expect(second.closesFromClient()).toEqual([]);
 });
 
+test("ignores delayed open, close, and error events from a replaced transport", async () => {
+  useHeartbeatClock();
+  try {
+    const first = createMockTransport();
+    const second = createMockTransport();
+    const transports = [first, second];
+    let transportIndex = 0;
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_stale_transport_events",
+      reconnect: { enabled: true, baseDelayMs: 1_500, maxDelayMs: 1_500 },
+      transportFactory: () => {
+        const transport = transports[transportIndex];
+        if (!transport) throw new Error("unexpected extra reconnect");
+        transportIndex += 1;
+        return transport.transport;
+      },
+    });
+    clients.push(client);
+
+    const initialConnect = client.connect();
+    first.triggerOpen();
+    await initialConnect;
+    first.triggerClose({ code: 1006, reason: "old relay connection closed" });
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    second.triggerOpen();
+    expect(client.getConnectionState()).toEqual({ status: "connected" });
+    expect(second.sent).toEqual([]);
+
+    first.triggerOpen();
+    first.triggerClose({ code: 1006, reason: "late close" });
+    first.triggerError(new Error("late transport error"));
+
+    expect(client.getConnectionState()).toEqual({ status: "connected" });
+    expect(second.sent).toEqual([]);
+    expect(transportIndex).toBe(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("stays online through ten minutes of pongs that arrive five seconds late", async () => {
   useHeartbeatClock();
   const session = new DaemonClientSession();
@@ -3032,6 +3074,71 @@ test("uploadFile waits for the transport send buffer to drain", async () => {
   expect(reads).toBe(2);
 });
 
+test("uploadFile keeps liveness heartbeats running while the send buffer is stalled", async () => {
+  useHeartbeatClock();
+  const mock = createMockTransport();
+  let bufferedAmount = 2 * 1024 * 1024;
+  mock.transport.getBufferedAmount = () => bufferedAmount;
+
+  const pingTimes: number[] = [];
+  const send = mock.transport.send;
+  mock.transport.send = (data) => {
+    if (typeof data === "string" && JSON.parse(data).type === "ping") {
+      pingTimes.push(Date.now());
+    }
+    send(data);
+  };
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_heartbeat",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const startedAt = Date.now();
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const upload = client.uploadFile({
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    bytes: new Uint8Array(512 * 1024),
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-upload-heartbeat",
+  });
+
+  await vi.advanceTimersByTimeAsync(30_001);
+
+  expect(pingTimes.map((timestamp) => timestamp - startedAt)).toEqual([10_000, 20_000, 30_000]);
+  expect(client.getConnectionState()).toEqual({ status: "connected" });
+
+  bufferedAmount = 0;
+  await vi.advanceTimersByTimeAsync(100);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file.upload.response",
+      payload: {
+        requestId: "req-upload-heartbeat",
+        file: {
+          type: "uploaded_file",
+          id: "upload_req-upload-heartbeat",
+          fileName: "large.bin",
+          mimeType: "application/octet-stream",
+          size: 512 * 1024,
+          path: "/tmp/paseo-uploads/upload_req-upload-heartbeat/large.bin",
+        },
+        error: null,
+      },
+    }),
+  );
+
+  await expect(upload).resolves.toMatchObject({ requestId: "req-upload-heartbeat", error: null });
+});
+
 test("uploadFileEntry does not send chunks on a replacement transport", async () => {
   const first = createMockTransport();
   const second = createMockTransport();
@@ -3417,6 +3524,95 @@ test("uploadFileEntry waits for daemon progress before exceeding the upload wind
         alreadyExists: false,
         error: null,
         requestId: "req-upload-window",
+      },
+    }),
+  );
+  await expect(upload).resolves.toMatchObject({ success: true });
+});
+
+test("uploadFileEntry uses relay-safe chunks and a small acknowledged window", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://relay.test/ws?role=client&serverId=srv_test&v=2",
+    clientId: "clsk_upload_relay_window",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { fsEntryUploadResume: true } });
+  await connectPromise;
+
+  const size = 1536 * 1024;
+  const upload = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: ".",
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    source: {
+      size,
+      readChunk: async (_offset, length) => new Uint8Array(length),
+    },
+    uploadId: "upload_relay_window_test",
+    requestId: "req-upload-relay-window",
+  });
+  void upload.catch(() => undefined);
+
+  const findStatusRequest = () =>
+    mock.sent.findIndex((data) => {
+      if (typeof data !== "string") return false;
+      return JSON.parse(data).message.type === "fs.entry.upload.status.request";
+    });
+  await vi.waitFor(() => expect(findStatusRequest()).toBeGreaterThan(-1));
+
+  const statusIndex = findStatusRequest();
+  const framesBeforeStatus = mock.sent
+    .slice(0, statusIndex)
+    .filter((data): data is Uint8Array => data instanceof Uint8Array)
+    .map(decodeFileTransferFrame);
+  const chunksBeforeStatus = framesBeforeStatus.filter(
+    (frame) => frame.opcode === FileTransferOpcode.FileChunk,
+  );
+  expect(framesBeforeStatus[0]?.opcode).toBe(FileTransferOpcode.FileBegin);
+  expect(chunksBeforeStatus).toHaveLength(16);
+  expect(chunksBeforeStatus.every((frame) => frame.payload.byteLength === 64 * 1024)).toBe(true);
+
+  const statusRequest = parseSentFrame(mock.sent[statusIndex]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.status.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        uploadId: "upload_relay_window_test",
+        receivedBytes: size,
+        exists: true,
+        error: null,
+        requestId: statusRequest.requestId,
+      },
+    }),
+  );
+
+  await vi.waitFor(() => {
+    const frames = mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        path: "large.bin",
+        success: true,
+        alreadyExists: false,
+        error: null,
+        requestId: "req-upload-relay-window",
       },
     }),
   );

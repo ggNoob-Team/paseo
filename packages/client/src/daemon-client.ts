@@ -1157,6 +1157,15 @@ const FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS = 16;
 // bufferedAmount. Bound the local lead over the daemon's persisted offset too.
 const FILE_UPLOAD_REMOTE_WINDOW_BYTES = 8 * 1024 * 1024;
 const FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
+// A relay socket forwards many more physical frames than a loopback socket and
+// can be reset while ArkWeb still reports bufferedAmount as zero. Keep relay
+// uploads in a small acknowledged window and pace them so a 500 MB transfer
+// cannot turn one network hiccup into an endless reconnect storm.
+const RELAY_FILE_UPLOAD_CHUNK_BYTES = 64 * 1024;
+const RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 256 * 1024;
+const RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS = 12;
+const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 1024 * 1024;
+const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
@@ -1164,7 +1173,8 @@ const FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS = Math.max(
   DEFAULT_SESSION_RPC_TIMEOUT_MS * 2,
   Math.ceil(FILE_UPLOAD_REMOTE_WINDOW_BYTES / MIN_UPLOAD_BYTES_PER_SECOND) * 1000,
 );
-const MAX_UPLOAD_AUTO_RESUME_ATTEMPTS = 5;
+const MAX_UPLOAD_AUTO_RESUME_ATTEMPTS = 20;
+const MAX_UPLOAD_AUTO_RESUME_DELAY_MS = 10_000;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -1402,7 +1412,6 @@ export class DaemonClient {
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
-  private activeFileTransfers = 0;
 
   constructor(private config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
@@ -1556,8 +1565,10 @@ export class DaemonClient {
         });
       }, timeoutMs);
 
+      const isCurrentTransport = () => this.transport === transport;
       this.transportCleanup = [
         transport.onOpen(() => {
+          if (!isCurrentTransport()) return;
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
             this.pendingGenericTransportErrorTimeout = null;
@@ -1566,6 +1577,7 @@ export class DaemonClient {
           void this.sendHelloMessage();
         }),
         transport.onClose((event) => {
+          if (!isCurrentTransport()) return;
           this.resetConnectTimeout();
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
@@ -1585,6 +1597,7 @@ export class DaemonClient {
           });
         }),
         transport.onError((event) => {
+          if (!isCurrentTransport()) return;
           this.resetConnectTimeout();
           const reason = describeTransportError(event);
           const isGeneric = reason === "Transport error";
@@ -1597,8 +1610,9 @@ export class DaemonClient {
               this.pendingGenericTransportErrorTimeout = setTimeout(() => {
                 this.pendingGenericTransportErrorTimeout = null;
                 if (
-                  this.connectionState.status === "connected" ||
-                  this.connectionState.status === "connecting"
+                  isCurrentTransport() &&
+                  (this.connectionState.status === "connected" ||
+                    this.connectionState.status === "connecting")
                 ) {
                   this.lastErrorValue = reason;
                   this.scheduleReconnect({
@@ -1624,7 +1638,7 @@ export class DaemonClient {
           });
         }),
         transport.onMessage((data) => {
-          if (this.transport === transport) this.handleTransportMessage(data);
+          if (isCurrentTransport()) this.handleTransportMessage(data);
         }),
       ];
     } catch (error) {
@@ -2421,13 +2435,9 @@ export class DaemonClient {
     if (this.connectionState.status !== "connected" || this.livenessHeartbeatTimer) {
       return;
     }
-    if (this.activeFileTransfers > 0) {
-      this.livenessHeartbeatTimer = setTimeout(() => {
-        this.livenessHeartbeatTimer = null;
-        this.scheduleNextLivenessHeartbeat();
-      }, LIVENESS_HEARTBEAT_INTERVAL_MS);
-      return;
-    }
+    // Upload chunks normally renew the daemon-side application lease, but ArkWeb
+    // and relay backpressure can pause them while a buffer drains. Keep the
+    // liveness cadence so a 45-second silence never reaps an active connection.
     this.livenessHeartbeatTimer = setTimeout(() => {
       this.livenessHeartbeatTimer = null;
       this.livenessPing({ timeoutMs: LIVENESS_HEARTBEAT_TIMEOUT_MS })
@@ -5196,6 +5206,13 @@ export class DaemonClient {
         uploadId !== undefined &&
         this.lastServerInfoMessage?.features?.fsEntryUploadResume === true;
       const resolvedRequestId = this.createRequestId(input.requestId);
+      const isRelayUpload = this.logConnectionPath === "relay";
+      const remoteWindowBytes = isRelayUpload
+        ? RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES
+        : FILE_UPLOAD_REMOTE_WINDOW_BYTES;
+      const remoteLeadLimitBytes = isRelayUpload
+        ? RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES
+        : FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES;
       let confirmedBytes = resumeOffset;
       let progressProbe: Promise<number> | null = null;
       const requestRemoteProgress = async (transport: DaemonTransport): Promise<number> => {
@@ -5232,13 +5249,10 @@ export class DaemonClient {
             if (this.transport !== transport || this.connectionState.status !== "connected") {
               throw new DaemonConnectionError("Connection changed during file upload");
             }
-            if (!progressProbe && sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
+            if (!progressProbe && sentBytes - confirmedBytes >= remoteWindowBytes) {
               startProgressProbe(transport);
             }
-            if (
-              progressProbe &&
-              sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES
-            ) {
+            if (progressProbe && sentBytes - confirmedBytes >= remoteLeadLimitBytes) {
               await progressProbe;
             }
           }
@@ -5284,6 +5298,13 @@ export class DaemonClient {
         }
         autoResumeAttempts += 1;
         await this.waitForUploadReconnect(DEFAULT_SESSION_RPC_TIMEOUT_MS);
+        if (this.logConnectionPath === "relay") {
+          const delayMs = Math.min(
+            1000 * 2 ** (autoResumeAttempts - 1),
+            MAX_UPLOAD_AUTO_RESUME_DELAY_MS,
+          );
+          await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        }
         const status = await this.requestFileEntryUploadStatus({
           cwd: input.cwd,
           parentPath: input.parentPath,
@@ -5334,9 +5355,13 @@ export class DaemonClient {
     if (!uploadTransport) {
       throw new DaemonConnectionError("Transport not connected during file upload");
     }
-    this.activeFileTransfers += 1;
     try {
       const responsePromise = input.start();
+      const isRelayUpload = this.logConnectionPath === "relay";
+      const bufferHighWaterBytes = isRelayUpload
+        ? RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES
+        : FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES;
+      const chunkIntervalMs = isRelayUpload ? RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS : 0;
       let settled = false;
       void responsePromise.then(
         () => {
@@ -5366,13 +5391,16 @@ export class DaemonClient {
 
         const startOffset = input.offset ?? 0;
         input.onProgress?.(startOffset);
-        const chunkSize = input.chunkSize ?? DEFAULT_FILE_UPLOAD_CHUNK_BYTES;
+        const chunkSize =
+          input.chunkSize ??
+          (isRelayUpload ? RELAY_FILE_UPLOAD_CHUNK_BYTES : DEFAULT_FILE_UPLOAD_CHUNK_BYTES);
         for (let cursor = startOffset; cursor < input.source.size; cursor += chunkSize) {
           // Native WebSocket.send encodes binary synchronously. Let rendering and
           // incoming messages run between bounded pieces on every platform.
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          await new Promise<void>((resolve) => setTimeout(resolve, chunkIntervalMs));
           const bufferState = await this.waitForUploadBuffer({
             uploadTransport,
+            highWaterBytes: bufferHighWaterBytes,
             isSettled: () => settled,
           });
           if (bufferState === "settled") {
@@ -5414,13 +5442,13 @@ export class DaemonClient {
 
       return responsePromise;
     } finally {
-      this.activeFileTransfers = Math.max(0, this.activeFileTransfers - 1);
       this.scheduleNextLivenessHeartbeat();
     }
   }
 
   private async waitForUploadBuffer(input: {
     uploadTransport: DaemonTransport;
+    highWaterBytes: number;
     isSettled: () => boolean;
   }): Promise<"ready" | "settled"> {
     while (true) {
@@ -5439,7 +5467,7 @@ export class DaemonClient {
       } catch {
         bufferedAmount = null;
       }
-      if (bufferedAmount === null || bufferedAmount <= FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES) {
+      if (bufferedAmount === null || bufferedAmount <= input.highWaterBytes) {
         return "ready";
       }
       await new Promise<void>((resolve) =>
