@@ -2237,9 +2237,10 @@ export class VoiceAssistantWebSocketServer {
     ws: WebSocketLike;
     buffer: Buffer;
     activeConnection: SessionConnection | undefined;
+    pendingConnection: PendingConnection | undefined;
     log: pino.Logger;
   }): boolean {
-    const { ws, buffer, activeConnection, log } = params;
+    const { ws, buffer, activeConnection, pendingConnection, log } = params;
     const asBytes = asUint8Array(buffer);
     if (!asBytes) {
       return false;
@@ -2249,6 +2250,17 @@ export class VoiceAssistantWebSocketServer {
       return false;
     }
     if (!activeConnection) {
+      if (
+        pendingConnection?.identity.transport === "relay" &&
+        decodedFrame.kind === "file_transfer"
+      ) {
+        this.incrementRuntimeCounter("relayBinaryBeforeHelloDropped");
+        log.debug(
+          { opcode: decodedFrame.frame.opcode, requestId: decodedFrame.frame.requestId },
+          "Dropped stale relay binary frame before hello",
+        );
+        return true;
+      }
       this.incrementRuntimeCounter("binaryBeforeHelloRejected");
       log.warn("Rejected binary frame before hello");
       this.clearPendingConnection(ws);
@@ -2326,6 +2338,7 @@ export class VoiceAssistantWebSocketServer {
         ws,
         buffer,
         activeConnection,
+        pendingConnection,
         log,
       });
       if (binaryHandled) {

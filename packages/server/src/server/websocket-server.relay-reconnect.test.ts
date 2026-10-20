@@ -18,6 +18,10 @@ import {
   TerminalStreamOpcode,
 } from "@getpaseo/protocol/terminal-stream-protocol";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import {
+  encodeFileTransferFrame,
+  FileTransferOpcode,
+} from "@getpaseo/protocol/binary-frames/index";
 import { APPLICATION_SOCKET_LEASE_MS } from "./websocket/physical-socket.js";
 
 type SocketListener = (...args: unknown[]) => void;
@@ -860,6 +864,53 @@ describe("relay external socket reconnect behavior", () => {
     );
     expect(closeCode).toBe(4002);
     expect(["Invalid hello", "Session message before hello"]).toContain(closeReason);
+    expect(sessionMock.instances).toHaveLength(0);
+
+    await server.close();
+  });
+
+  test("drops replayed relay file frames before hello without closing the connection", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+
+    await server.attachExternalSocket(socket, { transport: "relay" });
+    socket.emit(
+      "message",
+      Buffer.from(
+        encodeFileTransferFrame({
+          opcode: FileTransferOpcode.FileChunk,
+          requestId: "stale-upload",
+          payload: new Uint8Array([1, 2, 3]),
+        }),
+      ),
+    );
+
+    expect(socket.readyState).toBe(1);
+    socket.emit("message", JSON.stringify(createHelloMessage("cid-relay-replay")));
+    await vi.waitFor(() => expect(sentServerInfoEnvelopes(socket)).toHaveLength(1));
+    expect(sessionMock.instances).toHaveLength(1);
+    expect(sessionMock.instances[0]?.handleBinaryFrame).not.toHaveBeenCalled();
+
+    await server.close();
+  });
+
+  test("still rejects binary frames before hello on direct connections", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+
+    await asInternals<WebSocketServerInternals>(server).attachSocket(socket, createDirectRequest());
+    socket.emit(
+      "message",
+      Buffer.from(
+        encodeFileTransferFrame({
+          opcode: FileTransferOpcode.FileChunk,
+          requestId: "direct-upload",
+          payload: new Uint8Array([1, 2, 3]),
+        }),
+      ),
+    );
+
+    expect(socket.readyState).toBe(3);
     expect(sessionMock.instances).toHaveLength(0);
 
     await server.close();

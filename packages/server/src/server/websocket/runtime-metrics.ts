@@ -10,6 +10,7 @@ export interface WebSocketRuntimeCounters {
   sessionSocketDisconnectedAttached: number;
   sessionCleanup: number;
   validationFailed: number;
+  relayBinaryBeforeHelloDropped: number;
   binaryBeforeHelloRejected: number;
   pendingMessageRejectedBeforeHello: number;
   missingConnectionForMessage: number;
@@ -227,6 +228,7 @@ function createRuntimeCounters(): WebSocketRuntimeCounters {
     sessionSocketDisconnectedAttached: 0,
     sessionCleanup: 0,
     validationFailed: 0,
+    relayBinaryBeforeHelloDropped: 0,
     binaryBeforeHelloRejected: 0,
     pendingMessageRejectedBeforeHello: 0,
     missingConnectionForMessage: 0,
