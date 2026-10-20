@@ -1061,6 +1061,18 @@ function resolveFileUploadSource(
   };
 }
 
+function isRetryableUploadError(error: unknown): boolean {
+  if (error instanceof DaemonConnectionError) {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return /transport closed|connection (changed|lost)|transport not connected|websocket|upload progress timed out/i.test(
+    error.message,
+  );
+}
+
 function uploadTimeoutForSize(size: number): number {
   const transferTimeMs = Math.ceil(size / MIN_UPLOAD_BYTES_PER_SECOND) * 1000;
   return Math.max(DEFAULT_SESSION_RPC_TIMEOUT_MS, transferTimeMs);
@@ -1152,6 +1164,7 @@ const FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS = Math.max(
   DEFAULT_SESSION_RPC_TIMEOUT_MS * 2,
   Math.ceil(FILE_UPLOAD_REMOTE_WINDOW_BYTES / MIN_UPLOAD_BYTES_PER_SECOND) * 1000,
 );
+const MAX_UPLOAD_AUTO_RESUME_ATTEMPTS = 5;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -1941,6 +1954,39 @@ export class DaemonClient {
   /** Resolves once connected, waiting out a connection that is still being established. */
   private whenConnected(): Promise<void> {
     return this.sendWhenConnected(() => undefined);
+  }
+
+  private waitForUploadReconnect(timeoutMs: number): Promise<void> {
+    if (this.connectionState.status === "connected") {
+      return Promise.resolve();
+    }
+    if (this.connectionState.status === "disposed") {
+      return Promise.reject(new DaemonConnectionError("Daemon client is disposed"));
+    }
+
+    this.ensureConnected();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let unsubscribe = () => {};
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        unsubscribe();
+        if (error) reject(error);
+        else resolve();
+      };
+      const timeout = setTimeout(() => {
+        finish(new DaemonConnectionError("Timed out waiting for upload reconnect"));
+      }, timeoutMs);
+      unsubscribe = this.subscribeConnectionStatus((state) => {
+        if (state.status === "connected") {
+          finish();
+        } else if (state.status === "disposed") {
+          finish(new DaemonConnectionError("Daemon client was disposed during upload reconnect"));
+        }
+      });
+    });
   }
 
   private sendWhenConnected(send: () => void): Promise<void> {
@@ -5137,13 +5183,21 @@ export class DaemonClient {
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > source.size) {
       throw new Error("Upload offset is invalid.");
     }
-    await this.whenConnected();
-    const resolvedRequestId = this.createRequestId(input.requestId);
-    const modifiedAt = input.modifiedAt ?? new Date().toISOString();
+
     const uploadId = input.uploadId;
-    let confirmedBytes = offset;
-    const waitForRemoteProgress =
-      uploadId && this.lastServerInfoMessage?.features?.fsEntryUploadResume === true
+    const modifiedAt = input.modifiedAt ?? new Date().toISOString();
+    let resumeOffset = offset;
+    let autoResumeAttempts = 0;
+    let canAutoResume = false;
+
+    while (true) {
+      await this.whenConnected();
+      canAutoResume =
+        uploadId !== undefined &&
+        this.lastServerInfoMessage?.features?.fsEntryUploadResume === true;
+      const resolvedRequestId = this.createRequestId(input.requestId);
+      let confirmedBytes = resumeOffset;
+      const waitForRemoteProgress = canAutoResume
         ? async (transport: DaemonTransport, sentBytes: number): Promise<void> => {
             const deadline = Date.now() + FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS;
             while (sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
@@ -5154,7 +5208,7 @@ export class DaemonClient {
                 cwd: input.cwd,
                 parentPath: input.parentPath,
                 fileName: input.fileName,
-                uploadId,
+                uploadId: uploadId as string,
                 timeout: FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS,
               });
               if (status.error) {
@@ -5176,35 +5230,63 @@ export class DaemonClient {
             }
           }
         : undefined;
-    return await this.streamFileTransfer({
-      requestId: resolvedRequestId,
-      source,
-      fileName: input.fileName,
-      mimeType: input.mimeType,
-      modifiedAt,
-      offset,
-      onProgress: input.onProgress,
-      waitForRemoteProgress,
-      chunkSize: input.chunkSize,
-      start: () =>
-        this.sendCorrelatedRequest({
+
+      try {
+        return await this.streamFileTransfer({
           requestId: resolvedRequestId,
-          message: {
-            type: "fs.entry.upload.request",
-            cwd: input.cwd,
-            parentPath: input.parentPath,
-            fileName: input.fileName,
-            size: source.size,
-            overwrite: input.overwrite,
-            uploadId: input.uploadId,
-            offset,
-            requestId: resolvedRequestId,
-          },
-          responseType: "fs.entry.upload.response",
-          timeout: uploadTimeoutForSize(source.size),
-          options: { skipQueue: true },
-        }),
-    });
+          source,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          modifiedAt,
+          offset: resumeOffset,
+          onProgress: input.onProgress,
+          waitForRemoteProgress,
+          chunkSize: input.chunkSize,
+          start: () =>
+            this.sendCorrelatedRequest({
+              requestId: resolvedRequestId,
+              message: {
+                type: "fs.entry.upload.request",
+                cwd: input.cwd,
+                parentPath: input.parentPath,
+                fileName: input.fileName,
+                size: source.size,
+                overwrite: input.overwrite,
+                uploadId,
+                offset: resumeOffset,
+                requestId: resolvedRequestId,
+              },
+              responseType: "fs.entry.upload.response",
+              timeout: uploadTimeoutForSize(source.size),
+              options: { skipQueue: true },
+            }),
+        });
+      } catch (error) {
+        if (
+          !canAutoResume ||
+          autoResumeAttempts >= MAX_UPLOAD_AUTO_RESUME_ATTEMPTS ||
+          !isRetryableUploadError(error)
+        ) {
+          throw error;
+        }
+        autoResumeAttempts += 1;
+        await this.waitForUploadReconnect(DEFAULT_SESSION_RPC_TIMEOUT_MS);
+        const status = await this.requestFileEntryUploadStatus({
+          cwd: input.cwd,
+          parentPath: input.parentPath,
+          fileName: input.fileName,
+          uploadId: uploadId as string,
+          timeout: FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS,
+        });
+        if (status.error) {
+          throw new Error(status.error, { cause: error });
+        }
+        if (status.receivedBytes > source.size) {
+          throw new Error("Upload progress exceeded the declared file size.", { cause: error });
+        }
+        resumeOffset = status.receivedBytes;
+      }
+    }
   }
 
   async requestFileEntryUploadStatus(

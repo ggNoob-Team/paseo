@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import {
   MAX_FILE_UPLOAD_BYTES,
   MAX_FILE_UPLOAD_LABEL,
@@ -57,6 +58,19 @@ export function useFileUpload({
     [serverId, workspaceId, workspaceRoot],
   );
   const isUploading = useUploadStore((state) => hasActiveFileUploads(state.uploads, scope));
+  const uploadKeepAwakeTag = `file-upload-${useId()}`;
+
+  useEffect(() => {
+    if (!isUploading) {
+      return;
+    }
+    void activateKeepAwakeAsync(uploadKeepAwakeTag).catch((error) => {
+      console.warn("[FileUpload] Failed to keep the screen awake:", error);
+    });
+    return () => {
+      void deactivateKeepAwake(uploadKeepAwakeTag).catch(() => undefined);
+    };
+  }, [isUploading, uploadKeepAwakeTag]);
 
   const runner = useMemo<FileUploadRunner>(() => {
     async function readReceivedBytes(item: FileUploadItem): Promise<number> {

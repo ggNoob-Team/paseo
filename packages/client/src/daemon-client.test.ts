@@ -3090,6 +3090,106 @@ test("uploadFileEntry does not send chunks on a replacement transport", async ()
   expect(second.sent.some((data) => typeof data !== "string")).toBe(false);
 });
 
+test("uploadFileEntry automatically resumes after a transport drop", async () => {
+  const first = createMockTransport();
+  const second = createMockTransport();
+  const transports = [first, second];
+  let transportIndex = 0;
+  let readCalls = 0;
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_auto_resume",
+    logger: createMockLogger(),
+    reconnect: { enabled: true, baseDelayMs: 1, maxDelayMs: 1 },
+    transportFactory: () => {
+      const mock = transports[transportIndex];
+      transportIndex += 1;
+      if (!mock) throw new Error("unexpected extra reconnect");
+      return mock.transport;
+    },
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  first.triggerOpen({ features: { fsEntryUploadResume: true } });
+  await connectPromise;
+
+  const upload = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: ".",
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    source: {
+      size: 4,
+      readChunk: async (_offset, length) => {
+        readCalls += 1;
+        if (readCalls === 2) {
+          first.triggerClose({ code: 1006, reason: "network lost" });
+        }
+        return new Uint8Array(length);
+      },
+    },
+    uploadId: "upload_auto_resume_test",
+    chunkSize: 2,
+  });
+  void upload.catch(() => undefined);
+
+  await vi.waitFor(() => expect(transportIndex).toBe(2));
+  second.triggerOpen({ features: { fsEntryUploadResume: true } });
+
+  const findStatusRequest = () =>
+    second.sent.findIndex((data) => {
+      if (typeof data !== "string") return false;
+      return JSON.parse(data).message.type === "fs.entry.upload.status.request";
+    });
+  await vi.waitFor(() => expect(findStatusRequest()).toBeGreaterThan(-1));
+  const statusRequest = parseSentFrame(second.sent[findStatusRequest()]);
+  second.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.status.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        uploadId: "upload_auto_resume_test",
+        receivedBytes: 2,
+        exists: true,
+        error: null,
+        requestId: statusRequest.requestId,
+      },
+    }),
+  );
+
+  await vi.waitFor(() => {
+    const frames = second.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  const uploadRequest = second.sent
+    .filter((data): data is string => typeof data === "string")
+    .map((data) => parseSentFrame(data))
+    .find((message) => message.type === "fs.entry.upload.request");
+  expect(uploadRequest?.offset).toBe(2);
+  second.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        path: "large.bin",
+        success: true,
+        alreadyExists: false,
+        error: null,
+        requestId: uploadRequest?.requestId,
+      },
+    }),
+  );
+
+  await expect(upload).resolves.toMatchObject({ success: true });
+});
+
 test("uploadFileEntry registers a workspace upload and streams binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
