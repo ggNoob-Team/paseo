@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import type pino from "pino";
 import type { OwnedOperation, SessionDelivery } from "../owned-subscriptions/index.js";
 import type { FileVersion } from "@getpaseo/protocol/messages";
@@ -19,6 +20,8 @@ import type {
   FileEntryRenameRequest,
   FileEntryUploadRequest,
   FileEntryUploadResponse,
+  FileEntryUploadStatusRequest,
+  FileEntryUploadStatusResponse,
   FileExplorerRequest,
   FileUploadRequest,
   FileUploadResponse,
@@ -28,7 +31,11 @@ import type {
   SessionInboundMessage,
   SessionOutboundMessage,
 } from "../../messages.js";
-import { FileUploadStore, type FileUploadOutcome } from "../../file-upload/index.js";
+import {
+  FileUploadStore,
+  fileEntryUploadTempPath,
+  type FileUploadOutcome,
+} from "../../file-upload/index.js";
 import type { DownloadTokenStore } from "../../file-download/token-store.js";
 import {
   createExplorerEntry,
@@ -419,18 +426,16 @@ export class WorkspaceFilesSession {
       () => cancel?.(),
     );
     if (isUploadTooLarge(request.size)) {
-      this.emitUploadTooLarge(operation, {
-        type: "fs.entry.upload.response",
-        payload: {
-          cwd: request.cwd,
-          parentPath: request.parentPath,
-          path: null,
-          success: false,
-          alreadyExists: false,
-          error: uploadTooLargeMessage(),
-          requestId: request.requestId,
-        },
-      });
+      this.rejectFileEntryUpload(operation, request, uploadTooLargeMessage());
+      return;
+    }
+    const offset = request.offset ?? 0;
+    if (offset > request.size) {
+      this.rejectFileEntryUpload(operation, request, "Upload offset exceeds the declared size.");
+      return;
+    }
+    if (offset > 0 && !request.uploadId) {
+      this.rejectFileEntryUpload(operation, request, "Upload session id is required to resume.");
       return;
     }
     cancel = this.fileUploads.beginFileEntryUpload(request, {
@@ -447,8 +452,82 @@ export class WorkspaceFilesSession {
     });
   }
 
+  async handleFileEntryUploadStatusRequest(request: FileEntryUploadStatusRequest): Promise<void> {
+    try {
+      const directory = await resolveExplorerFilePath({
+        root: request.cwd,
+        relativePath: request.parentPath,
+      });
+      const tempPath = fileEntryUploadTempPath({
+        directory,
+        fileName: request.fileName,
+        uploadId: request.uploadId,
+      });
+      let receivedBytes = 0;
+      let exists = false;
+      try {
+        const fileInfo = await stat(tempPath);
+        exists = fileInfo.isFile();
+        receivedBytes = exists ? fileInfo.size : 0;
+      } catch (error) {
+        if (!isMissingEntryError(error)) {
+          throw error;
+        }
+      }
+      const response: FileEntryUploadStatusResponse = {
+        type: "fs.entry.upload.status.response",
+        payload: {
+          cwd: request.cwd,
+          parentPath: request.parentPath,
+          uploadId: request.uploadId,
+          receivedBytes,
+          exists,
+          error: null,
+          requestId: request.requestId,
+        },
+      };
+      this.host.emit(response);
+    } catch (error) {
+      const response: FileEntryUploadStatusResponse = {
+        type: "fs.entry.upload.status.response",
+        payload: {
+          cwd: request.cwd,
+          parentPath: request.parentPath,
+          uploadId: request.uploadId,
+          receivedBytes: 0,
+          exists: false,
+          error: getErrorMessage(error),
+          requestId: request.requestId,
+        },
+      };
+      this.host.emit(response);
+    }
+  }
+
   async handleFileTransferFrame(frame: FileTransferFrame, source: object): Promise<void> {
     await this.fileUploads.receiveFrame(frame, source);
+  }
+
+  private rejectFileEntryUpload(
+    operation: OwnedOperation,
+    request: FileEntryUploadRequest,
+    error: string,
+  ): void {
+    operation.emit({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: request.cwd,
+        parentPath: request.parentPath,
+        path: null,
+        success: false,
+        alreadyExists: false,
+        error,
+        requestId: request.requestId,
+      },
+    });
+    void operation
+      .release()
+      .catch((cleanupError) => this.logger.error({ err: cleanupError }, "Upload cleanup failed"));
   }
 
   private emitUploadTooLarge(
@@ -562,6 +641,11 @@ export class WorkspaceFilesSession {
       });
     }
   }
+}
+
+function isMissingEntryError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return code === "ENOENT" || code === "ENOTDIR";
 }
 
 function isUploadTooLarge(size: number): boolean {

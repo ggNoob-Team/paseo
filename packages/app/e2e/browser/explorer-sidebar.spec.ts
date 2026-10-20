@@ -7,6 +7,7 @@ import {
   expectTabTitleFits,
 } from "../support/helpers/launcher";
 import { seedWorkspace } from "../support/helpers/seed-client";
+import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-gate";
 import {
   ensureExplorerSidebar,
   openFilesPanel,
@@ -80,6 +81,7 @@ test.describe("Explorer file upload", () => {
       repoPrefix: "explorer-upload-",
       repo: { files: [{ path: "docs/guide.md", content: "# Guide\n" }] },
     });
+    const uploadGate = await installDaemonWebSocketGate(page);
 
     try {
       await gotoWorkspace(page, workspace.workspaceId);
@@ -87,21 +89,30 @@ test.describe("Explorer file upload", () => {
       const explorer = await ensureExplorerSidebar(page);
       await openFilesPanel(page);
 
+      const rootUploadBytes = Buffer.alloc(2 * 1024 * 1024, 7);
+      uploadGate.holdNextServerMessage("fs.entry.upload.response");
       const rootChooser = page.waitForEvent("filechooser");
       await explorer.getByTestId("files-upload").click();
       await (
         await rootChooser
       ).setFiles({
         name: "root-upload.txt",
-        mimeType: "text/plain",
-        buffer: Buffer.from("root upload"),
+        mimeType: "application/octet-stream",
+        buffer: rootUploadBytes,
       });
-      await expect(explorer.getByText("root-upload.txt", { exact: true })).toBeVisible();
+      await uploadGate.waitForHeldServerMessage("fs.entry.upload.response");
+      const uploadList = explorer.getByTestId("file-upload-progress-list");
+      await expect(uploadList).toBeVisible();
+      await expect(uploadList).toContainText("root-upload.txt");
+      await expect(uploadList.getByRole("progressbar").first()).toBeVisible();
+      uploadGate.releaseHeldServerMessage("fs.entry.upload.response");
+      const tree = explorer.getByTestId("file-explorer-tree-scroll");
+      await expect(tree.getByText("root-upload.txt", { exact: true })).toBeVisible();
       await expect(
-        readFile(join(workspace.workspaceDirectory, "root-upload.txt"), "utf8"),
-      ).resolves.toBe("root upload");
+        readFile(join(workspace.workspaceDirectory, "root-upload.txt")),
+      ).resolves.toEqual(rootUploadBytes);
 
-      await explorer.getByText("docs", { exact: true }).click({ button: "right" });
+      await tree.getByText("docs", { exact: true }).click({ button: "right" });
       const folderChooser = page.waitForEvent("filechooser");
       await page.getByRole("menuitem", { name: "Upload file", exact: true }).click();
       await (
@@ -111,7 +122,7 @@ test.describe("Explorer file upload", () => {
         mimeType: "text/plain",
         buffer: Buffer.from("folder upload"),
       });
-      await expect(explorer.getByText("folder-upload.txt", { exact: true })).toBeVisible();
+      await expect(tree.getByText("folder-upload.txt", { exact: true })).toBeVisible();
       await expect(
         readFile(join(workspace.workspaceDirectory, "docs", "folder-upload.txt"), "utf8"),
       ).resolves.toBe("folder upload");

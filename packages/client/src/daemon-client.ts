@@ -44,6 +44,7 @@ import type {
   CreatePaseoWorktreeRequest,
   FileDownloadTokenResponse,
   FileEntryUploadResponse,
+  FileEntryUploadStatusResponse,
   FileUploadResponse,
   FileExplorerResponse,
   FileVersion,
@@ -581,6 +582,9 @@ interface FileEntryUploadTarget {
   cwd: string;
   parentPath: string;
   overwrite?: boolean;
+  uploadId?: string;
+  offset?: number;
+  onProgress?: (uploadedBytes: number) => void;
 }
 export interface FileEntryUploadInput extends FileUploadMetadata, FileEntryUploadTarget {
   bytes: Uint8Array | ArrayBuffer;
@@ -589,6 +593,14 @@ export interface FileEntryUploadStreamInput extends FileUploadMetadata, FileEntr
   source: FileUploadSource;
 }
 export type FileEntryUploadResult = FileEntryUploadResponse["payload"];
+export interface FileEntryUploadStatusInput {
+  cwd: string;
+  parentPath: string;
+  fileName: string;
+  uploadId: string;
+  requestId?: string;
+}
+export type FileEntryUploadStatusResult = FileEntryUploadStatusResponse["payload"];
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
@@ -5104,6 +5116,10 @@ export class DaemonClient {
   ): Promise<FileEntryUploadResult> {
     const source = resolveFileUploadSource(input);
     assertUploadSize(source.size);
+    const offset = input.offset ?? 0;
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > source.size) {
+      throw new Error("Upload offset is invalid.");
+    }
     await this.whenConnected();
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
@@ -5113,6 +5129,8 @@ export class DaemonClient {
       fileName: input.fileName,
       mimeType: input.mimeType,
       modifiedAt,
+      offset,
+      onProgress: input.onProgress,
       chunkSize: input.chunkSize,
       start: () =>
         this.sendCorrelatedRequest({
@@ -5124,6 +5142,8 @@ export class DaemonClient {
             fileName: input.fileName,
             size: source.size,
             overwrite: input.overwrite,
+            uploadId: input.uploadId,
+            offset,
             requestId: resolvedRequestId,
           },
           responseType: "fs.entry.upload.response",
@@ -5133,12 +5153,29 @@ export class DaemonClient {
     });
   }
 
+  async requestFileEntryUploadStatus(
+    input: FileEntryUploadStatusInput,
+  ): Promise<FileEntryUploadStatusResult> {
+    return await this.sendNamespacedCorrelatedSessionRequest<"fs.entry.upload.status.response">({
+      requestId: input.requestId,
+      message: {
+        type: "fs.entry.upload.status.request",
+        cwd: input.cwd,
+        parentPath: input.parentPath,
+        fileName: input.fileName,
+        uploadId: input.uploadId,
+      },
+    });
+  }
+
   private async streamFileTransfer<TResult>(input: {
     requestId: string;
     source: FileUploadSource;
     fileName: string;
     mimeType: string;
     modifiedAt: string;
+    offset?: number;
+    onProgress?: (uploadedBytes: number) => void;
     chunkSize?: number;
     start: () => Promise<TResult>;
   }): Promise<TResult> {
@@ -5173,41 +5210,25 @@ export class DaemonClient {
         }),
       );
 
+      const startOffset = input.offset ?? 0;
+      input.onProgress?.(startOffset);
       const chunkSize = input.chunkSize ?? DEFAULT_FILE_UPLOAD_CHUNK_BYTES;
-      for (let offset = 0; offset < input.source.size; offset += chunkSize) {
+      for (let cursor = startOffset; cursor < input.source.size; cursor += chunkSize) {
         // Native WebSocket.send encodes binary synchronously. Let rendering and
         // incoming messages run between bounded pieces on every platform.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        if (settled) return await responsePromise;
-        if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
-          throw new DaemonConnectionError("Connection changed during file upload");
+        const bufferState = await this.waitForUploadBuffer({
+          uploadTransport,
+          isSettled: () => settled,
+        });
+        if (bufferState === "settled") {
+          return await responsePromise;
         }
-        // WebSocket.send only queues a frame; it does not apply backpressure. A
-        // fast local file read on a slower relay would otherwise push hundreds of
-        // megabytes into ArkWeb's native buffer until the whole socket is dropped.
-        while (true) {
-          if (settled) return await responsePromise;
-          if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
-            throw new DaemonConnectionError("Connection changed during file upload");
-          }
-          let bufferedAmount: number | null;
-          try {
-            bufferedAmount = uploadTransport.getBufferedAmount?.() ?? null;
-          } catch {
-            bufferedAmount = null;
-          }
-          if (bufferedAmount === null || bufferedAmount <= FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES) {
-            break;
-          }
-          await new Promise<void>((resolve) =>
-            setTimeout(resolve, FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS),
-          );
-        }
-        const length = Math.min(chunkSize, input.source.size - offset);
-        const chunk = await input.source.readChunk(offset, length);
+        const length = Math.min(chunkSize, input.source.size - cursor);
+        const chunk = await input.source.readChunk(cursor, length);
         if (chunk.byteLength !== length) {
           throw new Error(
-            `File changed during upload: expected ${length} bytes at ${offset}, received ${chunk.byteLength}.`,
+            `File changed during upload: expected ${length} bytes at ${cursor}, received ${chunk.byteLength}.`,
           );
         }
         this.sendBinaryFrame(
@@ -5217,6 +5238,7 @@ export class DaemonClient {
             payload: chunk,
           }),
         );
+        input.onProgress?.(cursor + chunk.byteLength);
       }
 
       this.sendBinaryFrame(
@@ -5234,6 +5256,35 @@ export class DaemonClient {
     }
 
     return responsePromise;
+  }
+
+  private async waitForUploadBuffer(input: {
+    uploadTransport: DaemonTransport;
+    isSettled: () => boolean;
+  }): Promise<"ready" | "settled"> {
+    while (true) {
+      if (input.isSettled()) {
+        return "settled";
+      }
+      if (this.transport !== input.uploadTransport || this.connectionState.status !== "connected") {
+        throw new DaemonConnectionError("Connection changed during file upload");
+      }
+      // WebSocket.send only queues a frame; it does not apply backpressure. A
+      // fast local file read on a slower relay would otherwise push hundreds of
+      // megabytes into ArkWeb's native buffer until the whole socket is dropped.
+      let bufferedAmount: number | null;
+      try {
+        bufferedAmount = input.uploadTransport.getBufferedAmount?.() ?? null;
+      } catch {
+        bufferedAmount = null;
+      }
+      if (bufferedAmount === null || bufferedAmount <= FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES) {
+        return "ready";
+      }
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS),
+      );
+    }
   }
 
   async requestDownloadToken(

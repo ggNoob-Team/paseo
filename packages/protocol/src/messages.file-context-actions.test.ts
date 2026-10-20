@@ -12,6 +12,8 @@ import {
   FileEntryRenameResponseSchema,
   FileEntryUploadRequestSchema,
   FileEntryUploadResponseSchema,
+  FileEntryUploadStatusRequestSchema,
+  FileEntryUploadStatusResponseSchema,
   ServerInfoStatusPayloadSchema,
 } from "./messages.js";
 
@@ -25,6 +27,7 @@ describe("file context action messages", () => {
     expect(legacy.features?.fsEntryOps).toBeUndefined();
     expect(legacy.features?.fsEntryDuplicate).toBeUndefined();
     expect(legacy.features?.fsEntryUpload).toBeUndefined();
+    expect(legacy.features?.fsEntryUploadResume).toBeUndefined();
     expect(legacy.features?.checkoutDiscardChanges).toBeUndefined();
 
     const current = ServerInfoStatusPayloadSchema.parse({
@@ -34,6 +37,7 @@ describe("file context action messages", () => {
         fsEntryOps: true,
         fsEntryDuplicate: true,
         fsEntryUpload: true,
+        fsEntryUploadResume: true,
         checkoutDiscardChanges: true,
       },
     });
@@ -41,6 +45,7 @@ describe("file context action messages", () => {
       fsEntryOps: true,
       fsEntryDuplicate: true,
       fsEntryUpload: true,
+      fsEntryUploadResume: true,
       checkoutDiscardChanges: true,
     });
   });
@@ -95,6 +100,13 @@ describe("file context action messages", () => {
     const replaceRequest = { ...request, overwrite: true };
     expect(FileEntryUploadRequestSchema.parse(replaceRequest)).toEqual(replaceRequest);
 
+    const resumeRequest = {
+      ...request,
+      uploadId: "upload_resume_1",
+      offset: 5,
+    };
+    expect(FileEntryUploadRequestSchema.parse(resumeRequest)).toEqual(resumeRequest);
+
     const response = {
       type: "fs.entry.upload.response",
       payload: {
@@ -108,6 +120,32 @@ describe("file context action messages", () => {
       },
     };
     expect(FileEntryUploadResponseSchema.parse(response)).toEqual(response);
+  });
+
+  test("round-trips file entry upload status requests and responses", () => {
+    const request = {
+      type: "fs.entry.upload.status.request",
+      cwd: "/workspace",
+      parentPath: "docs",
+      fileName: "notes.txt",
+      uploadId: "upload_resume_1",
+      requestId: "entry-upload-status-1",
+    };
+    expect(FileEntryUploadStatusRequestSchema.parse(request)).toEqual(request);
+
+    const response = {
+      type: "fs.entry.upload.status.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: "docs",
+        uploadId: "upload_resume_1",
+        receivedBytes: 5,
+        exists: true,
+        error: null,
+        requestId: "entry-upload-status-1",
+      },
+    };
+    expect(FileEntryUploadStatusResponseSchema.parse(response)).toEqual(response);
   });
 
   test("round-trips file entry rename requests and responses", () => {

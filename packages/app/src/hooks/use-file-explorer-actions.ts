@@ -261,6 +261,9 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
       mimeType: string;
       source: SelectedFile;
       overwrite?: boolean;
+      uploadId?: string;
+      offset?: number;
+      onProgress?: (uploadedBytes: number) => void;
     }) => {
       if (!normalizedWorkspaceRoot) {
         throw new Error(t("workspace.fileExplorer.states.unavailable"));
@@ -275,6 +278,27 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
         mimeType: input.mimeType,
         source: input.source,
         overwrite: input.overwrite,
+        uploadId: input.uploadId,
+        offset: input.offset,
+        onProgress: input.onProgress,
+      });
+    },
+    [client, normalizedWorkspaceRoot, t],
+  );
+
+  const requestFileEntryUploadStatus = useCallback(
+    async (input: { parentPath: string; fileName: string; uploadId: string }) => {
+      if (!normalizedWorkspaceRoot) {
+        throw new Error(t("workspace.fileExplorer.states.unavailable"));
+      }
+      if (!client) {
+        throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      return await client.requestFileEntryUploadStatus({
+        cwd: normalizedWorkspaceRoot,
+        parentPath: input.parentPath,
+        fileName: input.fileName,
+        uploadId: input.uploadId,
       });
     },
     [client, normalizedWorkspaceRoot, t],
@@ -370,6 +394,7 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
     requestFilePreview,
     requestFileDownloadToken,
     uploadFileEntry,
+    requestFileEntryUploadStatus,
     createEntry,
     renameEntry,
     duplicateEntry,

@@ -68,6 +68,7 @@ import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { FileUploadProgressList } from "@/components/file-upload-progress-list";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -482,16 +483,21 @@ export function FileExplorerPane({
   const fsEntryUploadEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryUpload === true,
   );
+  // COMPAT(fsEntryUploadResume): added in v0.11.2, remove gate after 2027-04-20.
+  const fsEntryUploadResumeEnabled = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryUploadResume === true,
+  );
   const [pendingEdit, setPendingEdit] = useState<ExplorerPendingEdit | null>(null);
   const downloadFile = useFileDownload({
     serverId,
     workspaceId,
     workspaceRoot: normalizedWorkspaceRoot,
   });
-  const { isUploading, uploadFiles } = useFileUpload({
+  const { isUploading, uploadFiles, resumeUpload, dismissUpload } = useFileUpload({
     serverId,
     workspaceId,
     workspaceRoot: normalizedWorkspaceRoot,
+    canResume: fsEntryUploadResumeEnabled,
   });
   const sortOption = usePanelStore((state) => state.explorerSortOption);
   const showHiddenFiles = usePanelStore((state) => state.explorerShowHiddenFiles);
@@ -690,25 +696,19 @@ export function FileExplorerPane({
 
   const handleUploadEntry = useCallback(
     async (parentPath: string) => {
-      const uploaded = await uploadFiles(parentPath);
-      if (uploaded === 0 || !workspaceStateKey) {
+      const queued = await uploadFiles(parentPath);
+      if (queued === 0 || parentPath === "." || !workspaceStateKey) {
         return;
       }
-      if (parentPath !== ".") {
-        setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
-          setExpandedDirectoryPath({
-            currentExpandedPaths: currentPaths,
-            directoryPath: parentPath,
-            expanded: true,
-          }),
-        );
-      }
-      await requestDirectoryListing(parentPath, {
-        recordHistory: false,
-        setCurrentPath: false,
-      });
+      setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
+        setExpandedDirectoryPath({
+          currentExpandedPaths: currentPaths,
+          directoryPath: parentPath,
+          expanded: true,
+        }),
+      );
     },
-    [requestDirectoryListing, setExpandedPathsForWorkspace, uploadFiles, workspaceStateKey],
+    [setExpandedPathsForWorkspace, uploadFiles, workspaceStateKey],
   );
 
   const handleUploadAtRoot = useCallback(() => {
@@ -1123,6 +1123,12 @@ export function FileExplorerPane({
         currentSortLabel={currentSortLabel}
         isRefreshFetching={isRefreshFetching}
         isUploading={isUploading}
+        serverId={serverId}
+        workspaceId={workspaceId}
+        workspaceRoot={normalizedWorkspaceRoot}
+        canResumeUploads={fsEntryUploadResumeEnabled}
+        onResumeUpload={resumeUpload}
+        onDismissUpload={dismissUpload}
         treeListRef={treeListRef}
         scrollbar={scrollbar}
         renderTreeRow={renderTreeRow}
@@ -1199,6 +1205,12 @@ interface FileExplorerPaneContentProps {
   currentSortLabel: string;
   isRefreshFetching: boolean;
   isUploading: boolean;
+  serverId: string;
+  workspaceId?: string | null;
+  workspaceRoot: string;
+  canResumeUploads: boolean;
+  onResumeUpload: (id: string) => void;
+  onDismissUpload: (id: string) => void;
   treeListRef: RefObject<FlatList<ExplorerListRow> | null>;
   scrollbar: OverlayFlatListScrollbar;
   renderTreeRow: (info: ListRenderItemInfo<ExplorerListRow>) => ReactElement;
@@ -1224,6 +1236,12 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     currentSortLabel,
     isRefreshFetching,
     isUploading,
+    serverId,
+    workspaceId,
+    workspaceRoot,
+    canResumeUploads,
+    onResumeUpload,
+    onDismissUpload,
     treeListRef,
     scrollbar,
     renderTreeRow,
@@ -1405,6 +1423,14 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           </ToolbarButton>
         </ToolbarControls>
       </PaneContentToolbar>
+      <FileUploadProgressList
+        serverId={serverId}
+        workspaceId={workspaceId}
+        workspaceRoot={workspaceRoot}
+        canResume={canResumeUploads}
+        onResume={onResumeUpload}
+        onDismiss={onDismissUpload}
+      />
       <ContextMenu>
         <RootCreationContextTarget enabled={Boolean(onNewEntryAtRoot)}>
           {listRows.length === 0 ? (

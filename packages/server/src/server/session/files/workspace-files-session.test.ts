@@ -751,6 +751,139 @@ describe("WorkspaceFilesSession", () => {
     await ownership.close();
   });
 
+  test("reports and resumes a cancelled file entry upload", async () => {
+    const cwd = makeDir("workspace-files-entry-resume-");
+    const { subsystem, emitted } = makeSubsystem();
+    const uploadId = "upload_session_resume";
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const firstRequest = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      uploadId,
+      requestId: "req-resume-first",
+    } as const;
+    await ownership.request(source, firstRequest, async () =>
+      subsystem.handleFileEntryUploadRequest(firstRequest, ownership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-resume-first",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      source,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileChunk,
+        requestId: "req-resume-first",
+        payload: new TextEncoder().encode("hello "),
+      }),
+      source,
+    );
+    await ownership.close();
+
+    const tempPath = join(cwd, `.notes.txt.paseo-${uploadId}.tmp`);
+    expect(readFileSync(tempPath, "utf8")).toBe("hello ");
+
+    await subsystem.handleFileEntryUploadStatusRequest({
+      type: "fs.entry.upload.status.request",
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      uploadId,
+      requestId: "req-resume-status",
+    });
+    const status = emitted.find((entry) => entry.type === "fs.entry.upload.status.response");
+    if (status?.type !== "fs.entry.upload.status.response") {
+      throw new Error("expected a fs.entry.upload.status.response message");
+    }
+    expect(status.payload).toEqual({
+      cwd,
+      parentPath: ".",
+      uploadId,
+      receivedBytes: 6,
+      exists: true,
+      error: null,
+      requestId: "req-resume-status",
+    });
+
+    const resumeSource = {};
+    const resumeOwnership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    resumeOwnership.attach(resumeSource, true);
+    const resumeRequest = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      uploadId,
+      offset: 6,
+      requestId: "req-resume-second",
+    } as const;
+    await resumeOwnership.request(resumeSource, resumeRequest, async () =>
+      subsystem.handleFileEntryUploadRequest(resumeRequest, resumeOwnership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-resume-second",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      resumeSource,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileChunk,
+        requestId: "req-resume-second",
+        payload: new TextEncoder().encode("world"),
+      }),
+      resumeSource,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({ opcode: FileTransferOpcode.FileEnd, requestId: "req-resume-second" }),
+      resumeSource,
+    );
+
+    const response = emitted.find((entry) => entry.type === "fs.entry.upload.response");
+    if (response?.type !== "fs.entry.upload.response") {
+      throw new Error("expected a fs.entry.upload.response message");
+    }
+    expect(response.payload).toMatchObject({
+      cwd,
+      parentPath: ".",
+      path: "notes.txt",
+      success: true,
+      alreadyExists: false,
+      error: null,
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
+    expect(existsSync(tempPath)).toBe(false);
+    await resumeOwnership.close();
+  });
+
   test("reports an existing destination without overwriting it", async () => {
     const cwd = makeDir("workspace-files-entry-upload-conflict-");
     writeFileSync(join(cwd, "notes.txt"), "existing");

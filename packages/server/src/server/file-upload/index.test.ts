@@ -370,6 +370,112 @@ describe("file entry uploads", () => {
     expect(readdirSync(cwd)).toEqual([]);
   });
 
+  it("replaces a destination after a conflict when overwrite is requested", async () => {
+    const cwd = makeDir("file-entry-upload-conflict-retry-");
+    writeFileSync(join(cwd, "notes.txt"), "existing");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      requestId: "req-entry-conflict-retry",
+      resolveDirectory: async () => cwd,
+    });
+    await expect(
+      uploads.receiveFrame(uploadBegins("req-entry-conflict-retry"), source),
+    ).resolves.toEqual({
+      status: "failed",
+      error: '"notes.txt" already exists',
+      alreadyExists: true,
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("existing");
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      overwrite: true,
+      requestId: "req-entry-conflict-overwrite",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-entry-conflict-overwrite"), source);
+    await uploads.receiveFrame(uploadChunk("req-entry-conflict-overwrite", "hello world"), source);
+    await expect(
+      uploads.receiveFrame(uploadEnds("req-entry-conflict-overwrite"), source),
+    ).resolves.toMatchObject({ status: "completed" });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
+  });
+
+  it("resumes a cancelled workspace upload from the daemon's received offset", async () => {
+    const cwd = makeDir("file-entry-upload-resume-");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const source = {};
+    const uploadId = "upload_resume_test";
+
+    const cancel = beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      uploadId,
+      requestId: "req-resume-first",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-resume-first"), source);
+    await uploads.receiveFrame(uploadChunk("req-resume-first", "hello "), source);
+    await cancel();
+
+    const tempName = readdirSync(cwd).find((name) => name.startsWith(".notes.txt.paseo-"));
+    if (!tempName) {
+      throw new Error("Expected the resumable temp file to survive cancellation");
+    }
+    expect(readFileSync(join(cwd, tempName), "utf8")).toBe("hello ");
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      uploadId,
+      offset: 5,
+      requestId: "req-resume-mismatch",
+      resolveDirectory: async () => cwd,
+    });
+    await expect(
+      uploads.receiveFrame(uploadBegins("req-resume-mismatch"), source),
+    ).resolves.toEqual({
+      status: "failed",
+      error: "Upload session is out of date. Refresh the upload status and try again.",
+      alreadyExists: false,
+    });
+    expect(readFileSync(join(cwd, tempName), "utf8")).toBe("hello ");
+
+    beginWorkspaceUpload(uploads, source, {
+      cwd,
+      parentPath: ".",
+      fileName: "notes.txt",
+      size: 11,
+      uploadId,
+      offset: 6,
+      requestId: "req-resume-second",
+      resolveDirectory: async () => cwd,
+    });
+    await uploads.receiveFrame(uploadBegins("req-resume-second"), source);
+    await uploads.receiveFrame(uploadChunk("req-resume-second", "world"), source);
+    await expect(uploads.receiveFrame(uploadEnds("req-resume-second"), source)).resolves.toEqual({
+      status: "completed",
+      uploadId,
+      fileName: "notes.txt",
+      path: join(cwd, "notes.txt"),
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
+    expect(readdirSync(cwd)).toEqual(["notes.txt"]);
+  });
+
   it("fails without writing when the destination directory cannot be resolved", async () => {
     const cwd = makeDir("file-entry-upload-unresolved-");
     const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
@@ -406,10 +512,12 @@ function beginWorkspaceUpload(
     fileName: string;
     size: number;
     overwrite?: boolean;
+    uploadId?: string;
+    offset?: number;
     requestId: string;
     resolveDirectory: () => Promise<string>;
   },
-): void {
+): () => Promise<void> {
   const request: FileEntryUploadRequest = {
     type: "fs.entry.upload.request",
     cwd: input.cwd,
@@ -417,9 +525,11 @@ function beginWorkspaceUpload(
     fileName: input.fileName,
     size: input.size,
     overwrite: input.overwrite,
+    uploadId: input.uploadId,
+    offset: input.offset,
     requestId: input.requestId,
   };
-  uploads.beginFileEntryUpload(request, {
+  return uploads.beginFileEntryUpload(request, {
     source,
     resolveDirectory: input.resolveDirectory,
     finished: () => {},

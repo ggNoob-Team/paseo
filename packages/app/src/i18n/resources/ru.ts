@@ -666,6 +666,13 @@ export const ru: TranslationResources = {
       upload: {
         uploading: "Загрузка файлов",
         tooLarge: "Файл {{fileName}} слишком большой (максимальный размер: {{size}})",
+        listTitle: "Загрузка",
+        queued: "Ожидает загрузки",
+        completed: "Загружено",
+        resume: "Продолжить",
+        resumeUnavailable: "Обновите хост, чтобы продолжить",
+        dismiss: "Скрыть",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "{{name}} загружен",
         uploaded_other: "Загружено файлов: {{count}}",
         failed: "Не удалось загрузить {{name}}",

@@ -667,6 +667,13 @@ export const ja: TranslationResources = {
       upload: {
         uploading: "ファイルをアップロード中",
         tooLarge: "{{fileName}} が大きすぎます（最大 {{size}}）",
+        listTitle: "アップロード中",
+        queued: "アップロード待ち",
+        completed: "アップロード済み",
+        resume: "続行",
+        resumeUnavailable: "ホストを更新すると再開できます",
+        dismiss: "閉じる",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "{{name}} をアップロードしました",
         uploaded_other: "{{count}} 個のファイルをアップロードしました",
         failed: "{{name}} のアップロードに失敗しました",

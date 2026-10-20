@@ -3051,6 +3051,7 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
 
   const bytes = new TextEncoder().encode("hello world");
   const reads: Array<[number, number]> = [];
+  const progress: number[] = [];
   const responsePromise = client.uploadFileEntry({
     cwd: "/workspace",
     parentPath: "docs",
@@ -3063,9 +3064,11 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
         return bytes.subarray(offset, offset + length);
       },
     },
+    uploadId: "upload_client_test",
     modifiedAt: "2026-05-02T00:00:00.000Z",
     requestId: "req-entry-upload",
     chunkSize: 5,
+    onProgress: (uploadedBytes) => progress.push(uploadedBytes),
   });
 
   await vi.waitFor(() => {
@@ -3081,6 +3084,8 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
       parentPath: "docs",
       fileName: "notes.txt",
       size: 11,
+      uploadId: "upload_client_test",
+      offset: 0,
       requestId: "req-entry-upload",
     },
   });
@@ -3148,6 +3153,166 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
     [5, 5],
     [10, 1],
   ]);
+  expect(progress).toEqual([0, 5, 10, 11]);
+});
+
+test("uploadFileEntry resumes from an offset and reports absolute progress", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const bytes = new TextEncoder().encode("hello world");
+  const progress: number[] = [];
+  const responsePromise = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: "docs",
+    fileName: "notes.txt",
+    mimeType: "text/plain",
+    source: {
+      size: bytes.byteLength,
+      readChunk: async (offset, length) => bytes.subarray(offset, offset + length),
+    },
+    overwrite: false,
+    uploadId: "upload_resume_test",
+    offset: 6,
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-entry-resume",
+    chunkSize: 5,
+    onProgress: (uploadedBytes) => progress.push(uploadedBytes),
+  });
+
+  await vi.waitFor(() => {
+    const frames = mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "fs.entry.upload.request",
+      cwd: "/workspace",
+      parentPath: "docs",
+      fileName: "notes.txt",
+      size: 11,
+      overwrite: false,
+      uploadId: "upload_resume_test",
+      offset: 6,
+      requestId: "req-entry-resume",
+    },
+  });
+  expect(mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
+    {
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-entry-resume",
+      metadata: {
+        mime: "text/plain",
+        size: 11,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+        fileName: "notes.txt",
+      },
+      payload: new Uint8Array(),
+    },
+    {
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-entry-resume",
+      payload: new TextEncoder().encode("world"),
+    },
+    {
+      opcode: FileTransferOpcode.FileEnd,
+      requestId: "req-entry-resume",
+      payload: new Uint8Array(),
+    },
+  ]);
+  expect(progress).toEqual([6, 11]);
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: "docs",
+        path: "docs/notes.txt",
+        success: true,
+        alreadyExists: false,
+        error: null,
+        requestId: "req-entry-resume",
+      },
+    }),
+  );
+  await expect(responsePromise).resolves.toMatchObject({ success: true });
+});
+
+test("requestFileEntryUploadStatus returns the daemon's received offset", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const statusPromise = client.requestFileEntryUploadStatus({
+    cwd: "/workspace",
+    parentPath: "docs",
+    fileName: "notes.txt",
+    uploadId: "upload_resume_test",
+  });
+  await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
+  const sent = JSON.parse(assertStr(mock.sent[0]));
+  expect(sent).toEqual({
+    type: "session",
+    message: {
+      type: "fs.entry.upload.status.request",
+      cwd: "/workspace",
+      parentPath: "docs",
+      fileName: "notes.txt",
+      uploadId: "upload_resume_test",
+      requestId: expect.any(String),
+    },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.status.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: "docs",
+        uploadId: "upload_resume_test",
+        receivedBytes: 6,
+        exists: true,
+        error: null,
+        requestId: sent.message.requestId,
+      },
+    }),
+  );
+  await expect(statusPromise).resolves.toEqual({
+    cwd: "/workspace",
+    parentPath: "docs",
+    uploadId: "upload_resume_test",
+    receivedBytes: 6,
+    exists: true,
+    error: null,
+    requestId: sent.message.requestId,
+  });
 });
 
 test("rejects uploads larger than 2GB before reading the source", async () => {

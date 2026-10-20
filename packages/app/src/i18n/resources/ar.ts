@@ -661,6 +661,13 @@ export const ar: TranslationResources = {
       upload: {
         uploading: "جارٍ رفع الملفات",
         tooLarge: "{{fileName}} كبير جدًا (الحد الأقصى {{size}})",
+        listTitle: "جارٍ الرفع",
+        queued: "في انتظار الرفع",
+        completed: "تم الرفع",
+        resume: "متابعة",
+        resumeUnavailable: "حدّث المضيف للمتابعة",
+        dismiss: "إغلاق",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "تم رفع {{name}}",
         uploaded_other: "تم رفع {{count}} ملفات",
         failed: "تعذّر رفع {{name}}",

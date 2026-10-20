@@ -659,6 +659,13 @@ export const zhCN: TranslationResources = {
       upload: {
         uploading: "正在上传文件",
         tooLarge: "{{fileName}} 过大（最大 {{size}}）",
+        listTitle: "正在上传",
+        queued: "等待上传",
+        completed: "已完成",
+        resume: "继续上传",
+        resumeUnavailable: "更新主机后可续传",
+        dismiss: "移除",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "已上传 {{name}}",
         uploaded_other: "已上传 {{count}} 个文件",
         failed: "上传 {{name}} 失败",

@@ -3025,6 +3025,17 @@ export const FileEntryUploadRequestSchema = z.object({
   fileName: z.string().min(1),
   size: z.number().int().nonnegative(),
   overwrite: z.boolean().optional(),
+  uploadId: z.string().min(1).optional(),
+  offset: z.number().int().nonnegative().optional(),
+  requestId: z.string(),
+});
+
+export const FileEntryUploadStatusRequestSchema = z.object({
+  type: z.literal("fs.entry.upload.status.request"),
+  cwd: z.string(),
+  parentPath: z.string(),
+  fileName: z.string().min(1),
+  uploadId: z.string().min(1),
   requestId: z.string(),
 });
 
@@ -3783,6 +3794,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FileEntryDuplicateRequestSchema,
   FileEntryDeleteRequestSchema,
   FileEntryUploadRequestSchema,
+  FileEntryUploadStatusRequestSchema,
   ProjectIconRequestSchema,
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
@@ -4179,6 +4191,8 @@ export const ServerInfoStatusPayloadSchema = z
         fsEntryDuplicate: z.boolean().optional(),
         // COMPAT(fsEntryUpload): added in v0.11.2, remove gate after 2027-04-10 once the daemon floor understands fs.entry.upload.*.
         fsEntryUpload: z.boolean().optional(),
+        // COMPAT(fsEntryUploadResume): added in v0.11.2, remove gate after 2027-04-20 once the daemon floor understands fs.entry.upload.status.*.
+        fsEntryUploadResume: z.boolean().optional(),
         // COMPAT(checkoutDiscardChanges): added in v0.3.0, remove gate after 2027-02-08.
         checkoutDiscardChanges: z.boolean().optional(),
         // COMPAT(agentProfiles): added in v0.3.2, remove gate after 2027-02-11.
@@ -6495,6 +6509,19 @@ export const FileEntryUploadResponseSchema = z.object({
   }),
 });
 
+export const FileEntryUploadStatusResponseSchema = z.object({
+  type: z.literal("fs.entry.upload.status.response"),
+  payload: z.object({
+    cwd: z.string(),
+    parentPath: z.string(),
+    uploadId: z.string(),
+    receivedBytes: z.number().int().nonnegative(),
+    exists: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileEntryRenameResponseSchema = z.object({
   type: z.literal("fs.entry.rename.response"),
   payload: z.object({
@@ -7571,6 +7598,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FileEntryDuplicateResponseSchema,
   FileEntryDeleteResponseSchema,
   FileEntryUploadResponseSchema,
+  FileEntryUploadStatusResponseSchema,
   FileUpdateSchema,
   ProjectIconResponseSchema,
   ProjectIconGetResponseSchema,
@@ -8020,6 +8048,8 @@ export type FileEntryDeleteRequest = z.infer<typeof FileEntryDeleteRequestSchema
 export type FileEntryDeleteResponse = z.infer<typeof FileEntryDeleteResponseSchema>;
 export type FileEntryUploadRequest = z.infer<typeof FileEntryUploadRequestSchema>;
 export type FileEntryUploadResponse = z.infer<typeof FileEntryUploadResponseSchema>;
+export type FileEntryUploadStatusRequest = z.infer<typeof FileEntryUploadStatusRequestSchema>;
+export type FileEntryUploadStatusResponse = z.infer<typeof FileEntryUploadStatusResponseSchema>;
 export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
 export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;

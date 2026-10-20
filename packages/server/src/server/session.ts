@@ -3222,6 +3222,8 @@ export class Session {
       case "fs.entry.upload.request":
         this.workspaceFilesSession.handleFileEntryUploadRequest(msg, this.delivery);
         return undefined;
+      case "fs.entry.upload.status.request":
+        return this.workspaceFilesSession.handleFileEntryUploadStatusRequest(msg);
       case "project_icon_request":
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "project.icon.get.request":

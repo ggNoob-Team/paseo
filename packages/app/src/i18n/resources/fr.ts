@@ -667,6 +667,13 @@ export const fr: TranslationResources = {
       upload: {
         uploading: "Import de fichiers",
         tooLarge: "{{fileName}} est trop volumineux (maximum {{size}})",
+        listTitle: "Import en cours",
+        queued: "En attente d’import",
+        completed: "Importé",
+        resume: "Continuer",
+        resumeUnavailable: "Mettez à jour l’hôte pour reprendre",
+        dismiss: "Ignorer",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "{{name}} importé",
         uploaded_other: "{{count}} fichiers importés",
         failed: "Échec de l’import de {{name}}",

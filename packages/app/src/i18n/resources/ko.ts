@@ -662,6 +662,13 @@ export const ko: TranslationResources = {
       upload: {
         uploading: "파일 업로드 중",
         tooLarge: "{{fileName}}이(가) 너무 큽니다 (최대 {{size}})",
+        listTitle: "업로드 중",
+        queued: "업로드 대기 중",
+        completed: "업로드됨",
+        resume: "계속",
+        resumeUnavailable: "호스트를 업데이트하면 이어서 업로드할 수 있습니다",
+        dismiss: "닫기",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "{{name}} 업로드됨",
         uploaded_other: "{{count}}개 파일 업로드됨",
         failed: "{{name}} 업로드 실패",

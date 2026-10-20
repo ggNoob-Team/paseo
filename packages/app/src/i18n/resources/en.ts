@@ -657,6 +657,13 @@ export const en = {
       upload: {
         uploading: "Uploading files",
         tooLarge: "{{fileName}} is too large (max {{size}})",
+        listTitle: "Uploading",
+        queued: "Waiting to upload",
+        completed: "Uploaded",
+        resume: "Continue",
+        resumeUnavailable: "Update host to resume",
+        dismiss: "Dismiss",
+        progress: "{{percent}}% · {{uploaded}} / {{total}}",
         uploaded_one: "Uploaded {{name}}",
         uploaded_other: "Uploaded {{count}} files",
         failed: "Failed to upload {{name}}",
