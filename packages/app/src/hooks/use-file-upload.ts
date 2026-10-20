@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import {
   MAX_FILE_UPLOAD_BYTES,
   MAX_FILE_UPLOAD_LABEL,
@@ -17,6 +16,7 @@ import {
   type FileUploadRunner,
 } from "@/stores/upload-store";
 import type { SelectedFile } from "@/attachments/selected-file";
+import { setKeepScreenOn } from "@/utils/keep-screen-on";
 
 interface UseFileUploadParams {
   serverId: string;
@@ -64,11 +64,20 @@ export function useFileUpload({
     if (!isUploading) {
       return;
     }
-    void activateKeepAwakeAsync(uploadKeepAwakeTag).catch((error) => {
-      console.warn("[FileUpload] Failed to keep the screen awake:", error);
-    });
+    let active = true;
+    void setKeepScreenOn(uploadKeepAwakeTag, true)
+      .then(() => {
+        if (!active) {
+          return setKeepScreenOn(uploadKeepAwakeTag, false);
+        }
+        return undefined;
+      })
+      .catch((error) => {
+        console.warn("[FileUpload] Failed to keep the screen awake:", error);
+      });
     return () => {
-      void deactivateKeepAwake(uploadKeepAwakeTag).catch(() => undefined);
+      active = false;
+      void setKeepScreenOn(uploadKeepAwakeTag, false).catch(() => undefined);
     };
   }, [isUploading, uploadKeepAwakeTag]);
 

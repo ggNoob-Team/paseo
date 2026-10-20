@@ -3329,7 +3329,7 @@ test("uploadFileEntry waits for daemon progress before exceeding the upload wind
   mock.triggerOpen({ features: { fsEntryUploadResume: true } });
   await connectPromise;
 
-  const size = 9 * 1024 * 1024;
+  const size = 17 * 1024 * 1024;
   const upload = client.uploadFileEntry({
     cwd: "/workspace",
     parentPath: ".",
@@ -3367,6 +3367,20 @@ test("uploadFileEntry waits for daemon progress before exceeding the upload wind
   ).toHaveLength(8);
   expect(framesBeforeStatus.at(-1)?.opcode).toBe(FileTransferOpcode.FileChunk);
 
+  await vi.waitFor(() => {
+    const chunks = mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame)
+      .filter((frame) => frame.opcode === FileTransferOpcode.FileChunk);
+    expect(chunks).toHaveLength(16);
+  });
+  expect(
+    mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame)
+      .at(-1)?.opcode,
+  ).toBe(FileTransferOpcode.FileChunk);
+
   const statusRequest = JSON.parse(assertStr(mock.sent[statusIndex])).message as {
     requestId: string;
   };
@@ -3377,7 +3391,7 @@ test("uploadFileEntry waits for daemon progress before exceeding the upload wind
         cwd: "/workspace",
         parentPath: ".",
         uploadId: "upload_window_test",
-        receivedBytes: size,
+        receivedBytes: 16 * 1024 * 1024,
         exists: true,
         error: null,
         requestId: statusRequest.requestId,

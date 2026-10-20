@@ -1156,7 +1156,7 @@ const FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS = 16;
 // ArkWeb can keep a large native WebSocket queue without reflecting it in
 // bufferedAmount. Bound the local lead over the daemon's persisted offset too.
 const FILE_UPLOAD_REMOTE_WINDOW_BYTES = 8 * 1024 * 1024;
-const FILE_UPLOAD_REMOTE_PROGRESS_POLL_INTERVAL_MS = 100;
+const FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
@@ -5197,36 +5197,49 @@ export class DaemonClient {
         this.lastServerInfoMessage?.features?.fsEntryUploadResume === true;
       const resolvedRequestId = this.createRequestId(input.requestId);
       let confirmedBytes = resumeOffset;
+      let progressProbe: Promise<number> | null = null;
+      const requestRemoteProgress = async (transport: DaemonTransport): Promise<number> => {
+        if (this.transport !== transport || this.connectionState.status !== "connected") {
+          throw new DaemonConnectionError("Connection changed during file upload");
+        }
+        const status = await this.requestFileEntryUploadStatus({
+          cwd: input.cwd,
+          parentPath: input.parentPath,
+          fileName: input.fileName,
+          uploadId: uploadId as string,
+          timeout: FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS,
+        });
+        if (status.error) {
+          throw new Error(status.error);
+        }
+        if (status.receivedBytes > source.size) {
+          throw new Error("Upload progress exceeded the declared file size.");
+        }
+        confirmedBytes = status.receivedBytes;
+        return status.receivedBytes;
+      };
+      const startProgressProbe = (transport: DaemonTransport): void => {
+        if (progressProbe) {
+          return;
+        }
+        progressProbe = requestRemoteProgress(transport).finally(() => {
+          progressProbe = null;
+        });
+        void progressProbe.catch(() => undefined);
+      };
       const waitForRemoteProgress = canAutoResume
         ? async (transport: DaemonTransport, sentBytes: number): Promise<void> => {
-            const deadline = Date.now() + FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS;
-            while (sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
-              if (this.transport !== transport || this.connectionState.status !== "connected") {
-                throw new DaemonConnectionError("Connection changed during file upload");
-              }
-              const status = await this.requestFileEntryUploadStatus({
-                cwd: input.cwd,
-                parentPath: input.parentPath,
-                fileName: input.fileName,
-                uploadId: uploadId as string,
-                timeout: FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS,
-              });
-              if (status.error) {
-                throw new Error(status.error);
-              }
-              if (status.receivedBytes > source.size) {
-                throw new Error("Upload progress exceeded the declared file size.");
-              }
-              confirmedBytes = status.receivedBytes;
-              if (sentBytes - confirmedBytes < FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
-                return;
-              }
-              if (Date.now() >= deadline) {
-                throw new DaemonConnectionError("Upload progress timed out");
-              }
-              await new Promise<void>((resolve) =>
-                setTimeout(resolve, FILE_UPLOAD_REMOTE_PROGRESS_POLL_INTERVAL_MS),
-              );
+            if (this.transport !== transport || this.connectionState.status !== "connected") {
+              throw new DaemonConnectionError("Connection changed during file upload");
+            }
+            if (!progressProbe && sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
+              startProgressProbe(transport);
+            }
+            if (
+              progressProbe &&
+              sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES
+            ) {
+              await progressProbe;
             }
           }
         : undefined;

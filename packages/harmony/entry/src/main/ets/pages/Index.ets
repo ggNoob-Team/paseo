@@ -2,6 +2,7 @@ import web_webview from "@ohos.web.webview";
 import common from "@ohos.app.ability.common";
 import pasteboard from "@ohos.pasteboard";
 import resourceManager from "@ohos.resourceManager";
+import window from "@ohos.window";
 import type { BusinessError } from "@ohos.base";
 import hilog from "@ohos.hilog";
 import {
@@ -54,6 +55,31 @@ class ClipboardBridge {
   }
 }
 
+/** Keeps the screen awake while the web app is uploading large files. */
+class ScreenKeepAwakeBridge {
+  private context: common.UIAbilityContext | null = null;
+
+  setContext(context: common.UIAbilityContext): void {
+    this.context = context;
+  }
+
+  setKeepScreenOn(enabled: boolean, callback: (kept: boolean) => void): void {
+    const context = this.context;
+    if (context === null) {
+      callback(false);
+      return;
+    }
+    window
+      .getLastWindow(context)
+      .then((lastWindow: window.Window) => lastWindow.setWindowKeepScreenOn(enabled))
+      .then(() => callback(true))
+      .catch((error: BusinessError) => {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, "keep-screen-on failed: %{public}s", `${error}`);
+        callback(false);
+      });
+  }
+}
+
 /**
  * Paseo HarmonyOS shell.
  *
@@ -65,6 +91,7 @@ class ClipboardBridge {
 @Component
 struct Index {
   private controller: web_webview.WebviewController = new web_webview.WebviewController();
+  private screenKeepAwake = new ScreenKeepAwakeBridge();
   private resources: resourceManager.ResourceManager | null = null;
   /**
    * A unique document URL per launch. The bundle and its document are served from
@@ -77,6 +104,7 @@ struct Index {
   aboutToAppear(): void {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     this.resources = context.resourceManager;
+    this.screenKeepAwake.setContext(context);
   }
 
   /**
@@ -174,6 +202,13 @@ struct Index {
           // synchronous and never receives the page's callback.
           methodList: [],
           asyncMethodList: ["readText", "writeText"],
+          controller: this.controller,
+        })
+        .javaScriptProxy({
+          object: this.screenKeepAwake,
+          name: "paseoKeepScreenOn",
+          methodList: [],
+          asyncMethodList: ["setKeepScreenOn"],
           controller: this.controller,
         })
         // IndexedDB backs the replica row store on web (row-store.web.ts).
