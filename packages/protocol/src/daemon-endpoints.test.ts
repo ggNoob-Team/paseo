@@ -4,6 +4,7 @@ import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
   CURRENT_RELAY_PROTOCOL_VERSION,
+  DEFAULT_HOSTED_RELAY_CLIENT_ENDPOINT,
   extractHostPortFromWebSocketUrl,
   normalizeRelayProtocolVersion,
   parseConnectionUri,
@@ -148,6 +149,48 @@ describe("relay websocket URL versioning", () => {
 
   test("rejects unsupported relay versions", () => {
     expect(() => normalizeRelayProtocolVersion("3")).toThrow('Relay version must be "1" or "2"');
+  });
+});
+
+describe("hosted relay client endpoint", () => {
+  test("routes hosted clients directly to the Fly relay upstream", () => {
+    const url = new URL(
+      buildRelayWebSocketUrl({
+        endpoint: "relay.paseo.sh:443",
+        useTls: true,
+        serverId: "srv_test",
+        role: "client",
+      }),
+    );
+
+    expect(url.hostname).toBe(DEFAULT_HOSTED_RELAY_CLIENT_ENDPOINT.split(":")[0]);
+  });
+
+  test("keeps hosted daemon sockets on the public relay endpoint", () => {
+    const url = new URL(
+      buildRelayWebSocketUrl({
+        endpoint: "relay.paseo.sh:443",
+        useTls: true,
+        serverId: "srv_test",
+        role: "server",
+        connectionId: "conn_test",
+      }),
+    );
+
+    expect(url.hostname).toBe("relay.paseo.sh");
+  });
+
+  test("does not rewrite custom relay endpoints", () => {
+    const url = new URL(
+      buildRelayWebSocketUrl({
+        endpoint: "relay.example.com:443",
+        useTls: true,
+        serverId: "srv_test",
+        role: "client",
+      }),
+    );
+
+    expect(url.hostname).toBe("relay.example.com");
   });
 });
 

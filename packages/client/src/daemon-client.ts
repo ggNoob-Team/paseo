@@ -1158,15 +1158,17 @@ const FILE_UPLOAD_BUFFER_STALL_TIMEOUT_MS = 30_000;
 // bufferedAmount. Bound the local lead over the daemon's persisted offset too.
 const FILE_UPLOAD_REMOTE_WINDOW_BYTES = 8 * 1024 * 1024;
 const FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
-// A relay can reset while ArkWeb still reports bufferedAmount as zero. Keep a
-// bounded local queue, but do not impose a low fixed throughput: the daemon
-// acknowledges several megabytes at a time and the transport itself provides
-// the useful backpressure.
+// A relay can reset while ArkWeb still reports bufferedAmount as zero. The
+// hosted relay also has no outbound backpressure signal for the daemon's WAN
+// socket, so sending an extra unacknowledged window can fill its queue and reset
+// the client at that exact byte boundary. Keep sending and acknowledgement in
+// the same bounded window; resumable uploads then continue from the daemon's
+// persisted offset instead of relying on a large speculative lead.
 const RELAY_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
 const RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 1024 * 1024;
 const RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS = 0;
 const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 4 * 1024 * 1024;
-const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
+const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;

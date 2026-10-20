@@ -68,6 +68,12 @@ export type RelayProtocolVersion = "1" | "2";
 
 export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
 export const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
+// The production Cloudflare cutover bridge streams WebSocket traffic through
+// fetch(). Sustained client uploads can reset that proxy while the same relay
+// service remains healthy when clients connect to its Fly upstream directly.
+// Keep daemon sockets on the public endpoint, but route clients around the
+// lossy bridge until it can preserve WebSocket backpressure.
+export const DEFAULT_HOSTED_RELAY_CLIENT_ENDPOINT = "paseo-relay-next.fly.dev:443";
 
 export function normalizeRelayProtocolVersion(
   value: unknown,
@@ -236,7 +242,10 @@ export function buildRelayWebSocketUrl(params: {
   connectionId?: string;
   version?: RelayProtocolVersion | 1 | 2;
 }): string {
-  const { host, port, isIpv6 } = parseHostPort(params.endpoint);
+  let { host, port, isIpv6 } = parseHostPort(params.endpoint);
+  if (params.role === "client" && params.useTls && host === "relay.paseo.sh" && port === 443) {
+    ({ host, port, isIpv6 } = parseHostPort(DEFAULT_HOSTED_RELAY_CLIENT_ENDPOINT));
+  }
   const protocol = params.useTls ? "wss" : "ws";
   const hostPart = isIpv6 ? `[${host}]` : host;
   const url = new URL(`${protocol}://${hostPart}:${port}/ws`);

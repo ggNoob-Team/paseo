@@ -3649,6 +3649,20 @@ test("uploadFileEntry uses efficient relay chunks and a bounded acknowledged win
   expect(chunksBeforeStatus.every((frame) => frame.payload.byteLength === 256 * 1024)).toBe(true);
 
   const statusRequest = parseSentFrame(mock.sent[statusIndex]);
+  await vi.waitFor(() => {
+    const sentChunks = mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame)
+      .filter((frame) => frame.opcode === FileTransferOpcode.FileChunk);
+    expect(sentChunks).toHaveLength(16);
+  });
+  expect(
+    mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame)
+      .at(-1)?.opcode,
+  ).toBe(FileTransferOpcode.FileChunk);
+
   mock.triggerMessage(
     wrapSessionMessage({
       type: "fs.entry.upload.status.response",
