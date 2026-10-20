@@ -2148,6 +2148,29 @@ test("foreground verification preserves a healthy socket and deduplicates simult
   expect(daemon.closesFromClient()).toEqual([]);
 });
 
+test("foreground relay verification tolerates a pong delayed by WAN latency", async () => {
+  useHeartbeatClock();
+  const daemon = new FakeDaemon();
+  daemon.daemonAnswersPingsAfter("5s");
+  const client = new DaemonClient({
+    url: "ws://relay.test/ws?role=client&serverId=srv_foreground_relay",
+    clientId: "foreground-relay",
+    logger: noopLogger,
+    reconnect: { enabled: false },
+    transportFactory: () => daemon.transport,
+  });
+  clients.push(client);
+  const connection = client.connect();
+  daemon.openConnection();
+  await connection;
+
+  client.ensureConnected({ verify: true });
+  await vi.advanceTimersByTimeAsync(5_000);
+
+  expect(client.getConnectionState()).toEqual({ status: "connected" });
+  expect(daemon.closesFromClient()).toEqual([]);
+});
+
 test("an obsolete foreground probe cannot close a replacement connection", async () => {
   useHeartbeatClock();
   const first = new FakeDaemon();
@@ -3116,6 +3139,11 @@ test("uploadFile pauses liveness heartbeats while the send buffer is stalled", a
   });
   await vi.advanceTimersByTimeAsync(20_000);
 
+  expect(pingTimes.map((timestamp) => timestamp - startedAt)).toEqual([]);
+  expect(client.getConnectionState()).toEqual({ status: "connected" });
+
+  client.ensureConnected({ verify: true });
+  await vi.advanceTimersByTimeAsync(3_000);
   expect(pingTimes.map((timestamp) => timestamp - startedAt)).toEqual([]);
   expect(client.getConnectionState()).toEqual({ status: "connected" });
 

@@ -1736,10 +1736,15 @@ export class DaemonClient {
   private verifyConnection(): void {
     const transport = this.transport;
     if (!transport || this.connectionVerification === transport) return;
+    // Bulk uploads can occupy the transport for several seconds on a WAN relay.
+    // A foreground ping would sit behind those frames and falsely fail the probe
+    // even though the upload itself is still advancing.
+    if (this.activeFileUploads > 0) return;
     this.connectionVerification = transport;
     // A session probe has its own deadline, independent of a heartbeat that the OS
     // may have suspended. A successful response also proves the session can serve RPCs.
-    void this.ping({ timeoutMs: 3_000 })
+    const timeoutMs = this.logConnectionPath === "relay" ? LIVENESS_HEARTBEAT_TIMEOUT_MS : 3_000;
+    void this.ping({ timeoutMs })
       .catch((error: unknown) => {
         if (this.transport !== transport || this.connectionState.status !== "connected") return;
         this.disposeTransport(1001, "Connection verification failed");
