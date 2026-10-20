@@ -22,9 +22,11 @@ export function createEncryptedRelaySocket(params: {
   channel: EncryptedRelayChannel;
   emitter: EventEmitter;
   getTransportBufferedAmount: () => number | undefined;
+  isTransportOpen?: () => boolean;
   terminateTransport: () => void;
 }): EncryptedRelaySocket {
-  const { channel, emitter, getTransportBufferedAmount, terminateTransport } = params;
+  const { channel, emitter, getTransportBufferedAmount, isTransportOpen, terminateTransport } =
+    params;
   let readyState = 1;
 
   channel.setState("open");
@@ -66,7 +68,13 @@ export function createEncryptedRelaySocket(params: {
         );
       }
       return channel.send(outbound).catch((error) => {
-        emitter.emit("error", error);
+        // ws.send() can reject after its readyState changes to CLOSING but before
+        // the close event reaches this wrapper. That is normal teardown racing an
+        // in-flight broadcast, not a connection error that should detach an
+        // already-closing application socket.
+        if (readyState === 1 && isTransportOpen?.() !== false) {
+          emitter.emit("error", error);
+        }
         throw error;
       });
     },

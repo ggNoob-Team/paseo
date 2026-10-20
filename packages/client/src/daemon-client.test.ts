@@ -3074,7 +3074,7 @@ test("uploadFile waits for the transport send buffer to drain", async () => {
   expect(reads).toBe(2);
 });
 
-test("uploadFile keeps liveness heartbeats running while the send buffer is stalled", async () => {
+test("uploadFile pauses liveness heartbeats while the send buffer is stalled", async () => {
   useHeartbeatClock();
   const mock = createMockTransport();
   let bufferedAmount = 2 * 1024 * 1024;
@@ -3111,9 +3111,12 @@ test("uploadFile keeps liveness heartbeats running while the send buffer is stal
     requestId: "req-upload-heartbeat",
   });
 
-  await vi.advanceTimersByTimeAsync(30_001);
+  await vi.waitFor(() => {
+    expect(mock.sent).toHaveLength(2);
+  });
+  await vi.advanceTimersByTimeAsync(20_000);
 
-  expect(pingTimes.map((timestamp) => timestamp - startedAt)).toEqual([10_000, 20_000, 30_000]);
+  expect(pingTimes.map((timestamp) => timestamp - startedAt)).toEqual([]);
   expect(client.getConnectionState()).toEqual({ status: "connected" });
 
   bufferedAmount = 0;
@@ -3137,6 +3140,44 @@ test("uploadFile keeps liveness heartbeats running while the send buffer is stal
   );
 
   await expect(upload).resolves.toMatchObject({ requestId: "req-upload-heartbeat", error: null });
+
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(pingTimes).toHaveLength(1);
+});
+
+test("uploadFile aborts a send buffer that remains stalled", async () => {
+  useHeartbeatClock();
+  const mock = createMockTransport();
+  mock.transport.getBufferedAmount = () => 2 * 1024 * 1024;
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_stall",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const upload = client.uploadFile({
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    bytes: new Uint8Array(512 * 1024),
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-upload-stall",
+  });
+  const uploadError = expect(upload).rejects.toThrow("Upload send buffer stalled");
+
+  await vi.waitFor(() => {
+    expect(mock.sent).toHaveLength(2);
+  });
+  await vi.advanceTimersByTimeAsync(30_001);
+
+  await uploadError;
 });
 
 test("uploadFileEntry does not send chunks on a replacement transport", async () => {
@@ -3530,7 +3571,7 @@ test("uploadFileEntry waits for daemon progress before exceeding the upload wind
   await expect(upload).resolves.toMatchObject({ success: true });
 });
 
-test("uploadFileEntry uses relay-safe chunks and a small acknowledged window", async () => {
+test("uploadFileEntry uses efficient relay chunks and a bounded acknowledged window", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
     url: "ws://relay.test/ws?role=client&serverId=srv_test&v=2",
@@ -3545,7 +3586,7 @@ test("uploadFileEntry uses relay-safe chunks and a small acknowledged window", a
   mock.triggerOpen({ features: { fsEntryUploadResume: true } });
   await connectPromise;
 
-  const size = 1536 * 1024;
+  const size = 10 * 1024 * 1024;
   const upload = client.uploadFileEntry({
     cwd: "/workspace",
     parentPath: ".",
@@ -3577,7 +3618,7 @@ test("uploadFileEntry uses relay-safe chunks and a small acknowledged window", a
   );
   expect(framesBeforeStatus[0]?.opcode).toBe(FileTransferOpcode.FileBegin);
   expect(chunksBeforeStatus).toHaveLength(16);
-  expect(chunksBeforeStatus.every((frame) => frame.payload.byteLength === 64 * 1024)).toBe(true);
+  expect(chunksBeforeStatus.every((frame) => frame.payload.byteLength === 256 * 1024)).toBe(true);
 
   const statusRequest = parseSentFrame(mock.sent[statusIndex]);
   mock.triggerMessage(

@@ -1153,18 +1153,19 @@ const FILE_DOWNLOAD_RPC_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS * 2;
 const DEFAULT_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
 const FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 512 * 1024;
 const FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS = 16;
+const FILE_UPLOAD_BUFFER_STALL_TIMEOUT_MS = 30_000;
 // ArkWeb can keep a large native WebSocket queue without reflecting it in
 // bufferedAmount. Bound the local lead over the daemon's persisted offset too.
 const FILE_UPLOAD_REMOTE_WINDOW_BYTES = 8 * 1024 * 1024;
 const FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
-// A relay socket forwards many more physical frames than a loopback socket and
-// can be reset while ArkWeb still reports bufferedAmount as zero. Keep relay
-// uploads in a small acknowledged window and pace them so a 500 MB transfer
-// cannot turn one network hiccup into an endless reconnect storm.
-const RELAY_FILE_UPLOAD_CHUNK_BYTES = 64 * 1024;
-const RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 256 * 1024;
-const RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS = 12;
-const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 1024 * 1024;
+// A relay can reset while ArkWeb still reports bufferedAmount as zero. Keep a
+// bounded local queue, but do not impose a low fixed throughput: the daemon
+// acknowledges several megabytes at a time and the transport itself provides
+// the useful backpressure.
+const RELAY_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
+const RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 1024 * 1024;
+const RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS = 0;
+const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 4 * 1024 * 1024;
 const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
@@ -1398,6 +1399,7 @@ export class DaemonClient {
   private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
   private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
   private completedBinaryFileReads = new Map<string, FileReadResult>();
+  private activeFileUploads = 0;
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
   private readonly logConnectionPath: "direct" | "relay";
@@ -2435,11 +2437,17 @@ export class DaemonClient {
     if (this.connectionState.status !== "connected" || this.livenessHeartbeatTimer) {
       return;
     }
-    // Upload chunks normally renew the daemon-side application lease, but ArkWeb
-    // and relay backpressure can pause them while a buffer drains. Keep the
-    // liveness cadence so a 45-second silence never reaps an active connection.
     this.livenessHeartbeatTimer = setTimeout(() => {
       this.livenessHeartbeatTimer = null;
+      // Upload chunks renew the daemon-side application lease. A heartbeat pong can
+      // be delayed behind a busy relay/ArkWeb receive queue even while upload chunks
+      // are still reaching the daemon, so do not let that false timeout tear down a
+      // healthy transfer. The buffer stall deadline below still recovers a genuinely
+      // stuck upload, and the heartbeat restarts as soon as the transfer settles.
+      if (this.activeFileUploads > 0) {
+        this.scheduleNextLivenessHeartbeat();
+        return;
+      }
       this.livenessPing({ timeoutMs: LIVENESS_HEARTBEAT_TIMEOUT_MS })
         .catch(() => {})
         .finally(() => {
@@ -5355,6 +5363,7 @@ export class DaemonClient {
     if (!uploadTransport) {
       throw new DaemonConnectionError("Transport not connected during file upload");
     }
+    this.activeFileUploads += 1;
     try {
       const responsePromise = input.start();
       const isRelayUpload = this.logConnectionPath === "relay";
@@ -5442,6 +5451,7 @@ export class DaemonClient {
 
       return responsePromise;
     } finally {
+      this.activeFileUploads = Math.max(0, this.activeFileUploads - 1);
       this.scheduleNextLivenessHeartbeat();
     }
   }
@@ -5451,6 +5461,7 @@ export class DaemonClient {
     highWaterBytes: number;
     isSettled: () => boolean;
   }): Promise<"ready" | "settled"> {
+    let highWaterSince: number | null = null;
     while (true) {
       if (input.isSettled()) {
         return "settled";
@@ -5469,6 +5480,10 @@ export class DaemonClient {
       }
       if (bufferedAmount === null || bufferedAmount <= input.highWaterBytes) {
         return "ready";
+      }
+      highWaterSince ??= Date.now();
+      if (Date.now() - highWaterSince >= FILE_UPLOAD_BUFFER_STALL_TIMEOUT_MS) {
+        throw new DaemonConnectionError("Upload send buffer stalled");
       }
       await new Promise<void>((resolve) =>
         setTimeout(resolve, FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS),
@@ -7350,6 +7365,10 @@ export class DaemonClient {
   }
 
   private recordLivenessFailure(error: Error): void {
+    if (this.activeFileUploads > 0) {
+      this.consecutiveLivenessFailures = 0;
+      return;
+    }
     this.consecutiveLivenessFailures += 1;
     if (this.consecutiveLivenessFailures < LIVENESS_FAILURE_RECONNECT_THRESHOLD) {
       return;

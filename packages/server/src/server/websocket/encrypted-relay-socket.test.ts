@@ -10,6 +10,7 @@ class BlockingChannel implements EncryptedRelayChannel {
   readonly sent: Array<string | ArrayBuffer> = [];
   readonly closes: Array<{ code?: number; reason?: string }> = [];
   private resolveSend: (() => void) | null = null;
+  private rejectSend: ((error: Error) => void) | null = null;
 
   setState(state: "open"): void {
     expect(state).toBe("open");
@@ -17,8 +18,9 @@ class BlockingChannel implements EncryptedRelayChannel {
 
   send(data: string | ArrayBuffer): Promise<void> {
     this.sent.push(data);
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.resolveSend = resolve;
+      this.rejectSend = reject;
     });
   }
 
@@ -34,6 +36,10 @@ class BlockingChannel implements EncryptedRelayChannel {
 
   drain(): void {
     this.resolveSend?.();
+  }
+
+  fail(error: Error): void {
+    this.rejectSend?.(error);
   }
 }
 
@@ -126,6 +132,28 @@ test("encrypted sends report physical completion through the returned promise", 
   await sending;
   expect(completed).toBe(true);
   expect(socket.bufferedAmount).toBe(0);
+});
+
+test("an in-flight send that loses its transport is rejected without an error detach", async () => {
+  const channel = new BlockingChannel();
+  const emitter = new EventEmitter();
+  const errors: Error[] = [];
+  emitter.on("error", (error) => errors.push(error));
+  let transportOpen = true;
+  const socket = createEncryptedRelaySocket({
+    channel,
+    emitter,
+    getTransportBufferedAmount: () => 0,
+    isTransportOpen: () => transportOpen,
+    terminateTransport: () => undefined,
+  });
+
+  const sending = socket.send(new Uint8Array([1]));
+  transportOpen = false;
+  channel.fail(new Error("WebSocket is not open: readyState 2 (CLOSING)"));
+
+  await expect(sending).rejects.toThrow("readyState 2");
+  expect(errors).toEqual([]);
 });
 
 test("encrypted sockets do not double-count bytes already buffered by the transport", () => {

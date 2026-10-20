@@ -449,6 +449,7 @@ async function attachEncryptedSocket(
       channel,
       emitter,
       getTransportBufferedAmount: () => socket.bufferedAmount,
+      isTransportOpen: () => socket.readyState === WebSocket.OPEN,
       terminateTransport: () => socket.terminate(),
     });
     await attachSocket(encryptedSocket, metadata);
