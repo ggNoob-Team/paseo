@@ -3032,6 +3032,64 @@ test("uploadFile waits for the transport send buffer to drain", async () => {
   expect(reads).toBe(2);
 });
 
+test("uploadFileEntry does not send chunks on a replacement transport", async () => {
+  const first = createMockTransport();
+  const second = createMockTransport();
+  const transports = [first, second];
+  let transportIndex = 0;
+  let markReadStarted: (() => void) | undefined;
+  let releaseRead: ((chunk: Uint8Array) => void) | undefined;
+  const readStarted = new Promise<void>((resolve) => {
+    markReadStarted = resolve;
+  });
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_reconnect",
+    logger: createMockLogger(),
+    reconnect: { enabled: true, baseDelayMs: 1, maxDelayMs: 1 },
+    transportFactory: () => {
+      const mock = transports[transportIndex];
+      transportIndex += 1;
+      if (!mock) throw new Error("unexpected extra reconnect");
+      return mock.transport;
+    },
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  first.triggerOpen();
+  await connectPromise;
+
+  const upload = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: ".",
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    source: {
+      size: 2,
+      readChunk: async () => {
+        markReadStarted?.();
+        return await new Promise<Uint8Array>((resolve) => {
+          releaseRead = resolve;
+        });
+      },
+    },
+    uploadId: "upload_reconnect_test",
+    chunkSize: 1,
+  });
+  void upload.catch(() => undefined);
+
+  await readStarted;
+  first.triggerClose({ code: 1006, reason: "network lost" });
+  await vi.waitFor(() => expect(transportIndex).toBe(2));
+  second.triggerOpen();
+  releaseRead?.(new Uint8Array([1]));
+
+  await expect(upload).rejects.toThrow("Connection changed during file upload");
+  expect(second.sent.some((data) => typeof data !== "string")).toBe(false);
+});
+
 test("uploadFileEntry registers a workspace upload and streams binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

@@ -1894,19 +1894,19 @@ export class DaemonClient {
     }
   }
 
-  private sendBinaryFrame(frame: Uint8Array): void {
-    if (!this.transport || this.connectionState.status !== "connected") {
+  private sendBinaryFrame(frame: Uint8Array, transport: DaemonTransport): void {
+    if (this.transport !== transport || this.connectionState.status !== "connected") {
       if (this.config.suppressSendErrors) {
         return;
       }
-      throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
+      throw new DaemonConnectionError("Connection changed during file upload");
     }
     try {
       this.traceInstant("paseo.ws.message.outbound", {
         envelopeType: "binary",
         messageType: "binary",
       });
-      this.sendTransportFrame(frame);
+      transport.send(frame);
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
@@ -5208,6 +5208,7 @@ export class DaemonClient {
             fileName: input.fileName,
           },
         }),
+        uploadTransport,
       );
 
       const startOffset = input.offset ?? 0;
@@ -5237,6 +5238,7 @@ export class DaemonClient {
             requestId: input.requestId,
             payload: chunk,
           }),
+          uploadTransport,
         );
         input.onProgress?.(cursor + chunk.byteLength);
       }
@@ -5246,6 +5248,7 @@ export class DaemonClient {
           opcode: FileTransferOpcode.FileEnd,
           requestId: input.requestId,
         }),
+        uploadTransport,
       );
     } catch (error) {
       this.rejectWaitersForRequestId(
