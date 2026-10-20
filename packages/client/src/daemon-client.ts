@@ -598,6 +598,7 @@ export interface FileEntryUploadStatusInput {
   parentPath: string;
   fileName: string;
   uploadId: string;
+  timeout?: number;
   requestId?: string;
 }
 export type FileEntryUploadStatusResult = FileEntryUploadStatusResponse["payload"];
@@ -1140,9 +1141,17 @@ const FILE_DOWNLOAD_RPC_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS * 2;
 const DEFAULT_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
 const FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 512 * 1024;
 const FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS = 16;
+// ArkWeb can keep a large native WebSocket queue without reflecting it in
+// bufferedAmount. Bound the local lead over the daemon's persisted offset too.
+const FILE_UPLOAD_REMOTE_WINDOW_BYTES = 8 * 1024 * 1024;
+const FILE_UPLOAD_REMOTE_PROGRESS_POLL_INTERVAL_MS = 100;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
+const FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS = Math.max(
+  DEFAULT_SESSION_RPC_TIMEOUT_MS * 2,
+  Math.ceil(FILE_UPLOAD_REMOTE_WINDOW_BYTES / MIN_UPLOAD_BYTES_PER_SECOND) * 1000,
+);
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -1380,6 +1389,7 @@ export class DaemonClient {
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
+  private activeFileTransfers = 0;
 
   constructor(private config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
@@ -2363,6 +2373,13 @@ export class DaemonClient {
 
   private scheduleNextLivenessHeartbeat(): void {
     if (this.connectionState.status !== "connected" || this.livenessHeartbeatTimer) {
+      return;
+    }
+    if (this.activeFileTransfers > 0) {
+      this.livenessHeartbeatTimer = setTimeout(() => {
+        this.livenessHeartbeatTimer = null;
+        this.scheduleNextLivenessHeartbeat();
+      }, LIVENESS_HEARTBEAT_INTERVAL_MS);
       return;
     }
     this.livenessHeartbeatTimer = setTimeout(() => {
@@ -5123,6 +5140,42 @@ export class DaemonClient {
     await this.whenConnected();
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
+    const uploadId = input.uploadId;
+    let confirmedBytes = offset;
+    const waitForRemoteProgress =
+      uploadId && this.lastServerInfoMessage?.features?.fsEntryUploadResume === true
+        ? async (transport: DaemonTransport, sentBytes: number): Promise<void> => {
+            const deadline = Date.now() + FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS;
+            while (sentBytes - confirmedBytes >= FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
+              if (this.transport !== transport || this.connectionState.status !== "connected") {
+                throw new DaemonConnectionError("Connection changed during file upload");
+              }
+              const status = await this.requestFileEntryUploadStatus({
+                cwd: input.cwd,
+                parentPath: input.parentPath,
+                fileName: input.fileName,
+                uploadId,
+                timeout: FILE_UPLOAD_REMOTE_WINDOW_TIMEOUT_MS,
+              });
+              if (status.error) {
+                throw new Error(status.error);
+              }
+              if (status.receivedBytes > source.size) {
+                throw new Error("Upload progress exceeded the declared file size.");
+              }
+              confirmedBytes = status.receivedBytes;
+              if (sentBytes - confirmedBytes < FILE_UPLOAD_REMOTE_WINDOW_BYTES) {
+                return;
+              }
+              if (Date.now() >= deadline) {
+                throw new DaemonConnectionError("Upload progress timed out");
+              }
+              await new Promise<void>((resolve) =>
+                setTimeout(resolve, FILE_UPLOAD_REMOTE_PROGRESS_POLL_INTERVAL_MS),
+              );
+            }
+          }
+        : undefined;
     return await this.streamFileTransfer({
       requestId: resolvedRequestId,
       source,
@@ -5131,6 +5184,7 @@ export class DaemonClient {
       modifiedAt,
       offset,
       onProgress: input.onProgress,
+      waitForRemoteProgress,
       chunkSize: input.chunkSize,
       start: () =>
         this.sendCorrelatedRequest({
@@ -5158,6 +5212,7 @@ export class DaemonClient {
   ): Promise<FileEntryUploadStatusResult> {
     return await this.sendNamespacedCorrelatedSessionRequest<"fs.entry.upload.status.response">({
       requestId: input.requestId,
+      timeout: input.timeout,
       message: {
         type: "fs.entry.upload.status.request",
         cwd: input.cwd,
@@ -5176,6 +5231,7 @@ export class DaemonClient {
     modifiedAt: string;
     offset?: number;
     onProgress?: (uploadedBytes: number) => void;
+    waitForRemoteProgress?: (transport: DaemonTransport, sentBytes: number) => Promise<void>;
     chunkSize?: number;
     start: () => Promise<TResult>;
   }): Promise<TResult> {
@@ -5183,82 +5239,89 @@ export class DaemonClient {
     if (!uploadTransport) {
       throw new DaemonConnectionError("Transport not connected during file upload");
     }
-    const responsePromise = input.start();
-    let settled = false;
-    void responsePromise.then(
-      () => {
-        settled = true;
-        return undefined;
-      },
-      () => {
-        settled = true;
-        return undefined;
-      },
-    );
+    this.activeFileTransfers += 1;
     try {
-      this.sendBinaryFrame(
-        encodeFileTransferFrame({
-          opcode: FileTransferOpcode.FileBegin,
-          requestId: input.requestId,
-          metadata: {
-            mime: input.mimeType,
-            size: input.source.size,
-            encoding: "binary",
-            modifiedAt: input.modifiedAt,
-            fileName: input.fileName,
-          },
-        }),
-        uploadTransport,
+      const responsePromise = input.start();
+      let settled = false;
+      void responsePromise.then(
+        () => {
+          settled = true;
+          return undefined;
+        },
+        () => {
+          settled = true;
+          return undefined;
+        },
       );
-
-      const startOffset = input.offset ?? 0;
-      input.onProgress?.(startOffset);
-      const chunkSize = input.chunkSize ?? DEFAULT_FILE_UPLOAD_CHUNK_BYTES;
-      for (let cursor = startOffset; cursor < input.source.size; cursor += chunkSize) {
-        // Native WebSocket.send encodes binary synchronously. Let rendering and
-        // incoming messages run between bounded pieces on every platform.
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        const bufferState = await this.waitForUploadBuffer({
-          uploadTransport,
-          isSettled: () => settled,
-        });
-        if (bufferState === "settled") {
-          return await responsePromise;
-        }
-        const length = Math.min(chunkSize, input.source.size - cursor);
-        const chunk = await input.source.readChunk(cursor, length);
-        if (chunk.byteLength !== length) {
-          throw new Error(
-            `File changed during upload: expected ${length} bytes at ${cursor}, received ${chunk.byteLength}.`,
-          );
-        }
+      try {
         this.sendBinaryFrame(
           encodeFileTransferFrame({
-            opcode: FileTransferOpcode.FileChunk,
+            opcode: FileTransferOpcode.FileBegin,
             requestId: input.requestId,
-            payload: chunk,
+            metadata: {
+              mime: input.mimeType,
+              size: input.source.size,
+              encoding: "binary",
+              modifiedAt: input.modifiedAt,
+              fileName: input.fileName,
+            },
           }),
           uploadTransport,
         );
-        input.onProgress?.(cursor + chunk.byteLength);
+
+        const startOffset = input.offset ?? 0;
+        input.onProgress?.(startOffset);
+        const chunkSize = input.chunkSize ?? DEFAULT_FILE_UPLOAD_CHUNK_BYTES;
+        for (let cursor = startOffset; cursor < input.source.size; cursor += chunkSize) {
+          // Native WebSocket.send encodes binary synchronously. Let rendering and
+          // incoming messages run between bounded pieces on every platform.
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          const bufferState = await this.waitForUploadBuffer({
+            uploadTransport,
+            isSettled: () => settled,
+          });
+          if (bufferState === "settled") {
+            return await responsePromise;
+          }
+          const length = Math.min(chunkSize, input.source.size - cursor);
+          const chunk = await input.source.readChunk(cursor, length);
+          if (chunk.byteLength !== length) {
+            throw new Error(
+              `File changed during upload: expected ${length} bytes at ${cursor}, received ${chunk.byteLength}.`,
+            );
+          }
+          this.sendBinaryFrame(
+            encodeFileTransferFrame({
+              opcode: FileTransferOpcode.FileChunk,
+              requestId: input.requestId,
+              payload: chunk,
+            }),
+            uploadTransport,
+          );
+          input.onProgress?.(cursor + chunk.byteLength);
+          await input.waitForRemoteProgress?.(uploadTransport, cursor + chunk.byteLength);
+        }
+
+        this.sendBinaryFrame(
+          encodeFileTransferFrame({
+            opcode: FileTransferOpcode.FileEnd,
+            requestId: input.requestId,
+          }),
+          uploadTransport,
+        );
+      } catch (error) {
+        this.rejectWaitersForRequestId(
+          input.requestId,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        throw error;
       }
 
-      this.sendBinaryFrame(
-        encodeFileTransferFrame({
-          opcode: FileTransferOpcode.FileEnd,
-          requestId: input.requestId,
-        }),
-        uploadTransport,
-      );
-    } catch (error) {
-      this.rejectWaitersForRequestId(
-        input.requestId,
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      throw error;
+      return responsePromise;
+    } finally {
+      this.activeFileTransfers = Math.max(0, this.activeFileTransfers - 1);
+      this.scheduleNextLivenessHeartbeat();
     }
-
-    return responsePromise;
   }
 
   private async waitForUploadBuffer(input: {

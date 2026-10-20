@@ -3214,6 +3214,101 @@ test("uploadFileEntry registers a workspace upload and streams binary chunks", a
   expect(progress).toEqual([0, 5, 10, 11]);
 });
 
+test("uploadFileEntry waits for daemon progress before exceeding the upload window", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_window",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { fsEntryUploadResume: true } });
+  await connectPromise;
+
+  const size = 9 * 1024 * 1024;
+  const upload = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: ".",
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    source: {
+      size,
+      readChunk: async (_offset, length) => new Uint8Array(length),
+    },
+    uploadId: "upload_window_test",
+    requestId: "req-upload-window",
+    chunkSize: 1024 * 1024,
+  });
+  void upload.catch(() => undefined);
+
+  await vi.waitFor(() => {
+    expect(
+      mock.sent.some((data) => {
+        if (typeof data !== "string") return false;
+        return JSON.parse(data).message.type === "fs.entry.upload.status.request";
+      }),
+    ).toBe(true);
+  });
+
+  const statusIndex = mock.sent.findIndex((data) => {
+    if (typeof data !== "string") return false;
+    return JSON.parse(data).message.type === "fs.entry.upload.status.request";
+  });
+  const framesBeforeStatus = mock.sent
+    .slice(0, statusIndex)
+    .filter((data): data is Uint8Array => data instanceof Uint8Array)
+    .map(decodeFileTransferFrame);
+  expect(
+    framesBeforeStatus.filter((frame) => frame.opcode === FileTransferOpcode.FileChunk),
+  ).toHaveLength(8);
+  expect(framesBeforeStatus.at(-1)?.opcode).toBe(FileTransferOpcode.FileChunk);
+
+  const statusRequest = JSON.parse(assertStr(mock.sent[statusIndex])).message as {
+    requestId: string;
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.status.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        uploadId: "upload_window_test",
+        receivedBytes: size,
+        exists: true,
+        error: null,
+        requestId: statusRequest.requestId,
+      },
+    }),
+  );
+
+  await vi.waitFor(() => {
+    const frames = mock.sent
+      .filter((data): data is Uint8Array => data instanceof Uint8Array)
+      .map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: ".",
+        path: "large.bin",
+        success: true,
+        alreadyExists: false,
+        error: null,
+        requestId: "req-upload-window",
+      },
+    }),
+  );
+  await expect(upload).resolves.toMatchObject({ success: true });
+});
+
 test("uploadFileEntry resumes from an offset and reports absolute progress", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
