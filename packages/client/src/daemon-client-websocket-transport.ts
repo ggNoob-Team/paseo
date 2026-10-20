@@ -56,6 +56,12 @@ export function createWebSocketTransportFactory(factory: WebSocketFactory): Daem
         }
         ws.send(data);
       },
+      getBufferedAmount: () => {
+        const bufferedAmount = ws.bufferedAmount;
+        return typeof bufferedAmount === "number" && Number.isFinite(bufferedAmount)
+          ? Math.max(0, bufferedAmount)
+          : null;
+      },
       close: (code?: number, reason?: string) => {
         // Node's `ws` may emit an `error` when a connecting socket is closed before the
         // handshake completes. Keep a temporary no-op handler attached so cleanup during

@@ -1,5 +1,7 @@
 export interface DaemonTransport {
   send: (data: string | Uint8Array | ArrayBuffer) => void;
+  /** Bytes accepted by send() but not yet handed to the network, when observable. */
+  getBufferedAmount?: () => number | null;
   close: (code?: number, reason?: string) => void;
   onMessage: (handler: (data: unknown, isBinary: boolean) => void) => () => void;
   onOpen: (handler: () => void) => () => void;
@@ -20,6 +22,7 @@ export type WebSocketFactory = (
 
 export interface WebSocketLike {
   readyState: number;
+  bufferedAmount?: number;
   send: (data: string | Uint8Array | ArrayBuffer) => void;
   close: (code?: number, reason?: string) => void;
   binaryType?: string;

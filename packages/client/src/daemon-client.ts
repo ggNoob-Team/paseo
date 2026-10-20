@@ -1123,7 +1123,11 @@ const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
 // A download waits for a whole binary file transfer, not for a single
 // response, so it gets twice the default session RPC deadline.
 const FILE_DOWNLOAD_RPC_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS * 2;
-const DEFAULT_FILE_UPLOAD_CHUNK_BYTES = 1024 * 1024;
+// Small frames keep ArkWeb and relay bridges from allocating a large native
+// send queue while a File is being streamed from disk.
+const DEFAULT_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
+const FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 512 * 1024;
+const FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS = 16;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
@@ -5139,6 +5143,9 @@ export class DaemonClient {
     start: () => Promise<TResult>;
   }): Promise<TResult> {
     const uploadTransport = this.transport;
+    if (!uploadTransport) {
+      throw new DaemonConnectionError("Transport not connected during file upload");
+    }
     const responsePromise = input.start();
     let settled = false;
     void responsePromise.then(
@@ -5174,6 +5181,27 @@ export class DaemonClient {
         if (settled) return await responsePromise;
         if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
           throw new DaemonConnectionError("Connection changed during file upload");
+        }
+        // WebSocket.send only queues a frame; it does not apply backpressure. A
+        // fast local file read on a slower relay would otherwise push hundreds of
+        // megabytes into ArkWeb's native buffer until the whole socket is dropped.
+        while (true) {
+          if (settled) return await responsePromise;
+          if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
+            throw new DaemonConnectionError("Connection changed during file upload");
+          }
+          let bufferedAmount: number | null;
+          try {
+            bufferedAmount = uploadTransport.getBufferedAmount?.() ?? null;
+          } catch {
+            bufferedAmount = null;
+          }
+          if (bufferedAmount === null || bufferedAmount <= FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES) {
+            break;
+          }
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS),
+          );
         }
         const length = Math.min(chunkSize, input.source.size - offset);
         const chunk = await input.source.readChunk(offset, length);

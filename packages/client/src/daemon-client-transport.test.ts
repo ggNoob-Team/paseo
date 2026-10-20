@@ -52,6 +52,24 @@ describe("daemon-client transport helpers", () => {
     });
   });
 
+  test("createEncryptedTransport forwards the underlying send buffer", () => {
+    const transport = createEncryptedTransport(
+      {
+        send: vi.fn(),
+        getBufferedAmount: () => 4096,
+        close: vi.fn(),
+        onOpen: () => () => {},
+        onClose: () => () => {},
+        onError: () => () => {},
+        onMessage: () => () => {},
+      },
+      "daemon-public-key",
+      { warn: vi.fn() },
+    );
+
+    expect(transport.getBufferedAmount?.()).toBe(4096);
+  });
+
   test("createWebSocketTransportFactory forwards sends when socket is open", () => {
     const addEventListener = vi.fn();
     const removeEventListener = vi.fn();
@@ -73,6 +91,24 @@ describe("daemon-client transport helpers", () => {
 
     expect(send).toHaveBeenCalledWith("hello");
     expect(close).toHaveBeenCalledWith(1000, "bye");
+  });
+
+  test("createWebSocketTransportFactory exposes the current send buffer", () => {
+    const ws = {
+      readyState: 1,
+      bufferedAmount: 1536,
+      send: vi.fn(),
+      close: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    const transport = createWebSocketTransportFactory(() => ws)({ url: "ws://example.test" });
+
+    expect(transport.getBufferedAmount?.()).toBe(1536);
+    ws.bufferedAmount = -1;
+    expect(transport.getBufferedAmount?.()).toBe(0);
+    ws.bufferedAmount = Number.NaN;
+    expect(transport.getBufferedAmount?.()).toBeNull();
   });
 
   test("createWebSocketTransportFactory passes WebSocket protocols to the socket factory", () => {

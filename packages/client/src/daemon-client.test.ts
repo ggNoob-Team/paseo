@@ -2965,6 +2965,73 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
   });
 });
 
+test("uploadFile waits for the transport send buffer to drain", async () => {
+  const mock = createMockTransport();
+  let bufferedAmount = 2 * 1024 * 1024;
+  mock.transport.getBufferedAmount = () => bufferedAmount;
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_upload_backpressure",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  let reads = 0;
+  const upload = client.uploadFile({
+    fileName: "large.bin",
+    mimeType: "application/octet-stream",
+    source: {
+      size: 512 * 1024,
+      readChunk: async (_offset, length) => {
+        reads += 1;
+        return new Uint8Array(length);
+      },
+    },
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-backpressure",
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(reads).toBe(0);
+  expect(mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
+    expect.objectContaining({ opcode: FileTransferOpcode.FileBegin }),
+  ]);
+
+  bufferedAmount = 0;
+  await vi.waitFor(() => {
+    const frames = mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file.upload.response",
+      payload: {
+        requestId: "req-backpressure",
+        file: {
+          type: "uploaded_file",
+          id: "upload_req-backpressure",
+          fileName: "large.bin",
+          mimeType: "application/octet-stream",
+          size: 512 * 1024,
+          path: "/tmp/paseo-uploads/upload_req-backpressure/large.bin",
+        },
+        error: null,
+      },
+    }),
+  );
+
+  await expect(upload).resolves.toMatchObject({ requestId: "req-backpressure", error: null });
+  expect(reads).toBe(2);
+});
+
 test("uploadFileEntry registers a workspace upload and streams binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

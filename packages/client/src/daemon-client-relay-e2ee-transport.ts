@@ -141,6 +141,7 @@ export function createEncryptedTransport(
         emitError(error);
       });
     },
+    getBufferedAmount: () => base.getBufferedAmount?.() ?? null,
     close: (code?: number, reason?: string) => {
       if (channel) {
         channel.close(code, reason);
