@@ -564,6 +564,12 @@ export interface FileUploadSource {
   size: number;
   readChunk(offset: number, length: number): Promise<Uint8Array>;
 }
+interface FileUploadWindowInput {
+  transport: DaemonTransport;
+  sentBytes: number;
+  nextChunkBytes: number;
+  isSettled: () => boolean;
+}
 interface FileUploadMetadata {
   fileName: string;
   mimeType: string;
@@ -1165,10 +1171,14 @@ const FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = FILE_UPLOAD_REMOTE_WINDOW_BYTES * 2;
 // the same bounded window; resumable uploads then continue from the daemon's
 // persisted offset instead of relying on a large speculative lead.
 const RELAY_FILE_UPLOAD_CHUNK_BYTES = 256 * 1024;
+const RELAY_FILE_UPLOAD_MIN_CHUNK_BYTES = 64 * 1024;
+const FILE_UPLOAD_SEND_BUDGET_MS = 12;
 const RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES = 1024 * 1024;
-const RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS = 0;
-const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 4 * 1024 * 1024;
-const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES;
+// Status replies snapshot progress when the request is handled. Asking after
+// only 1 MiB repeatedly returns stale offsets and releases too little room.
+// Leave 1 MiB in flight while confirming most of the current window.
+const RELAY_FILE_UPLOAD_REMOTE_WINDOW_BYTES = 3 * 1024 * 1024;
+const RELAY_FILE_UPLOAD_REMOTE_LEAD_LIMIT_BYTES = 4 * 1024 * 1024;
 // A 2GB upload can legitimately run for a long time. Give the response wait
 // enough headroom for a slow connection instead of the default RPC timeout.
 const MIN_UPLOAD_BYTES_PER_SECOND = 128 * 1024;
@@ -1190,6 +1200,22 @@ const DEFAULT_SEND_QUEUE_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS;
 const DEFAULT_DICTATION_FINISH_ACCEPT_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS;
 const DEFAULT_DICTATION_FINISH_FALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DICTATION_FINISH_TIMEOUT_GRACE_MS = 5000;
+
+async function yieldForFileUpload(runtime: object = globalThis): Promise<void> {
+  if ("scheduler" in runtime) {
+    const scheduler = runtime.scheduler;
+    if (
+      typeof scheduler === "object" &&
+      scheduler !== null &&
+      "postTask" in scheduler &&
+      typeof scheduler.postTask === "function"
+    ) {
+      await scheduler.postTask(() => undefined, { priority: "background" });
+      return;
+    }
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
 
 function isWaiterTimeoutError(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith("Timeout waiting for message");
@@ -1732,7 +1758,9 @@ export class DaemonClient {
       this.attemptConnect();
       return;
     }
-    void this.connect();
+    // Connection failures are reported through connection state and lastError.
+    // This fire-and-forget entry point also owns the rejected connect promise.
+    void this.connect().catch(() => undefined);
   }
 
   private verifyConnection(): void {
@@ -1749,6 +1777,9 @@ export class DaemonClient {
     void this.ping({ timeoutMs })
       .catch((error: unknown) => {
         if (this.transport !== transport || this.connectionState.status !== "connected") return;
+        // An upload may have started after this probe. Its own progress and
+        // stall checks now own recovery, just as when verification is skipped above.
+        if (this.activeFileUploads > 0) return;
         this.disposeTransport(1001, "Connection verification failed");
         this.scheduleReconnect({
           reason: error instanceof Error ? error.message : String(error),
@@ -5260,15 +5291,34 @@ export class DaemonClient {
         void progressProbe.catch(() => undefined);
       };
       const waitForRemoteProgress = canAutoResume
-        ? async (transport: DaemonTransport, sentBytes: number): Promise<void> => {
+        ? async ({
+            transport,
+            sentBytes,
+            nextChunkBytes,
+            isSettled,
+          }: FileUploadWindowInput): Promise<void> => {
+            if (isSettled()) {
+              return;
+            }
             if (this.transport !== transport || this.connectionState.status !== "connected") {
               throw new DaemonConnectionError("Connection changed during file upload");
             }
             if (!progressProbe && sentBytes - confirmedBytes >= remoteWindowBytes) {
               startProgressProbe(transport);
             }
-            if (progressProbe && sentBytes - confirmedBytes >= remoteLeadLimitBytes) {
+            // A status response may acknowledge none or only part of the queued
+            // data. Reserve enough room for the entire next chunk before sending it.
+            while (!isSettled()) {
+              if (sentBytes + nextChunkBytes - confirmedBytes <= remoteLeadLimitBytes) {
+                return;
+              }
+              startProgressProbe(transport);
               await progressProbe;
+              if (sentBytes + nextChunkBytes - confirmedBytes > remoteLeadLimitBytes) {
+                await new Promise<void>((resolve) =>
+                  setTimeout(resolve, FILE_UPLOAD_BUFFER_POLL_INTERVAL_MS),
+                );
+              }
             }
           }
         : undefined;
@@ -5284,6 +5334,7 @@ export class DaemonClient {
           onProgress: input.onProgress,
           waitForRemoteProgress,
           chunkSize: input.chunkSize,
+          maxChunkSize: remoteLeadLimitBytes,
           start: () =>
             this.sendCorrelatedRequest({
               requestId: resolvedRequestId,
@@ -5362,8 +5413,9 @@ export class DaemonClient {
     modifiedAt: string;
     offset?: number;
     onProgress?: (uploadedBytes: number) => void;
-    waitForRemoteProgress?: (transport: DaemonTransport, sentBytes: number) => Promise<void>;
+    waitForRemoteProgress?: (input: FileUploadWindowInput) => Promise<void>;
     chunkSize?: number;
+    maxChunkSize?: number;
     start: () => Promise<TResult>;
   }): Promise<TResult> {
     const uploadTransport = this.transport;
@@ -5377,7 +5429,6 @@ export class DaemonClient {
       const bufferHighWaterBytes = isRelayUpload
         ? RELAY_FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES
         : FILE_UPLOAD_BUFFER_HIGH_WATER_BYTES;
-      const chunkIntervalMs = isRelayUpload ? RELAY_FILE_UPLOAD_CHUNK_INTERVAL_MS : 0;
       let settled = false;
       void responsePromise.then(
         () => {
@@ -5407,13 +5458,16 @@ export class DaemonClient {
 
         const startOffset = input.offset ?? 0;
         input.onProgress?.(startOffset);
-        const chunkSize =
+        const requestedChunkSize =
           input.chunkSize ??
           (isRelayUpload ? RELAY_FILE_UPLOAD_CHUNK_BYTES : DEFAULT_FILE_UPLOAD_CHUNK_BYTES);
-        for (let cursor = startOffset; cursor < input.source.size; cursor += chunkSize) {
+        let chunkSize = Math.min(requestedChunkSize, input.maxChunkSize ?? Infinity);
+        const adaptChunkSize = isRelayUpload && input.chunkSize === undefined;
+        for (let cursor = startOffset; cursor < input.source.size; ) {
           // Native WebSocket.send encodes binary synchronously. Let rendering and
           // incoming messages run between bounded pieces on every platform.
-          await new Promise<void>((resolve) => setTimeout(resolve, chunkIntervalMs));
+          await yieldForFileUpload();
+          const length = Math.min(chunkSize, input.source.size - cursor);
           const bufferState = await this.waitForUploadBuffer({
             uploadTransport,
             highWaterBytes: bufferHighWaterBytes,
@@ -5422,23 +5476,56 @@ export class DaemonClient {
           if (bufferState === "settled") {
             return await responsePromise;
           }
-          const length = Math.min(chunkSize, input.source.size - cursor);
-          const chunk = await input.source.readChunk(cursor, length);
+          // Overlap one bounded disk read with the remote acknowledgement wait.
+          // The chunk is still sent only after both have completed.
+          const chunkPromise = input.source.readChunk(cursor, length);
+          void chunkPromise.catch(() => undefined);
+          if (input.waitForRemoteProgress) {
+            await Promise.race([
+              Promise.all([
+                input.waitForRemoteProgress({
+                  transport: uploadTransport,
+                  sentBytes: cursor,
+                  nextChunkBytes: length,
+                  isSettled: () => settled,
+                }),
+                chunkPromise,
+              ]),
+              responsePromise,
+            ]);
+          }
+          if (settled) {
+            return await responsePromise;
+          }
+          const chunk = await chunkPromise;
+          const sendBufferState = await this.waitForUploadBuffer({
+            uploadTransport,
+            highWaterBytes: bufferHighWaterBytes,
+            isSettled: () => settled,
+          });
+          if (sendBufferState === "settled") {
+            return await responsePromise;
+          }
           if (chunk.byteLength !== length) {
             throw new Error(
               `File changed during upload: expected ${length} bytes at ${cursor}, received ${chunk.byteLength}.`,
             );
           }
-          this.sendBinaryFrame(
-            encodeFileTransferFrame({
-              opcode: FileTransferOpcode.FileChunk,
-              requestId: input.requestId,
-              payload: chunk,
-            }),
-            uploadTransport,
-          );
-          input.onProgress?.(cursor + chunk.byteLength);
-          await input.waitForRemoteProgress?.(uploadTransport, cursor + chunk.byteLength);
+          const frame = encodeFileTransferFrame({
+            opcode: FileTransferOpcode.FileChunk,
+            requestId: input.requestId,
+            payload: chunk,
+          });
+          const sendStartedAt = perfNow();
+          this.sendBinaryFrame(frame, uploadTransport);
+          const sendTimeMs = perfNow() - sendStartedAt;
+          cursor += chunk.byteLength;
+          input.onProgress?.(cursor);
+          // Relay encryption and native send run synchronously. Keep individual
+          // bursts short on slower WebViews while retaining larger frames on fast devices.
+          if (adaptChunkSize) {
+            chunkSize = this.uploadChunkSizeAfterSend(chunkSize, sendTimeMs);
+          }
         }
 
         this.sendBinaryFrame(
@@ -5461,6 +5548,13 @@ export class DaemonClient {
       this.activeFileUploads = Math.max(0, this.activeFileUploads - 1);
       this.scheduleNextLivenessHeartbeat();
     }
+  }
+
+  private uploadChunkSizeAfterSend(chunkSize: number, sendTimeMs: number): number {
+    if (sendTimeMs <= FILE_UPLOAD_SEND_BUDGET_MS) {
+      return chunkSize;
+    }
+    return Math.max(RELAY_FILE_UPLOAD_MIN_CHUNK_BYTES, Math.floor(chunkSize / 2));
   }
 
   private async waitForUploadBuffer(input: {

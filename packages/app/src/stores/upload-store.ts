@@ -239,7 +239,7 @@ async function processQueue(): Promise<void> {
           offset = await runner.getReceivedBytes(item);
           useUploadStore.getState().updateProgress(id, offset);
         }
-        const onProgress = createProgressReporter(id, item.size, offset);
+        const onProgress = createProgressReporter(id, item.size);
         const result = await runner.upload({ item, offset, onProgress });
         if (result.ok) {
           markCompleted(id);
@@ -262,26 +262,15 @@ async function processQueue(): Promise<void> {
   }
 }
 
-function createProgressReporter(
-  id: string,
-  size: number,
-  initialOffset: number,
-): (uploadedBytes: number) => void {
-  let lastReportedBytes = initialOffset;
+function createProgressReporter(id: string, size: number): (uploadedBytes: number) => void {
   let lastReportedAt = 0;
-  const step = Math.max(1, Math.floor(size / 100));
   return (uploadedBytes) => {
     const now = Date.now();
     const isFinal = size === 0 || uploadedBytes >= size;
-    if (
-      !isFinal &&
-      now - lastReportedAt < PROGRESS_UPDATE_INTERVAL_MS &&
-      uploadedBytes - lastReportedBytes < step
-    ) {
+    if (!isFinal && now - lastReportedAt < PROGRESS_UPDATE_INTERVAL_MS) {
       return;
     }
     lastReportedAt = now;
-    lastReportedBytes = uploadedBytes;
     useUploadStore.getState().updateProgress(id, uploadedBytes);
   };
 }
