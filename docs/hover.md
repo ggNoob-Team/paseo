@@ -111,17 +111,18 @@ rendered while the menu is up. `useOpenKebabMenuVisibility`
 sidebar rows: it owns `open`, hands the menu its controlled props, and ORs `open` into the
 row's own `showKebab`.
 
-## Native fallback
+## Touch and native fallback
 
-Hover doesn't exist on touch devices. Anything you hide behind hover must have a non-hover path on native and compact layouts:
+Touch input has no persistent hover. Anything you hide behind hover must have a non-hover path on native, compact layouts, and wide touch screens:
 
 ```tsx
-const showControls = isHovered || isNative || isCompact;
+const hasFinePointer = useHasFinePointer();
+const showControls = isHovered || isNative || isCompact || !hasFinePointer;
 ```
 
-`isNative` and `isCompact` come from `@/constants/platform` and `@/constants/layout`. Don't use `Platform.OS === "ios"` as a proxy.
+`isNative` and `isCompact` come from `@/constants/platform` and `@/constants/layout`. `useHasFinePointer` comes from `@/hooks/use-fine-pointer` and tracks hover and pointer capabilities. A HarmonyOS foldable uses the web build and can cross the desktop breakpoint when unfolded; neither platform nor width tells you whether its user can hover. Don't use `Platform.OS === "ios"` as a proxy.
 
-`onPointerEnter` / `onPointerLeave` are DOM events. They do not fire on native. You do not need to gate them — on native, hover is unreachable anyway and visibility is driven by `isNative` / `isCompact` in your show-the-controls expression above. This is why the workspace row's pointer events are not wrapped in `if (isWeb)`.
+`onPointerEnter` / `onPointerLeave` are DOM events. They do not fire on native. You do not need to gate them — on native, hover is unreachable anyway and the fallback keeps controls visible. This is why the workspace row's pointer events are not wrapped in `if (isWeb)`.
 
 ## What about `Pressable.onHoverIn` / `onHoverOut`?
 
@@ -148,7 +149,7 @@ Before opening a PR that touches hover:
 - [ ] The hover trigger's bounding box contains every element the user might mouse into while interacting with the feature.
 - [ ] Hovered state does **not** change the trigger's outer geometry (`width`, `height`, `padding`, `borderWidth`, mount/unmount of siblings that shift it). Internal swaps fit inside a fixed `minHeight` / `minWidth`.
 - [ ] Revealed content inside the trigger uses `opacity` + `pointerEvents`, not conditional rendering, if mounting it would reflow the trigger.
-- [ ] Visibility on native and compact layouts works without hover (`isHovered || isNative || isCompact`).
+- [ ] Visibility on native, compact layouts, and wide touch screens works without hover (`isHovered || isNative || isCompact || !hasFinePointer`).
 - [ ] A menu opened from the revealed trigger keeps the trigger rendered while it is open, so losing hover can't strand it.
 - [ ] If the revealed content sits in a separate layer (portal, floating panel) and the user can point at it, it is a `HoverCard`.
 - [ ] You opened the dev server, hovered the trigger, and slowly moved the mouse along **every** revealed element — including any visible gaps — without losing hover state.

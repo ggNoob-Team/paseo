@@ -68,6 +68,7 @@ import { resolveToolCallIcon } from "@/utils/tool-call-icon";
 import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
 import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { MarkdownFenceBlock } from "@/components/markdown/fence";
 import type { MarkdownPhase } from "@/components/markdown/fence/types";
@@ -444,6 +445,7 @@ export const UserMessage = memo(function UserMessage({
   disableOuterSpacing,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
+  const hasFinePointer = useHasFinePointer();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
@@ -456,7 +458,8 @@ export const UserMessage = memo(function UserMessage({
   const hasText = message.trim().length > 0;
   const hasImages = images.length > 0;
   const hasAttachments = attachments.length > 0;
-  const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
+  const showTrailingRow =
+    !isPending && hasText && (isCompact || isNative || !hasFinePointer || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
     [timestamp],

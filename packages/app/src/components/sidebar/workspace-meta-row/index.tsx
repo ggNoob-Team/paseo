@@ -14,6 +14,7 @@ import type { PrHint } from "@/git/pr-hint";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import type { Theme } from "@/styles/theme";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { CheckIndicator } from "./check-indicator";
@@ -64,6 +65,7 @@ export function WorkspaceMetaRow({
   currentBranch,
   projectName,
   hostBadge,
+  statusEnteredAt = null,
   prHint,
   serviceSummary,
   labels = EMPTY_LABELS,
@@ -71,6 +73,7 @@ export function WorkspaceMetaRow({
   currentBranch: string | null;
   projectName: string | null;
   hostBadge: HostBadgeModel | null;
+  statusEnteredAt?: Date | null;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
   labels?: readonly WorkspaceLabelDefinition[];
@@ -80,6 +83,7 @@ export function WorkspaceMetaRow({
     currentBranch,
     projectName,
     hasHostBadge: hostBadge !== null,
+    statusEnteredAt,
     prHint,
     serviceSummary,
     labels,
@@ -120,6 +124,9 @@ function MetaItemNode({
   if (item.kind === "host") {
     return hostBadge ? <HostBadge badge={hostBadge} /> : null;
   }
+  if (item.kind === "timestamp") {
+    return <WorkspaceTimestamp enteredAt={item.enteredAt} />;
+  }
   if (item.kind === "changeRequest") {
     return <PullRequestItem hint={item.hint} />;
   }
@@ -130,6 +137,16 @@ function MetaItemNode({
     return <LabelsItem labels={item.labels} leading={leading} />;
   }
   return <ServiceItem summary={item.summary} />;
+}
+
+// Keep the minute tick in this leaf so updating the label doesn't re-render the workspace row.
+function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {
+  const label = useCompactTimeAgo(enteredAt);
+  return (
+    <Text style={styles.timestamp} numberOfLines={1} testID="sidebar-workspace-timestamp">
+      {label}
+    </Text>
+  );
 }
 
 function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string }) {
@@ -338,6 +355,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 1,
+  },
+  timestamp: {
+    color: theme.colors.foregroundExtraMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 16,
+    flexShrink: 0,
   },
   itemPressed: {
     opacity: 0.82,

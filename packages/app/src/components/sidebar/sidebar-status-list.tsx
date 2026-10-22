@@ -20,7 +20,21 @@ import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import type { GestureType } from "react-native-gesture-handler";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import {
+  type SidebarProjectEntry,
+  type SidebarWorkspaceEntry,
+} from "@/hooks/use-sidebar-workspaces-list";
+import { router } from "expo-router";
+import { buildNewWorkspaceRoute } from "@/utils/host-routes";
+import {
+  buildSidebarProjectRowModel,
+  resolveSidebarProjectLocalPath,
+} from "@/utils/sidebar-project-row-model";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import {
+  ProjectRowTrailingActions,
+  useSidebarProjectRemove,
+} from "@/components/sidebar/project-actions";
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
 import type {
   HostProjectSection,
@@ -127,6 +141,8 @@ function statusWorkspaceKeyExtractor(workspace: SidebarWorkspaceEntry): string {
 }
 
 interface StatusWorkspaceListProps {
+  projectsByViewKey: ReadonlyMap<string, SidebarProjectEntry>;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   groups: SidebarWorkspaceGroup[];
   pinnedWorkspaces: SidebarWorkspaceEntry[];
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -151,6 +167,8 @@ interface StatusWorkspaceListProps {
 }
 
 export function SidebarStatusWorkspaceList({
+  projectsByViewKey,
+  supportsMultiplicityByServerId,
   groups,
   pinnedWorkspaces,
   projectIconByProjectViewKey,
@@ -260,6 +278,8 @@ export function SidebarStatusWorkspaceList({
         <SidebarFilterEmptyState />
       ) : (
         <StatusGroupList
+          projectsByViewKey={projectsByViewKey}
+          supportsMultiplicityByServerId={supportsMultiplicityByServerId}
           groups={groups}
           collapsedWorkspaceGroupKeys={collapsedWorkspaceGroupKeys}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
@@ -312,6 +332,8 @@ export function SidebarStatusWorkspaceList({
 }
 
 function StatusGroupList({
+  projectsByViewKey,
+  supportsMultiplicityByServerId,
   groups,
   collapsedWorkspaceGroupKeys,
   projectIconByProjectViewKey,
@@ -322,6 +344,8 @@ function StatusGroupList({
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
+  projectsByViewKey: ReadonlyMap<string, SidebarProjectEntry>;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   groups: SidebarWorkspaceGroup[];
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -336,6 +360,8 @@ function StatusGroupList({
     <>
       {groups.map((group) => (
         <StatusGroupRows
+          projectsByViewKey={projectsByViewKey}
+          supportsMultiplicityByServerId={supportsMultiplicityByServerId}
           key={group.key}
           group={group}
           collapsed={collapsedWorkspaceGroupKeys.has(group.key)}
@@ -353,6 +379,8 @@ function StatusGroupList({
 }
 
 function StatusGroupRows({
+  projectsByViewKey,
+  supportsMultiplicityByServerId,
   group,
   collapsed,
   projectIconByProjectViewKey,
@@ -363,6 +391,8 @@ function StatusGroupRows({
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
+  projectsByViewKey: ReadonlyMap<string, SidebarProjectEntry>;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   group: SidebarWorkspaceGroup;
   collapsed: boolean;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -394,6 +424,9 @@ function StatusGroupRows({
           {group.projectSections ? (
             group.projectSections.map((section) => (
               <HostProjectSectionRows
+                project={projectsByViewKey.get(section.projectViewKey) ?? null}
+                serverId={group.leading.kind === "host" ? group.leading.serverId : null}
+                supportsMultiplicityByServerId={supportsMultiplicityByServerId}
                 key={section.projectViewKey}
                 section={section}
                 groupKey={group.key}
@@ -494,8 +527,17 @@ function SidebarGroupRowList({
 function HostProjectSectionRows({
   section,
   groupKey,
+  project,
+  serverId,
+  supportsMultiplicityByServerId,
   ...rowListProps
-}: SidebarGroupRowListProps & { section: HostProjectSection; groupKey: string }) {
+}: SidebarGroupRowListProps & {
+  section: HostProjectSection;
+  groupKey: string;
+  project: SidebarProjectEntry | null;
+  serverId: string | null;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
+}) {
   const collapsed = useSidebarCollapsedSectionsStore((state) =>
     state.collapsedProjectKeys.has(section.projectViewKey),
   );
@@ -505,6 +547,36 @@ function HostProjectSectionRows({
   const handleToggle = useCallback(() => {
     toggleProjectCollapsed(section.projectViewKey);
   }, [section.projectViewKey, toggleProjectCollapsed]);
+  const hostProject = useMemo(() => {
+    if (!project || !serverId) return null;
+    return {
+      ...project,
+      hosts: project.hosts.filter((host) => host.serverId === serverId),
+      workspaces: project.workspaces.filter((workspace) => workspace.serverId === serverId),
+    };
+  }, [project, serverId]);
+  const actions = useMemo(
+    () =>
+      hostProject ? (
+        <HostProjectActions
+          project={hostProject}
+          actionKey={`${groupKey}:${section.projectViewKey}`}
+          displayName={section.label}
+          collapsed={collapsed}
+          supportsMultiplicityByServerId={supportsMultiplicityByServerId}
+          onWorkspacePress={rowListProps.onWorkspacePress}
+        />
+      ) : null,
+    [
+      hostProject,
+      groupKey,
+      section.projectViewKey,
+      section.label,
+      collapsed,
+      supportsMultiplicityByServerId,
+      rowListProps.onWorkspacePress,
+    ],
+  );
 
   return (
     <View
@@ -519,6 +591,7 @@ function HostProjectSectionRows({
         iconDataUri={rowListProps.projectIconByProjectViewKey.get(section.projectViewKey) ?? null}
         collapsed={collapsed}
         onToggle={handleToggle}
+        actions={actions}
       />
       {!collapsed ? (
         <SidebarGroupRowList
@@ -548,24 +621,26 @@ function HostProjectHeader({
   iconDataUri,
   collapsed,
   onToggle,
+  actions,
 }: {
   label: string;
   projectViewKey: string;
   iconDataUri: string | null;
   collapsed: boolean;
   onToggle: () => void;
+  actions: ReactNode;
 }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
-  const rowStyle = useCallback(
-    ({ pressed }: PressableStateCallbackType) => [
-      styles.hostProjectRow,
-      isHovered && styles.hostProjectRowHovered,
-      pressed && styles.hostProjectRowPressed,
-    ],
-    [isHovered],
-  );
+  const handlePressIn = useCallback(() => setIsPressed(true), []);
+  const handlePressOut = useCallback(() => setIsPressed(false), []);
+  const rowStyle = [
+    styles.hostProjectRow,
+    isHovered && styles.hostProjectRowHovered,
+    isPressed && styles.hostProjectRowPressed,
+  ];
   const initial = useMemo(
     () => projectIconPlaceholderLabelFromDisplayName(label).charAt(0).toUpperCase(),
     [label],
@@ -573,27 +648,93 @@ function HostProjectHeader({
   const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
 
   return (
-    <View onPointerEnter={handleHoverIn} onPointerLeave={handleHoverOut}>
-      <Pressable
-        accessibilityRole={platformIsWeb ? undefined : "button"}
-        accessibilityState={accessibilityState}
-        style={rowStyle}
-        onPress={onToggle}
-      >
-        <View style={styles.hostProjectLeadingSlot}>
-          <HostProjectLeadingVisual
-            isHovered={isHovered}
-            collapsed={collapsed}
-            iconDataUri={iconDataUri}
-            initial={initial}
-            projectViewKey={projectViewKey}
-          />
-        </View>
-        <Text style={styles.hostProjectTitle} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
+    <View
+      style={styles.hostProjectRowContainer}
+      onPointerEnter={handleHoverIn}
+      onPointerLeave={handleHoverOut}
+    >
+      <View style={rowStyle}>
+        <Pressable
+          accessibilityRole={platformIsWeb ? undefined : "button"}
+          accessibilityState={accessibilityState}
+          style={styles.hostProjectRowLeft}
+          onPress={onToggle}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
+          <View style={styles.hostProjectLeadingSlot}>
+            <HostProjectLeadingVisual
+              isHovered={isHovered}
+              collapsed={collapsed}
+              iconDataUri={iconDataUri}
+              initial={initial}
+              projectViewKey={projectViewKey}
+            />
+          </View>
+          <Text style={styles.hostProjectTitle} numberOfLines={1}>
+            {label}
+          </Text>
+        </Pressable>
+        {actions}
+      </View>
     </View>
+  );
+}
+
+function HostProjectActions({
+  project,
+  actionKey,
+  displayName,
+  collapsed,
+  supportsMultiplicityByServerId,
+  onWorkspacePress,
+}: {
+  project: SidebarProjectEntry;
+  actionKey: string;
+  displayName: string;
+  collapsed: boolean;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
+  onWorkspacePress?: () => void;
+}) {
+  const localDaemonServerId = useLocalDaemonServerId();
+  const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
+  const rowModel = buildSidebarProjectRowModel({
+    project,
+    collapsed,
+    supportsMultiplicityByServerId,
+  });
+  const worktreeTarget =
+    rowModel.trailingAction.kind === "new_workspace" ? rowModel.trailingAction.target : null;
+  const settingsTarget = project.hosts[0] ?? null;
+  const { isRemovingProject, handleRemoveProject } = useSidebarProjectRemove({
+    project,
+    displayName,
+  });
+  const handleBeginWorkspaceSetup = useCallback(() => {
+    if (!worktreeTarget) return;
+    onWorkspacePress?.();
+    router.navigate(
+      buildNewWorkspaceRoute({
+        serverId: worktreeTarget.serverId,
+        sourceDirectory: worktreeTarget.iconWorkingDir,
+        displayName,
+        projectId: worktreeTarget.projectId,
+      }),
+    );
+  }, [displayName, onWorkspacePress, worktreeTarget]);
+
+  return (
+    <ProjectRowTrailingActions
+      projectViewKey={actionKey}
+      displayName={displayName}
+      worktreeTarget={worktreeTarget}
+      settingsTarget={settingsTarget}
+      projectPath={projectPath}
+      isProjectActive={false}
+      onBeginWorkspaceSetup={handleBeginWorkspaceSetup}
+      onRemoveProject={handleRemoveProject}
+      removeProjectStatus={isRemovingProject ? "pending" : "idle"}
+    />
   );
 }
 
@@ -1321,9 +1462,20 @@ const styles = StyleSheet.create((theme) => ({
   hostProjectSection: {
     paddingBottom: theme.spacing[2],
   },
-  hostProjectRow: {
+  hostProjectRowContainer: {
+    position: "relative",
+  },
+  hostProjectRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    flex: 1,
+    minWidth: 0,
     minHeight: 28,
     paddingVertical: theme.spacing[1],
+  },
+  hostProjectRow: {
+    minHeight: 28,
     paddingHorizontal: theme.spacing[2],
     // Rows under a group header are indented; the project they belong to starts on that rail.
     paddingLeft: theme.spacing[2] + theme.spacing[2],

@@ -14,7 +14,7 @@ import {
   openMobileAgentSidebar,
   pinWorkspaceFromSidebar,
 } from "../support/helpers/sidebar";
-import { seedWorkspace } from "../support/helpers/seed-client";
+import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { expectWorkspaceHeader } from "../support/helpers/workspace-ui";
 import { getServerId } from "../support/helpers/server-id";
 import { getE2EDaemonPort } from "../support/helpers/daemon-port";
@@ -22,6 +22,10 @@ import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { escapeRegex } from "../support/helpers/regex";
 import { openFilesPanel } from "../support/helpers/workspace-tabs";
 import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { addConnectedHostAndReload, reloadPreservingHostRegistry } from "../support/helpers/hosts";
+import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
+
+const APP_SETTINGS_KEY = "@paseo:app-settings";
 
 const GITHUB_REMOTE_URL = "https://github.com/test-owner/test-repo.git";
 
@@ -293,7 +297,112 @@ async function expectRecoveredWorkspacesAfterReload(
   });
 }
 
+async function setSidebarActivityPreferences(
+  page: Page,
+  trailing: "timestamp" | "diff" | "none",
+  host: boolean,
+): Promise<void> {
+  await page.evaluate(
+    ({ key, trailing: activityPreference, host: showHost }) => {
+      const settings = JSON.parse(localStorage.getItem(key) ?? "{}");
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          ...settings,
+          sidebarWorkspaceTrailing: activityPreference,
+          sidebarRowItems: { ...settings.sidebarRowItems, host: showHost },
+        }),
+      );
+    },
+    { key: APP_SETTINGS_KEY, trailing, host },
+  );
+  await reloadPreservingHostRegistry(page);
+}
+
 test.describe("Sidebar workspace list", () => {
+  test("places timestamps after the host on the metadata line and respects activity preferences", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    const secondaryHost = await startIsolatedHostDaemon("sidebar-timestamp-secondary");
+    let workspace: SeededWorkspace | null = null;
+    let secondary: SeededWorkspace | null = null;
+
+    try {
+      workspace = await seedWorkspace({
+        repoPrefix: "sidebar-timestamp-primary-",
+        title: "Timestamp workspace",
+      });
+      secondary = await seedWorkspace({
+        repoPrefix: "sidebar-timestamp-secondary-",
+        port: secondaryHost.port,
+      });
+      await page.addInitScript((key) => {
+        if (localStorage.getItem(key)) return;
+        localStorage.setItem(
+          key,
+          JSON.stringify({
+            sidebarWorkspaceTrailing: "timestamp",
+            sidebarRowItems: { host: true, branch: false, project: false },
+          }),
+        );
+      }, APP_SETTINGS_KEY);
+      await gotoAppShell(page);
+      await addConnectedHostAndReload(page, {
+        serverId: secondaryHost.serverId,
+        label: "Timestamp secondary host",
+        port: secondaryHost.port,
+      });
+      await expect(
+        page.getByTestId(
+          `sidebar-workspace-row-${secondaryHost.serverId}:${secondary.workspaceId}`,
+        ),
+      ).toBeVisible({ timeout: 30_000 });
+
+      const row = await waitForSidebarWorkspace(page, workspace.workspaceId);
+      const title = row.getByText(workspace.workspaceName, { exact: true });
+      const host = row.getByTestId(`host-badge-${getServerId()}`);
+      const timestamp = row.getByTestId("sidebar-workspace-timestamp");
+      await expect(host).toContainText("localhost");
+      await expect(timestamp).toBeVisible();
+      await expect(timestamp).not.toHaveText("");
+      const [titleBox, hostBox, timestampBox] = await Promise.all([
+        title.boundingBox(),
+        host.boundingBox(),
+        timestamp.boundingBox(),
+      ]);
+      expect(titleBox).not.toBeNull();
+      expect(hostBox).not.toBeNull();
+      expect(timestampBox).not.toBeNull();
+      expect(timestampBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
+      expect(timestampBox!.y + timestampBox!.height / 2).toBeCloseTo(
+        hostBox!.y + hostBox!.height / 2,
+        0,
+      );
+      expect(timestampBox!.x).toBeGreaterThan(hostBox!.x + hostBox!.width);
+      await page.screenshot({ path: testInfo.outputPath("timestamp-after-host.png") });
+
+      await setSidebarActivityPreferences(page, "timestamp", false);
+      await expect(host).toHaveCount(0);
+      await expect(timestamp).toBeVisible();
+      const timestampWithoutHost = await timestamp.boundingBox();
+      expect(timestampWithoutHost).not.toBeNull();
+      expect(timestampWithoutHost!.x).toBeCloseTo(hostBox!.x, 0);
+      expect(timestampWithoutHost!.y).toBeCloseTo(timestampBox!.y, 0);
+      await page.screenshot({ path: testInfo.outputPath("timestamp-without-host.png") });
+
+      for (const trailing of ["diff", "none"] as const) {
+        await setSidebarActivityPreferences(page, trailing, true);
+        await expect(host).toContainText("localhost");
+        await expect(timestamp).toHaveCount(0);
+      }
+    } finally {
+      await workspace?.cleanup();
+      await secondary?.cleanup();
+      await secondaryHost.close();
+    }
+  });
+
   test("recovers missing workspaces from a damaged legacy cache after reload", async ({
     page,
   }, testInfo) => {

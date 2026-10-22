@@ -17,12 +17,14 @@ const PR_HINT: PrHint = {
 const SERVICE: WorkspaceServiceSummary = { name: "web", health: null };
 
 const LABELS: WorkspaceLabelDefinition[] = [{ name: "Urgent", color: "red" }];
+const STATUS_ENTERED_AT = new Date("2026-10-22T10:00:00Z");
 
 function select(overrides: Partial<Parameters<typeof selectMetaRowItems>[0]> = {}) {
   return selectMetaRowItems({
     currentBranch: "feature/sidebar-badges",
     projectName: "Paseo",
     hasHostBadge: true,
+    statusEnteredAt: null,
     prHint: PR_HINT,
     serviceSummary: SERVICE,
     labels: LABELS,
@@ -50,6 +52,40 @@ describe("selectMetaRowItems", () => {
 
   it("reads identity, then the change, then its state, then what is running, then labels", () => {
     expect(kinds(select())).toEqual(["host", "changeRequest", "checks", "services", "labels"]);
+  });
+
+  it("puts the timestamp immediately after the host", () => {
+    const items = select({ statusEnteredAt: STATUS_ENTERED_AT });
+    expect(kinds(items)).toEqual([
+      "host",
+      "timestamp",
+      "changeRequest",
+      "checks",
+      "services",
+      "labels",
+    ]);
+    expect(items[1]).toEqual({ kind: "timestamp", enteredAt: STATUS_ENTERED_AT });
+  });
+
+  it("uses the host position for the timestamp when the host is hidden", () => {
+    const visible = { ...DEFAULT_SIDEBAR_ROW_ITEMS, branch: true, project: true };
+    expect(
+      kinds(select({ hasHostBadge: false, statusEnteredAt: STATUS_ENTERED_AT, visible })),
+    ).toEqual(["branch", "project", "timestamp", "changeRequest", "checks", "services", "labels"]);
+  });
+
+  it("keeps a timestamp when there are no other metadata items", () => {
+    expect(
+      select({
+        currentBranch: null,
+        projectName: null,
+        hasHostBadge: false,
+        statusEnteredAt: STATUS_ENTERED_AT,
+        prHint: null,
+        serviceSummary: null,
+        labels: [],
+      }),
+    ).toEqual([{ kind: "timestamp", enteredAt: STATUS_ENTERED_AT }]);
   });
 
   it("omits what the workspace does not have", () => {

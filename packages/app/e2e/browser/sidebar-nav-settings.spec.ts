@@ -1,4 +1,4 @@
-import { expect, test } from "../support/fixtures";
+import { expect, test, type Page } from "../support/fixtures";
 import { openAddProjectFlow, addProjectFlow } from "../support/helpers/add-project-flow";
 import { installUsageReportsFixture } from "../support/helpers/usage-reports";
 import {
@@ -7,6 +7,8 @@ import {
   openCompactSidebar,
 } from "../support/helpers/usage-sidebar-item";
 import { gotoAppShell } from "../support/helpers/app";
+import { gotoWorkspace } from "../support/helpers/launcher";
+import { seedWorkspace } from "../support/helpers/seed-client";
 import { SHOWCASE_PLUGIN_ID, installSidebarPlugins } from "../support/helpers/plugin-sidebar-items";
 import {
   expectFooterIconRow,
@@ -30,6 +32,80 @@ import {
   setFooterItemVisible,
   setSidebarNavItemVisible,
 } from "../support/helpers/sidebar-nav-settings";
+
+function leftSidebarHandle(page: Page) {
+  return page.getByTestId("left-sidebar-resize-handle").filter({ visible: true }).first();
+}
+
+function readSidebarBoundary(page: Page): Promise<number> {
+  return leftSidebarHandle(page).evaluate((element) => element.getBoundingClientRect().right);
+}
+
+function readSidebarGripOpacity(page: Page): Promise<number> {
+  return page
+    .getByTestId("left-sidebar-resize-handle-grip")
+    .filter({ visible: true })
+    .first()
+    .evaluate((element) => Number(getComputedStyle(element).opacity));
+}
+
+async function narrowSidebarWithTouch(page: Page): Promise<void> {
+  const bounds = await leftSidebarHandle(page).boundingBox();
+  if (!bounds) throw new Error("Left sidebar resize handle has no bounds");
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    for (let distance = 10; distance <= 90; distance += 10) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: x - distance, y }],
+      });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } finally {
+    await cdp.detach();
+  }
+}
+
+test.describe("Left sidebar resizing on a wide touch screen", () => {
+  test.use({ viewport: { width: 900, height: 960 }, isMobile: true, hasTouch: true });
+
+  test("shows a grab handle and remembers the dragged width after reload and folding", async ({
+    page,
+  }, testInfo) => {
+    const workspace = await seedWorkspace({ repoPrefix: "left-sidebar-touch-resize-" });
+    try {
+      await gotoWorkspace(page, workspace.workspaceId);
+      await expect(leftSidebarHandle(page)).toBeVisible();
+      expect(
+        await page.evaluate(() => window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+      ).toBe(false);
+      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+      const initialBoundary = await readSidebarBoundary(page);
+
+      await narrowSidebarWithTouch(page);
+      await expect.poll(() => readSidebarBoundary(page)).toBeLessThan(initialBoundary - 50);
+      const resizedBoundary = await readSidebarBoundary(page);
+      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+
+      await page.reload();
+      await expect.poll(() => readSidebarBoundary(page)).toBeCloseTo(resizedBoundary, 0);
+      await page.setViewportSize({ width: 390, height: 960 });
+      await expect(leftSidebarHandle(page)).toHaveCount(0);
+      await page.setViewportSize({ width: 900, height: 960 });
+      await expect.poll(() => readSidebarBoundary(page)).toBeCloseTo(resizedBoundary, 0);
+      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+      await page.screenshot({ path: testInfo.outputPath("wide-touch-sidebar-resized.png") });
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+});
 
 test("fixed footer line keeps its five icons, Help and Settings at the end", async ({ page }) => {
   test.setTimeout(120_000);

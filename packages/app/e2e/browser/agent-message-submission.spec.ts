@@ -886,6 +886,106 @@ async function completeDraftCreateSubmission(
   await expectCreatedAgentHandoff(page, pending.prompt, pending.userMessage);
 }
 
+async function readClipboardText(page: Page): Promise<string> {
+  return page.evaluate(() => navigator.clipboard.readText());
+}
+
+test.describe("user message actions with a mouse", () => {
+  test.use({ viewport: { width: 900, height: 960 } });
+
+  test("reveals the timestamp and keeps the copy action clickable while hovered", async ({
+    page,
+    context,
+  }) => {
+    const prompt = "Keep my message actions available while hovering.";
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "message-actions-mouse-",
+      title: "Mouse message actions",
+      initialPrompt: prompt,
+    });
+    try {
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await openAgentRoute(page, agent);
+      await expectComposerVisible(page);
+      expect(
+        await page.evaluate(() => window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+      ).toBe(true);
+      const userMessage = page.getByTestId("user-message").filter({ hasText: prompt });
+      const trailingRow = userMessage.getByTestId("user-message-trailing-row");
+      await userMessage.scrollIntoViewIfNeeded();
+      await page.mouse.move(0, 0);
+      await expect(trailingRow).toHaveCSS("opacity", "0");
+      await expect(trailingRow).toHaveCSS("pointer-events", "none");
+
+      await userMessage.getByText(prompt, { exact: true }).hover();
+      await expect(trailingRow).toHaveCSS("opacity", "1");
+      await expect(userMessage.getByTestId("user-message-timestamp")).toBeVisible();
+      const copyButton = userMessage.getByRole("button", { name: "Copy message", exact: true });
+      await copyButton.hover();
+      await expect(trailingRow).toHaveCSS("opacity", "1");
+      await expect(trailingRow).toHaveCSS("pointer-events", "auto");
+      await copyButton.click();
+      await expect.poll(() => readClipboardText(page)).toBe(prompt);
+
+      await page.mouse.move(0, 0);
+      await expect(trailingRow).toHaveCSS("opacity", "0");
+      await expect(trailingRow).toHaveCSS("pointer-events", "none");
+    } finally {
+      await agent.cleanup();
+    }
+  });
+});
+
+test.describe("user message actions on a touch screen", () => {
+  test.use({ viewport: { width: 900, height: 960 }, isMobile: true, hasTouch: true });
+
+  test("keeps the timestamp and copy action available while folding and unfolding", async ({
+    page,
+    context,
+  }, testInfo) => {
+    const prompt = "Keep my message actions available after folding.";
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "message-actions-touch-",
+      title: "Touch message actions",
+      initialPrompt: prompt,
+    });
+    try {
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await openAgentRoute(page, agent);
+      await expectComposerVisible(page);
+      expect(
+        await page.evaluate(() => window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+      ).toBe(false);
+      const userMessage = page.getByTestId("user-message").filter({ hasText: prompt });
+      const trailingRow = userMessage.getByTestId("user-message-trailing-row");
+
+      for (const width of [900, 390, 900]) {
+        await page.setViewportSize({ width, height: 960 });
+        await userMessage.scrollIntoViewIfNeeded();
+        await expect(userMessage).toHaveAttribute("aria-busy", "false");
+        await expect(trailingRow).toHaveCSS("opacity", "1");
+        await expect(trailingRow).toHaveCSS("pointer-events", "auto");
+        await expect(userMessage.getByTestId("user-message-timestamp")).toBeVisible();
+        await page.evaluate(() => navigator.clipboard.writeText(""));
+        await userMessage.getByRole("button", { name: "Copy message", exact: true }).tap();
+        await expect.poll(() => readClipboardText(page)).toBe(prompt);
+        await expect(trailingRow).toHaveCSS("opacity", "1");
+        await expect(trailingRow).toHaveCSS("pointer-events", "auto");
+      }
+      const screenshotPath = testInfo.outputPath("wide-touch-message-actions.png");
+      await page.screenshot({ path: screenshotPath });
+      await testInfo.attach("wide-touch-message-actions", {
+        path: screenshotPath,
+        contentType: "image/png",
+      });
+    } finally {
+      await agent.cleanup();
+    }
+  });
+});
+
 test.describe("Agent message submission", () => {
   test("settles an immediately interrupted first prompt", async ({ page }, testInfo) => {
     const workspace = await seedWorkspace({

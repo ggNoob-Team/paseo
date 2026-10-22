@@ -129,9 +129,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   children?: ReactNode;
 }) {
   const {
-    settings: { workspaceTitleSource },
+    settings: { workspaceTitleSource, sidebarWorkspaceTrailing },
   } = useAppSettings();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
+  const statusEnteredAt =
+    sidebarWorkspaceTrailing === "timestamp" ? workspace.statusEnteredAt : null;
   // The workspace carries label names; their colors live in its host's catalog, so the row is
   // where the two meet — the meta line is handed finished definitions.
   const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
@@ -176,6 +178,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             currentBranch={workspace.currentBranch}
             projectName={leadingProjectName}
             hostBadge={hostBadge ?? null}
+            statusEnteredAt={statusEnteredAt}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}
             labels={labels}
