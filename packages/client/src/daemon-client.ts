@@ -5565,12 +5565,11 @@ export class DaemonClient {
         void progressProbe.catch(() => undefined);
       };
       const waitForRemoteProgress = canAutoResume
-        ? async ({
-            transport,
-            sentBytes,
-            nextChunkBytes,
-            isSettled,
-          }: FileUploadWindowInput): Promise<void> => {
+        ? async (uploadWindow: FileUploadWindowInput): Promise<void> => {
+            // Destructure inside the body: a destructured async-arrow parameter
+            // inside a ternary trips babel-preset-expo's Hermes v1 parameter
+            // rewrite and fails the release bundle.
+            const { transport, sentBytes, nextChunkBytes, isSettled } = uploadWindow;
             if (isSettled()) {
               return;
             }
