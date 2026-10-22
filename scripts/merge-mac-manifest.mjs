@@ -22,8 +22,7 @@ export function mergeMacManifest(arm64Path, x64Path, outputPath) {
 
 if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
-  const [arm64Path, x64Path, outputPath] =
-    args.length === 2 ? [args[0], undefined, args[1]] : args;
+  const [arm64Path, x64Path, outputPath] = args.length === 2 ? [args[0], undefined, args[1]] : args;
   if (!arm64Path || !outputPath || args.length > 3) {
     throw new Error("Usage: node scripts/merge-mac-manifest.mjs <arm64.yml> [x64.yml] <out.yml>");
   }
