@@ -135,6 +135,14 @@ Use the host route context for host-owned leaves that need the host id after
 `h/[serverId]/_layout.tsx` has matched. Do not make a leaf recover from an
 unmatched tree by guessing from global state.
 
+## Navigation Hooks
+
+Import navigation hooks from `expo-router/react-navigation`, not from
+`@react-navigation/native`. Expo Router vendors its own React Navigation, so
+the bare package's `useNavigation`/`useIsFocused` read a different context and
+throw `Couldn't find a navigation object` even for a component mounted by a
+route.
+
 ## App Directory
 
 Keep non-route modules out of `src/app`. Expo Router treats ordinary `.ts` and

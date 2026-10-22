@@ -1,6 +1,6 @@
 import { useCallback, type ReactElement } from "react";
 import { FlatList, Text, View } from "react-native";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router/react-navigation";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { StackScreenHeader } from "@/components/headers/stack-screen-header";
