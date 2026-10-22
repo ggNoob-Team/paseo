@@ -1,12 +1,7 @@
 import { useCallback, useMemo, type ReactElement } from "react";
-import {
-  Pressable,
-  Text,
-  View,
-  type PressableStateCallbackType,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Text, View } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { useTranslation } from "react-i18next";
 import { Copy } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -21,9 +16,8 @@ const ThemedCopy = withUnistyles(Copy);
 /**
  * The links a note mentions, each openable and copyable.
  *
- * A long press on an inline link copies it on Android and web, but not on iOS,
- * where inline links are drawn inside a UITextView that does not forward long
- * presses. Listing the links gives every platform the same way to copy one.
+ * Listing the links gives every platform an explicit copy action alongside
+ * the Markdown renderer's long-press gesture.
  */
 export function NoteLinksSection({ text }: { text: string }): ReactElement | null {
   const { t } = useTranslation();
@@ -61,10 +55,11 @@ function NoteLinkRow({
 
   return (
     <View style={styles.row}>
-      <Pressable
+      <PressHighlight
         onPress={handleOpen}
         onLongPress={handleCopy}
         style={styles.linkPressable}
+        highlightStyle={styles.linkHighlight}
         accessibilityRole="link"
         accessibilityLabel={url}
         accessibilityHint={t("notes.copyLinkHint")}
@@ -73,26 +68,17 @@ function NoteLinkRow({
         <Text numberOfLines={1} style={styles.linkText}>
           {url}
         </Text>
-      </Pressable>
-      <Pressable
+      </PressHighlight>
+      <ToolbarButton
         onPress={handleCopy}
-        style={copyButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={t("notes.copyLink")}
+        style={styles.copyButton}
+        label={t("notes.copyLink")}
         testID="note-link-copy"
       >
         <ThemedCopy size={16} uniProps={mutedColorMapping} />
-      </Pressable>
+      </ToolbarButton>
     </View>
   );
-}
-
-function copyButtonStyle({ hovered, pressed }: PressableStateCallbackType): StyleProp<ViewStyle> {
-  return [
-    styles.copyButton,
-    hovered ? styles.copyButtonHovered : null,
-    pressed ? styles.copyButtonPressed : null,
-  ];
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -115,6 +101,9 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     paddingVertical: theme.spacing[1],
   },
+  linkHighlight: {
+    backgroundColor: theme.colors.interactionHighlight,
+  },
   linkText: {
     color: theme.colors.accentBright,
     fontSize: theme.fontSize.sm,
@@ -125,11 +114,5 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-  },
-  copyButtonHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
-  },
-  copyButtonPressed: {
-    backgroundColor: theme.colors.surface2,
   },
 }));

@@ -1,8 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Check, Upload, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { Button } from "@/components/ui/button";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import { isFileUploadInScope, useUploadStore, type FileUploadItem } from "@/stores/upload-store";
 import type { Theme } from "@/styles/theme";
@@ -121,28 +123,27 @@ function FileUploadProgressRow({
     trailing = (
       <View style={styles.failedActions}>
         {canResume ? (
-          <Pressable
+          <Button
+            variant="secondary"
+            size="xs"
             onPress={handleResume}
-            accessibilityRole="button"
-            style={styles.resumeButton}
             testID={`file-upload-resume-${item.id}`}
           >
-            <Text style={styles.resumeText}>{t("workspace.fileExplorer.upload.resume")}</Text>
-          </Pressable>
+            {t("workspace.fileExplorer.upload.resume")}
+          </Button>
         ) : (
           <Text style={styles.resumeUnavailable}>
             {t("workspace.fileExplorer.upload.resumeUnavailable")}
           </Text>
         )}
-        <Pressable
+        <ToolbarButton
+          compact
           onPress={handleDismiss}
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.fileExplorer.upload.dismiss")}
-          style={styles.dismissButton}
+          label={t("workspace.fileExplorer.upload.dismiss")}
           testID={`file-upload-dismiss-${item.id}`}
         >
           <ThemedX size={14} uniProps={mutedIcon} />
-        </Pressable>
+        </ToolbarButton>
       </View>
     );
   } else if (item.status === "uploading") {
@@ -297,17 +298,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundExtraMuted,
     fontSize: theme.fontSize.sm,
   },
-  resumeButton: {
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
-  },
-  resumeText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-  },
   resumeUnavailable: {
     maxWidth: 96,
     color: theme.colors.foregroundExtraMuted,
@@ -318,8 +308,5 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-  },
-  dismissButton: {
-    padding: theme.spacing[1],
   },
 }));

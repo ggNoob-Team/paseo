@@ -1,5 +1,4 @@
 import React, { useCallback, type ReactNode } from "react";
-import { Pressable } from "react-native";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, X } from "lucide-react-native";
@@ -9,6 +8,7 @@ import { BackHeader } from "@/components/headers/back-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { SidebarMenuToggle } from "@/components/headers/sidebar-menu-toggle";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import {
   iconButtonChromeGlyphSize,
   mutedIconColorMapping,
@@ -92,47 +92,31 @@ export function StackScreenHeader({
 function StackScreenBackButton({ onPress }: { onPress: () => void }): ReactNode {
   const { t } = useTranslation();
   return (
-    <Pressable
-      onPress={onPress}
-      style={styles.glyphButton}
-      accessibilityRole="button"
-      accessibilityLabel={t("common.actions.back")}
-      testID="stack-screen-back"
-    >
+    <ToolbarButton onPress={onPress} label={t("common.actions.back")} testID="stack-screen-back">
       <ThemedArrowLeft
         size={iconButtonChromeGlyphSize("large")}
         strokeWidth={1.5}
         uniProps={mutedIconColorMapping}
       />
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
 function StackScreenCloseButton({ onPress }: { onPress: () => void }): ReactNode {
   const { t } = useTranslation();
   return (
-    <Pressable
-      onPress={onPress}
-      style={styles.glyphButton}
-      accessibilityRole="button"
-      accessibilityLabel={t("common.actions.close")}
-      testID="stack-screen-close"
-    >
+    <ToolbarButton onPress={onPress} label={t("common.actions.close")} testID="stack-screen-close">
       <ThemedX
         size={iconButtonChromeGlyphSize("large")}
         strokeWidth={1.5}
         uniProps={mutedIconColorMapping}
       />
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   left: {
     gap: theme.spacing[2],
-  },
-  glyphButton: {
-    padding: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
   },
 }));

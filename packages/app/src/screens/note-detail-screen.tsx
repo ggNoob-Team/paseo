@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react-native";
@@ -18,7 +18,6 @@ import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedTrash = withUnistyles(Trash2);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 export function NoteDetailScreen(): ReactElement {
@@ -182,16 +181,18 @@ function NoteDetailBody({ note }: { note: HostNote }): ReactElement {
         </View>
       )}
       {isEditing ? null : (
-        <Pressable
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={Trash2}
           onPress={handleDeletePress}
           style={styles.deleteRow}
           accessibilityRole="button"
           accessibilityLabel={t("notes.deleteNote")}
           testID="note-delete"
         >
-          <ThemedTrash size={16} uniProps={mutedColorMapping} />
-          <Text style={styles.deleteLabel}>{t("notes.deleteNote")}</Text>
-        </Pressable>
+          {t("notes.deleteNote")}
+        </Button>
       )}
       {isEditing ? headerActions : null}
     </ScrollView>
@@ -292,17 +293,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   deleteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
     alignSelf: "flex-start",
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
     marginTop: theme.spacing[4],
-  },
-  deleteLabel: {
-    color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.base,
   },
 }));

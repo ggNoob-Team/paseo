@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import {
   Check,
   ChevronDown,
@@ -29,9 +29,12 @@ import {
   type ArchifySearchEntry,
 } from "@/archify/model";
 import { Button } from "@/components/ui/button";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { PressHighlight } from "@/components/ui/press-highlight";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
-import { FileHtmlPreview } from "@/file-pane/html-preview";
+import { FileHtmlPreview } from "@/file-panels/html-preview";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { usePaneContext } from "@/panels/pane-context";
@@ -107,16 +110,12 @@ function ArchifyRefreshButton({
   label: string;
   onPress: () => void;
 }): ReactElement {
+  const compact = useIsCompactFormFactor();
   const handlePress = useCallback(() => onPress(), [onPress]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={handlePress}
-      style={styles.iconButton}
-    >
+    <ToolbarButton compact={compact} label={label} onPress={handlePress}>
       <RefreshCw size={15} color={styles.mutedColor.color} />
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
@@ -129,17 +128,12 @@ function ArchifyDeleteButton({
   label: string;
   onPress: () => void;
 }): ReactElement {
+  const compact = useIsCompactFormFactor();
   const handlePress = useCallback(() => onPress(), [onPress]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={handlePress}
-      style={[styles.iconButton, disabled && styles.generateButtonDisabled]}
-    >
+    <ToolbarButton compact={compact} label={label} disabled={disabled} onPress={handlePress}>
       <Trash2 size={15} color={styles.mutedColor.color} />
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
@@ -155,8 +149,19 @@ function ArchifySearchResultRow({
   onSelect: (entry: ArchifySearchEntry) => void;
 }): ReactElement {
   const handlePress = useCallback(() => onSelect(entry), [entry, onSelect]);
+  const rowStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
+      styles.resultRow,
+      (hovered || pressed) && styles.interactionHighlight,
+    ],
+    [],
+  );
   return (
-    <Pressable onPress={handlePress} style={styles.resultRow}>
+    <PressHighlight
+      onPress={handlePress}
+      style={rowStyle}
+      highlightStyle={styles.interactionHighlight}
+    >
       <View style={styles.resultMain}>
         <Text style={styles.resultLabel}>{entry.label}</Text>
         <Text style={styles.resultDetail} numberOfLines={1}>
@@ -164,7 +169,7 @@ function ArchifySearchResultRow({
         </Text>
       </View>
       <Text style={styles.resultKind}>{entry.kind === "node" ? nodeLabel : relationshipLabel}</Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 
@@ -183,13 +188,21 @@ function ArchifyArtifactTab({
 }): ReactElement {
   const handlePress = useCallback(() => onSelect(artifact.id), [artifact.id, onSelect]);
   const accessibilityState = useMemo(() => ({ selected: active }), [active]);
+  const tabStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
+      styles.artifactTab,
+      (active || hovered || pressed) && styles.interactionHighlight,
+    ],
+    [active],
+  );
   return (
-    <Pressable
+    <PressHighlight
       accessibilityRole="tab"
       accessibilityLabel={`${typeLabel}: ${label}`}
       accessibilityState={accessibilityState}
       onPress={handlePress}
-      style={[styles.artifactTab, active && styles.artifactTabActive]}
+      style={tabStyle}
+      highlightStyle={styles.interactionHighlight}
     >
       <DiagramTypeIcon
         type={artifact.type}
@@ -199,7 +212,7 @@ function ArchifyArtifactTab({
       <Text numberOfLines={1} style={[styles.artifactTabText, active && styles.activeText]}>
         {label}
       </Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 
@@ -212,22 +225,22 @@ function ArchifyGenerationToggle({
   label: string;
   onToggle: () => void;
 }): ReactElement {
+  const compact = useIsCompactFormFactor();
   const handlePress = useCallback(() => onToggle(), [onToggle]);
-  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={accessibilityState}
+    <ToolbarButton
+      compact={compact}
+      label={label}
+      aria-expanded={!collapsed}
+      selected={!collapsed}
       onPress={handlePress}
-      style={styles.generationToggle}
     >
       {collapsed ? (
         <ChevronDown size={16} color={styles.mutedColor.color} />
       ) : (
         <ChevronUp size={16} color={styles.mutedColor.color} />
       )}
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
@@ -247,23 +260,29 @@ function ArchifyTypeOption({
   onToggle: (type: ArchifyDiagramType) => void;
 }): ReactElement {
   const handlePress = useCallback(() => onToggle(type), [onToggle, type]);
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={handlePress}
-      style={[
-        styles.typeOption,
-        selected && styles.typeOptionSelected,
-        ready && styles.typeOptionReady,
-      ]}
-    >
+  const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  const leadingIcon = useMemo(
+    () => (
       <DiagramTypeIcon
         type={type}
         size={14}
         color={selected ? styles.activeColor.color : styles.mutedColor.color}
       />
-      <Text style={[styles.typeOptionText, selected && styles.activeText]}>{label}</Text>
-    </Pressable>
+    ),
+    [selected, type],
+  );
+  return (
+    <Button
+      variant={selected ? "secondary" : "ghost"}
+      size="xs"
+      disabled={disabled}
+      accessibilityState={accessibilityState}
+      onPress={handlePress}
+      style={ready ? styles.typeOptionReady : undefined}
+      leftIcon={leadingIcon}
+    >
+      {label}
+    </Button>
   );
 }
 
@@ -280,17 +299,16 @@ function ArchifyGenerateButton({
 }): ReactElement {
   const handlePress = useCallback(() => onPress(), [onPress]);
   return (
-    <Pressable
+    <Button
+      variant="default"
+      size="sm"
       disabled={disabled}
+      loading={generating}
       onPress={handlePress}
-      style={[styles.generateButton, disabled && styles.generateButtonDisabled]}
+      style={styles.generateButton}
     >
-      {generating ? (
-        <ActivityIndicator size="small" color={styles.generateText.color} />
-      ) : (
-        <Text style={styles.generateText}>{label}</Text>
-      )}
-    </Pressable>
+      {label}
+    </Button>
   );
 }
 
@@ -410,12 +428,21 @@ function ArchifyAnchorRow({
 }): ReactElement {
   const handlePress = useCallback(() => onToggle(anchor), [anchor, onToggle]);
   const accessibilityState = useMemo(() => ({ checked: selected }), [selected]);
+  const rowStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
+      styles.anchorRow,
+      selected && styles.anchorRowSelected,
+      (hovered || pressed) && styles.interactionHighlight,
+    ],
+    [selected],
+  );
   return (
-    <Pressable
+    <PressHighlight
       accessibilityRole="checkbox"
       accessibilityState={accessibilityState}
       onPress={handlePress}
-      style={[styles.anchorRow, selected && styles.anchorRowSelected]}
+      style={rowStyle}
+      highlightStyle={styles.interactionHighlight}
     >
       <Text style={styles.anchorKind}>{kindLabel}</Text>
       <View style={styles.anchorMain}>
@@ -429,7 +456,7 @@ function ArchifyAnchorRow({
         ) : null}
       </View>
       {selected ? <Check size={14} color={styles.activeColor.color} /> : null}
-    </Pressable>
+    </PressHighlight>
   );
 }
 
@@ -1080,6 +1107,9 @@ export const archifyPanelRegistration = definePanel("archify", {
 });
 
 const styles = StyleSheet.create((theme) => ({
+  interactionHighlight: {
+    backgroundColor: theme.colors.interactionHighlight,
+  },
   root: {
     flex: 1,
     minHeight: 0,
@@ -1111,16 +1141,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     paddingVertical: 0,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
-  },
-  pressed: {
-    opacity: 0.7,
   },
   results: {
     maxHeight: 220,
@@ -1171,13 +1191,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
-  generationToggle: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
   artifactTab: {
     maxWidth: 240,
     flexDirection: "row",
@@ -1188,9 +1201,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     height: 30,
     borderRadius: theme.borderRadius.md,
-  },
-  artifactTabActive: {
-    backgroundColor: theme.colors.surface2,
   },
   artifactTabText: {
     color: theme.colors.foregroundMuted,
@@ -1337,26 +1347,8 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: theme.spacing[1],
   },
-  typeOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-  },
-  typeOptionSelected: {
-    borderColor: theme.colors.foregroundMuted,
-    backgroundColor: theme.colors.surface2,
-  },
   typeOptionReady: {
     borderColor: theme.colors.success,
-  },
-  typeOptionText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
   },
   inputRow: {
     flexDirection: "row",
@@ -1382,20 +1374,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   generateButton: {
     minWidth: 88,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.accent,
-  },
-  generateButtonDisabled: {
-    opacity: 0.45,
-  },
-  generateText: {
-    color: theme.colors.accentForeground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
   },
   preview: {
     flex: 1,

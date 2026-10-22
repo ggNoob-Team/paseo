@@ -1,11 +1,5 @@
-import { useCallback, useState, type ComponentProps, type PropsWithChildren } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  type GestureResponderEvent,
-  type PressableStateCallbackType,
-} from "react-native";
+import { useCallback, useMemo, useState, type ComponentProps, type PropsWithChildren } from "react";
+import { View, Text, type GestureResponderEvent } from "react-native";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -18,8 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shortcut } from "@/components/ui/shortcut";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useToast } from "@/contexts/toast-context";
 import { isWeb as platformIsWeb, getIsElectron } from "@/constants/platform";
@@ -252,12 +245,19 @@ function NewWorktreeButton({
   const { t } = useTranslation();
   const newWorktreeKeys = useShortcutKeys("new-worktree");
 
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.projectIconActionButton,
-      (Boolean(hovered) || pressed) && !loading && styles.projectIconActionButtonHovered,
-    ],
-    [loading],
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const handleHoverIn = useCallback(() => setHovered(true), []);
+  const handleHoverOut = useCallback(() => setHovered(false), []);
+  const handlePressIn = useCallback(() => setPressed(true), []);
+  const handlePressOut = useCallback(() => setPressed(false), []);
+  const tooltip = useMemo(
+    () => (
+      <Text style={styles.projectActionTooltipText}>
+        {t("sidebar.workspace.actions.newWorkspace")}
+      </Text>
+    ),
+    [t],
   );
 
   const handlePress = useCallback(
@@ -270,43 +270,28 @@ function NewWorktreeButton({
 
   return (
     <View style={styles.projectTrailingControlSlot}>
-      <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-        <TooltipTrigger asChild>
-          <Pressable
-            style={pressableStyle}
-            onPress={handlePress}
-            disabled={loading}
-            accessibilityRole={platformIsWeb ? undefined : "button"}
-            accessibilityLabel={t("sidebar.workspace.actions.createWorkspaceFor", {
-              projectName: displayName,
-            })}
-            testID={testID}
-          >
-            {({ hovered, pressed }) =>
-              loading ? (
-                <ThemedLoadingSpinner size={14} uniProps={foregroundMutedColorMapping} />
-              ) : (
-                <ThemedPlus
-                  size={15}
-                  uniProps={
-                    hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping
-                  }
-                />
-              )
-            }
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="center" offset={8}>
-          <View style={styles.projectActionTooltipRow}>
-            <Text style={styles.projectActionTooltipText}>
-              {t("sidebar.workspace.actions.newWorkspace")}
-            </Text>
-            {showShortcutHint && newWorktreeKeys ? (
-              <Shortcut chord={newWorktreeKeys} style={styles.projectActionTooltipShortcut} />
-            ) : null}
-          </View>
-        </TooltipContent>
-      </Tooltip>
+      <ToolbarButton
+        style={styles.projectIconActionButton}
+        label={t("sidebar.workspace.actions.createWorkspaceFor", { projectName: displayName })}
+        tooltip={tooltip}
+        shortcut={showShortcutHint ? newWorktreeKeys : null}
+        onPress={handlePress}
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={loading}
+        testID={testID}
+      >
+        {loading ? (
+          <ThemedLoadingSpinner size={14} uniProps={foregroundMutedColorMapping} />
+        ) : (
+          <ThemedPlus
+            size={15}
+            uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+          />
+        )}
+      </ToolbarButton>
     </View>
   );
 }
@@ -386,9 +371,6 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     flexShrink: 0,
   },
-  projectIconActionButtonHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
-  },
   projectTrailingActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -416,14 +398,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     flexShrink: 0,
   },
-  projectActionTooltipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
   projectActionTooltipText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
   },
-  projectActionTooltipShortcut: {},
 }));

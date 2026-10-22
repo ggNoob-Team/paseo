@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, type ReactElement } from "react";
 import {
   FlatList,
-  Pressable,
   Text,
   View,
   type PressableStateCallbackType,
@@ -11,6 +10,7 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StackScreenHeader } from "@/components/headers/stack-screen-header";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
@@ -129,9 +129,10 @@ function RecentWorkspaceRowItem({
   }, [row.serverId, row.workspaceId]);
 
   return (
-    <Pressable
+    <PressHighlight
       onPress={handlePress}
       style={recentRowStyle}
+      highlightStyle={styles.rowPressed}
       accessibilityRole="button"
       testID={`recent-workspace-${row.workspaceKey}`}
     >
@@ -144,7 +145,7 @@ function RecentWorkspaceRowItem({
         </Text>
       </View>
       <Text style={styles.time}>{timeLabel || t("recent.noActivity")}</Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 

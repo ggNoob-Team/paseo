@@ -1,10 +1,11 @@
-import { memo, useCallback, type ReactElement } from "react";
-import { Pressable, type StyleProp, type ViewStyle } from "react-native";
+import { memo, useCallback, useState, type ReactElement } from "react";
+import { type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import { NotebookPen } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useNotesCaptureOptional } from "./capture-context";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 
 const ThemedNotebookPen = withUnistyles(NotebookPen);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -30,6 +31,9 @@ export const AddToNotesButton = memo(function AddToNotesButton({
 }): ReactElement | null {
   const { t } = useTranslation();
   const capture = useNotesCaptureOptional();
+  const [hovered, setHovered] = useState(false);
+  const handleHoverIn = useCallback(() => setHovered(true), []);
+  const handleHoverOut = useCallback(() => setHovered(false), []);
 
   const handlePress = useCallback(() => {
     if (!capture) return;
@@ -42,19 +46,18 @@ export const AddToNotesButton = memo(function AddToNotesButton({
   if (!capture) return null;
 
   return (
-    <Pressable
+    <ToolbarButton
       onPress={handlePress}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
       style={containerStyle}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? t("notes.addEntryAction")}
+      label={accessibilityLabel ?? t("notes.addEntryAction")}
       testID="add-to-notes"
     >
-      {({ hovered }) => (
-        <ThemedNotebookPen
-          size={ICON_SIZE.sm}
-          uniProps={hovered ? hoveredColorMapping : mutedColorMapping}
-        />
-      )}
-    </Pressable>
+      <ThemedNotebookPen
+        size={ICON_SIZE.sm}
+        uniProps={hovered ? hoveredColorMapping : mutedColorMapping}
+      />
+    </ToolbarButton>
   );
 });

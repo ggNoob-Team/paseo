@@ -1,12 +1,6 @@
 import { memo, useCallback, useMemo, type ReactElement } from "react";
-import {
-  Pressable,
-  Text,
-  View,
-  type PressableStateCallbackType,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Text, View } from "react-native";
+import { Button } from "@/components/ui/button";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -50,29 +44,21 @@ export const NoteListRow = memo(function NoteListRow({ note }: { note: HostNote 
           {note.projectName} · {note.hostLabel} · {timeLabel}
         </Text>
       </View>
-      <Pressable
+      <Button
+        variant="ghost"
+        size="xs"
         onPress={handleOpen}
-        style={detailsButtonStyle}
+        style={styles.detailsButton}
+        textStyle={styles.detailsLabel}
         accessibilityRole="button"
         accessibilityLabel={t("notes.details")}
         testID={`note-details-${note.noteId}`}
       >
-        <Text style={styles.detailsLabel}>{t("notes.details")}</Text>
-      </Pressable>
+        {t("notes.details")}
+      </Button>
     </View>
   );
 });
-
-function detailsButtonStyle({
-  hovered,
-  pressed,
-}: PressableStateCallbackType): StyleProp<ViewStyle> {
-  return [
-    styles.detailsButton,
-    hovered ? styles.detailsButtonHovered : null,
-    pressed ? styles.detailsButtonPressed : null,
-  ];
-}
 
 function NotePreviewSpan({
   segment,
@@ -145,16 +131,7 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.85,
   },
   detailsButton: {
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
     flexShrink: 0,
-  },
-  detailsButtonHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
-  },
-  detailsButtonPressed: {
-    backgroundColor: theme.colors.surface2,
   },
   detailsLabel: {
     color: theme.colors.foreground,

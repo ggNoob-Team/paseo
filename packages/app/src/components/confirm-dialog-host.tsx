@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { resolveConfirmDialog, subscribeConfirmDialog } from "@/utils/confirm-dialog";
 
 interface PendingDialog {
@@ -48,7 +49,12 @@ export function ConfirmDialogHost(): React.ReactNode {
   return (
     <Modal transparent animationType="fade" visible onRequestClose={cancel}>
       <View style={styles.backdrop}>
-        <Pressable style={styles.backdropPress} onPress={cancel} accessibilityRole="button" />
+        <PressHighlight
+          style={styles.backdropPress}
+          highlightStyle={styles.backdropHighlight}
+          onPress={cancel}
+          accessibilityRole="button"
+        />
         <View style={styles.card} testID="confirm-dialog">
           <Text style={styles.title}>{pending.title}</Text>
           <Text style={styles.message}>{pending.message}</Text>
@@ -81,6 +87,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   backdropPress: {
     ...StyleSheet.absoluteFillObject,
+  },
+  backdropHighlight: {
+    backgroundColor: "transparent",
   },
   card: {
     width: "100%",

@@ -1,4 +1,3 @@
-import type { AssistantImageContext } from "@/utils/assistant-image-metadata";
 import type { ComponentType, ReactElement, ReactNode, RefObject } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
@@ -52,6 +51,8 @@ export interface ScrollToMessageOccurrence {
 }
 
 export interface StreamViewportHandle {
+  /** Give keyboard navigation back to the scrolling surface on web. */
+  focus?: () => void;
   scrollToBottom: (reason?: BottomAnchorLocalRequest["reason"]) => void;
   prepareForViewportChange: () => void;
   scrollToMessage?: (messageId: string, occurrence?: ScrollToMessageOccurrence) => void;
@@ -100,7 +101,6 @@ export interface StreamRenderInput {
    * comfortable width still has room for it. Web viewports only.
    */
   contentLeadingInset?: number;
-  imageContext?: AssistantImageContext;
 }
 
 export interface ResolveStreamRenderStrategyInput {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Square, SquareCheck } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -9,6 +9,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import type { Theme } from "@/styles/theme";
 import { joinSelectedBlocks, selectAllBlockIds, type MessageBlock } from "./message-blocks";
 
@@ -275,9 +276,10 @@ function BlockRow({
   const iconMapping = selected ? accentColorMapping : mutedColorMapping;
   const accessibilityState = useMemo(() => ({ checked: selected }), [selected]);
   return (
-    <Pressable
+    <PressHighlight
       onPress={handlePress}
       style={styles.blockRow}
+      highlightStyle={styles.blockRowHighlight}
       accessibilityRole="checkbox"
       accessibilityState={accessibilityState}
       testID={`add-note-block-${block.id}`}
@@ -290,7 +292,7 @@ function BlockRow({
       <Text numberOfLines={2} style={styles.blockText}>
         {block.text}
       </Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 
@@ -330,6 +332,9 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
+  },
+  blockRowHighlight: {
+    backgroundColor: theme.colors.interactionHighlight,
   },
   blockText: {
     color: theme.colors.foreground,
