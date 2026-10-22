@@ -529,7 +529,7 @@
 
       <div class="tabs" id="tabs">
         <button class="tab backlog on" data-tab="backlog">
-          计划中 / 未开发<span class="c">23</span>
+          计划中 / 未开发<span class="c">25</span>
         </button>
         <button class="tab bug" data-tab="bugs">Bug<span class="c">6</span></button>
         <button class="tab pain" data-tab="pains">痛点想法<span class="c">1</span></button>
@@ -735,7 +735,7 @@
       <div class="pane on" id="pane-backlog">
         <section>
           <h2>
-            计划中 / 未开发 <span class="n">23 项 · 待办；标「已做」的部分已落地</span>
+            计划中 / 未开发 <span class="n">25 项 · 待办；标「已做」的部分已落地</span>
             <span class="badge b-p0">P0 · 最高优先级</span>
           </h2>
           <div class="grid">
@@ -833,6 +833,103 @@
                 <div class="v">
                   与「个人笔记收件箱」互补：这里管项目笔记的锚点与待处理，那里管个人碎片（链接 /
                   图片 / 地址）。
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="session">
+              <div class="t">
+                平板侧边栏宽度可配置<span class="tag g-session">会话</span
+                ><span class="badge b-plan">计划中</span><span class="badge b-p0">P0</span>
+              </div>
+              <div class="d">
+                平板模式下左侧任务 /
+                会话列表的宽度无法直接调整，影响高频使用。在设置中提供一个数字输入框，填宽度即可，不要求拖动调整。
+              </div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>设置页增加「平板侧边栏宽度」数字输入项，输入一个数字即可保存。</li>
+                    <li>修改后立即作用于平板模式左侧任务列表，不需要重启 App。</li>
+                    <li>保存后跨页面生效，并在重新打开 App 后保持；无需依赖拖拽手势。</li>
+                    <li>沿用现有侧边栏宽度约束：默认 320，合法范围 200–600。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">现状</span>
+                <div class="v">
+                  侧边栏宽度已经存于
+                  <code>packages/app/src/stores/panel-store/state.ts</code>（默认 320，范围
+                  200–600），由 <code>packages/app/src/app/_layout.tsx</code>
+                  读取并参与布局；目前缺少用户可直接输入数值的设置入口。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">验收</span>
+                <div class="v">
+                  在设置中输入新宽度后，返回平板会话界面立即看到侧栏宽度变化；关闭并重新打开 App
+                  后仍保持该数值；非法输入不会破坏布局。
+                </div>
+              </div>
+            </div>
+
+            <div class="card req" data-tag="notes">
+              <div class="t">
+                标签笔记 Bottom Sheet + 事件驱动刷新<span class="tag g-notes">笔记</span
+                ><span class="badge b-plan">计划中</span><span class="badge b-p0">P0</span>
+              </div>
+              <div class="d">
+                顶部笔记图标是高频入口，但现在每次打开都会先进入笔记页并刷新约 3
+                秒。改为从屏幕底部升起的抽屉，用缓存直接显示列表，只有数据可能变化时才后台刷新。
+              </div>
+              <div class="rq">
+                <span class="k">需求</span>
+                <div class="v">
+                  <ul>
+                    <li>
+                      点击工作区顶部的笔记按钮，不再跳转笔记页面，而是打开从下往上的 Bottom Sheet。
+                    </li>
+                    <li>
+                      交互形态与在笔记列表里点开笔记时出现的底部弹窗一致；抽屉内容换成可上下滚动的笔记列表。
+                    </li>
+                    <li>
+                      打开抽屉时先展示已有缓存，不因展开动作触发一次加载；需要更新时在后台进行并保留当前列表。
+                    </li>
+                    <li>
+                      刷新改为事件 / 钩子触发：App
+                      启动后刷新一次；新增、编辑或删除笔记后刷新一次；也保留用户主动下拉刷新。
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">现状</span>
+                <div class="v">
+                  笔记按钮当前通过路由进入项目笔记页（
+                  <code>packages/app/src/notes/notes-header-button.tsx</code>）；列表页挂载时由
+                  <code>useNotesList</code> 拉取笔记（
+                  <code>packages/app/src/screens/notes-screen.tsx</code>、
+                  <code>packages/app/src/notes/use-notes.ts</code>）。新增笔记的弹窗已经使用
+                  <code>AdaptiveModalSheet</code>。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">验收</span>
+                <div class="v">
+                  重复展开 / 收起抽屉不产生网络刷新且列表立即可见；仅在约定的数据变更事件或 App
+                  启动后更新；添加一条笔记后返回抽屉，新笔记出现且只触发一次刷新。
+                </div>
+              </div>
+              <div class="rq">
+                <span class="k">截图</span>
+                <div class="v">
+                  <img
+                    class="shot"
+                    src="/webview/assets/notes-tag-bottom-sheet-refresh-2026-10-20.png"
+                    alt="工作区顶部被圈出的笔记按钮"
+                  />
                 </div>
               </div>
             </div>
@@ -1673,8 +1770,15 @@
       </div>
 
       <footer>
-        更新于 <code>2026-10-15 18:01 CST</code> · 仓库 revision
+        更新于 <code>2026-10-21 02:15 CST</code> · 仓库 revision
         <code>b2538cdbf</code>（0.11.3）<br />
+        新增最高优先级需求「平板侧边栏宽度可配置」：设置中直接输入宽度数值，不使用拖拽；修改即时生效并持久化（计划中
+        24 → 25）。<br />
+
+        新增 P0 计划中需求「标签笔记 Bottom Sheet +
+        事件驱动刷新」：顶部笔记入口改为从下往上的抽屉，列表缓存即时展示，不再每次展开都刷新；刷新只在
+        App 启动、笔记增删改后或用户主动触发时发生（计划中 23 → 24）。<br />
+
         新增 P0 Bug「鸿蒙 3 折叠安装后应用图标出现白色边框」，附截图；源图
         packages/harmony/assets/app_icon.png 四周为白色，叠加系统圆角遮罩形成白边（Bug 5 → 6）。<br />
 
