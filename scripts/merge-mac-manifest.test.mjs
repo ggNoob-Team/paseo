@@ -29,3 +29,22 @@ test("preserves unknown fields while merging files by url", () => {
     rmSync(dir, { force: true, recursive: true });
   }
 });
+
+test("normalizes a single arm64 manifest", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "paseo-merge-mac-manifest-"));
+  try {
+    const arm64Path = path.join(dir, "arm64.yml");
+    const outputPath = path.join(dir, "latest-mac.yml");
+    writeFileSync(
+      arm64Path,
+      "version: 1.2.3\nfiles:\n  - url: app-arm64.zip\n    sha512: arm\npath: app-arm64.zip\nsha512: arm\nreleaseDate: '2026-04-28T00:00:00.000Z'\n",
+    );
+    mergeMacManifest(arm64Path, undefined, outputPath);
+    const output = readFileSync(outputPath, "utf8");
+    assert.match(output, /minimumSystemVersion: 22\.0\.0/);
+    assert.match(output, /url: app-arm64\.zip/);
+    assert.doesNotMatch(output, /app-x64\.zip/);
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+  }
+});

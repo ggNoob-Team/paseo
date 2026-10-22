@@ -8,7 +8,7 @@ export const MACOS_MINIMUM_DARWIN_VERSION = "22.0.0";
 
 export function mergeMacManifest(arm64Path, x64Path, outputPath) {
   const arm64 = load(fs.readFileSync(arm64Path, "utf8"));
-  const x64 = load(fs.readFileSync(x64Path, "utf8"));
+  const x64 = x64Path ? load(fs.readFileSync(x64Path, "utf8")) : { files: [] };
   const files = [...(arm64.files ?? []), ...(x64.files ?? [])].filter(
     (file, index, all) => all.findIndex((entry) => entry.url === file.url) === index,
   );
@@ -21,9 +21,11 @@ export function mergeMacManifest(arm64Path, x64Path, outputPath) {
 }
 
 if (isMainModule(import.meta.url)) {
-  const [, , arm64Path, x64Path, outputPath] = process.argv;
-  if (!arm64Path || !x64Path || !outputPath) {
-    throw new Error("Usage: node scripts/merge-mac-manifest.mjs <arm64.yml> <x64.yml> <out.yml>");
+  const args = process.argv.slice(2);
+  const [arm64Path, x64Path, outputPath] =
+    args.length === 2 ? [args[0], undefined, args[1]] : args;
+  if (!arm64Path || !outputPath || args.length > 3) {
+    throw new Error("Usage: node scripts/merge-mac-manifest.mjs <arm64.yml> [x64.yml] <out.yml>");
   }
   process.stdout.write(mergeMacManifest(arm64Path, x64Path, outputPath));
 }

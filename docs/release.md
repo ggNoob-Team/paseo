@@ -193,14 +193,13 @@ npm run release:promote          # Promote X.Y.Z-beta.N to stable X.Y.Z
 - Betas publish desktop assets and APKs for testing. They also build iOS, upload it to TestFlight, add it to the `Paseo Beta` external group, and submit it for Beta App Review. They do not submit mobile builds to the production stores.
 - `release:promote` creates a fresh stable tag like `v0.1.41`; the final release never reuses the beta tag
 - Desktop assets now come from the Electron package at `packages/desktop`
-- Require the Linux artifact CI checks with both restricted and usable user namespaces to pass before publication; see [packaged desktop smoke](testing.md#packaged-desktop-smoke). Keep the installed-package and AppImage checks together.
 - Beta releases use Electron's `beta` update channel. Users on the stable channel only receive stable releases; users on the beta channel receive beta releases and the final stable release when it is published.
 - **A beta series has one changelog entry.** Each beta folds into it and renames its heading to the new `## X.Y.Z-beta.N`, which `Release Notes Sync` mirrors into that prerelease body. Promotion renames it to the stable heading. See the Changelog policy section.
 
 Use the beta path when you need to:
 
 - smoke a build yourself before promoting it to everyone
-- test a build manually in a Linux or Windows VM
+- test a build manually on Windows
 - send a build to a user who is hitting a specific problem
 - iterate on `beta.1`, `beta.2`, `beta.3`, and so on before deciding to ship broadly
 
@@ -208,14 +207,14 @@ Use the beta path when you need to:
 
 Stable desktop releases go out via a linear time-based rollout for automatic update checks: 0% admitted when the updater manifests appear, 100% admitted 36 hours later, linear ramp in between. Manual checks bypass the rollout so a user can install immediately when they click **Check**. Beta releases bypass the rollout entirely — beta users always receive updates immediately.
 
-The rollout is driven by a `rolloutHours` field stamped into the GitHub Release manifests (`latest-mac.yml`, `latest-linux.yml`, `latest.yml`) by the `finalize-rollout` job in `desktop-release.yml`.
+The rollout is driven by a `rolloutHours` field stamped into the GitHub Release manifests (`latest-mac.yml` and `latest.yml`) by the `finalize-rollout` job in `desktop-release.yml`.
 
 Desktop release builds now publish in two phases:
 
-- The GitHub Release stays a draft while platform build jobs upload the installers/packages (`.dmg`, `.zip`, `.exe`, `.AppImage`, etc.).
-- The final job merges and stamps every channel manifest, uploads them with the final `releaseDate` and `rolloutHours`, then publishes the GitHub Release.
+- The GitHub Release stays a draft while platform build jobs upload the installers/packages (`.dmg`, `.zip`, `.exe`, etc.).
+- The final job normalizes and stamps every channel manifest, uploads them with the final `releaseDate` and `rolloutHours`, then publishes the GitHub Release.
 
-Drafts do not appear in GitHub's releases feed. Updater clients continue to see the previous complete release until all three manifests are available. If a desktop build or manifest upload fails, the new release stays a draft.
+Drafts do not appear in GitHub's releases feed. Updater clients continue to see the previous complete release until both manifests are available. If a desktop build or manifest upload fails, the new release stays a draft.
 
 ### Default behavior
 
@@ -378,10 +377,10 @@ the completion checklist or finds a failure that needs new user authority.
 Each heartbeat checks the release tag commit, all GitHub Actions runs for the
 release branch and tag, npm dist-tags, the GitHub Release body and assets,
 desktop updater manifests, the published Docker image, and the applicable EAS
-workflow. Inspect the GitHub Release itself and confirm that the macOS, Linux,
+workflow. Inspect the GitHub Release itself and confirm that the macOS arm64,
 Windows, and Android APK assets are present along with the channel manifests
-(`latest-mac.yml`, `latest-linux.yml`, and `latest.yml` for stable;
-`beta-mac.yml`, `beta-linux.yml`, and `beta.yml` for beta).
+(`latest-mac.yml` and `latest.yml` for stable; `beta-mac.yml` and `beta.yml`
+for beta).
 
 For stable releases, also confirm every required mobile build, external
 TestFlight distribution, Beta App Review submission, and store submission job
@@ -467,7 +466,6 @@ git tag -f desktop-v0.1.28 HEAD && git push origin desktop-v0.1.28 --force
 
 # Desktop (single platform)
 git tag -f desktop-macos-v0.1.28 HEAD && git push origin desktop-macos-v0.1.28 --force
-git tag -f desktop-linux-v0.1.28 HEAD && git push origin desktop-linux-v0.1.28 --force
 git tag -f desktop-windows-v0.1.28 HEAD && git push origin desktop-windows-v0.1.28 --force
 
 # Android APK
@@ -481,7 +479,7 @@ This ensures the checkout ref matches the actual code on `main` with the fix inc
 
 - `vX.Y.Z` or `vX.Y.Z-beta.N` rebuilds the full tagged release
 - `desktop-vX.Y.Z` rebuilds desktop for all desktop platforms only
-- `desktop-macos-vX.Y.Z`, `desktop-linux-vX.Y.Z`, and `desktop-windows-vX.Y.Z` rebuild only that desktop platform
+- `desktop-macos-vX.Y.Z` and `desktop-windows-vX.Y.Z` rebuild only that desktop platform
 - `android-vX.Y.Z` rebuilds the Android APK release only
 
 If you decide to publish a release without working desktop builds, inspect its
@@ -660,9 +658,9 @@ Every entry covers `previous stable release → release source`: first beta, lat
 - [ ] `npm run release:beta:patch`, `npm run release:beta:minor`, or `npm run release:beta:next` completes successfully
 - [ ] Every GitHub Actions run for the complete release commit and tag is green
 - [ ] npm shows the version under the `beta` dist-tag, not `latest`
-- [ ] The GitHub prerelease was published only after the three beta manifests were uploaded, and it has the changelog body and every expected macOS, Linux, Windows, and Android APK asset
+- [ ] The GitHub prerelease was published only after the two beta manifests were uploaded, and it has the changelog body and every expected macOS arm64, Windows, and Android APK asset
 - [ ] GitHub `Desktop Release` workflow for the `v*-beta.N` tag is green
-- [ ] The GitHub prerelease contains `beta-mac.yml`, `beta-linux.yml`, and `beta.yml`
+- [ ] The GitHub prerelease contains `beta-mac.yml` and `beta.yml`
 - [ ] GitHub `Android APK Release` workflow for the same tag is green
 - [ ] GitHub `Docker` workflow is green and the versioned beta image is published without moving `latest`
 - [ ] GitHub `Release Notes Sync` mirrored the beta entry into the prerelease body
@@ -683,9 +681,9 @@ Every entry covers `previous stable release → release source`: first beta, lat
 - [ ] `npm run release:patch`, `npm run release:minor`, or `npm run release:promote` completes successfully
 - [ ] Every GitHub Actions run for the complete release commit and tag is green
 - [ ] Move npm's `beta` dist-tag to the new stable version for every published package and verify both `latest` and `beta` resolve to it
-- [ ] The GitHub Release was published only after the three stable manifests were uploaded, and it has the changelog body and every expected macOS, Linux, Windows, and Android APK asset
+- [ ] The GitHub Release was published only after the two stable manifests were uploaded, and it has the changelog body and every expected macOS arm64, Windows, and Android APK asset
 - [ ] GitHub `Desktop Release` workflow for the `v*` tag is green
-- [ ] The GitHub Release contains `latest-mac.yml`, `latest-linux.yml`, and `latest.yml`
+- [ ] The GitHub Release contains `latest-mac.yml` and `latest.yml`
 - [ ] `latest-mac.yml` contains the current `minimumSystemVersion` guard
 - [ ] GitHub `Android APK Release` workflow for the same tag is green
 - [ ] GitHub `Docker` workflow is green and both the versioned and `latest` images are published

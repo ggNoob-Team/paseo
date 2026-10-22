@@ -59,9 +59,10 @@ rollout_hours: 0
 The run produces:
 
 - `desktop-macos-arm64`: `Paseo-<version>-arm64.dmg`.
-- `desktop-macos-x64`: `Paseo-<version>-x64.dmg`.
 
-Without `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`, the DMGs are unsigned and not notarized. Gatekeeper can warn.
+Intel macOS is not packaged by `Desktop Release`.
+
+Without `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`, the DMG is unsigned and not notarized. Gatekeeper can warn.
 
 CLI equivalent:
 
@@ -179,7 +180,7 @@ publish: true
 rollout_hours: 0
 ```
 
-This builds Windows, macOS, and Linux desktop artifacts. It does not build the Android APK. Run **Android APK Build** separately if the release needs an APK asset.
+This builds Windows and macOS arm64 desktop artifacts. It does not build Linux or Intel macOS packages. It does not build the Android APK; run **Android APK Build** separately if the release needs an APK asset.
 
 For a single-platform retry against an existing draft release, follow the release workflow notes in [release.md](release.md).
 
