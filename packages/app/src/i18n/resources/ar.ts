@@ -2586,6 +2586,11 @@ export const ar: TranslationResources = {
       },
       layout: {
         title: "التخطيط",
+        sidebarWidth: "عرض الشريط الجانبي",
+        sidebarWidthHint:
+          "عرض الشريط الجانبي لمساحة العمل على الشاشات العريضة. يمكن ضبطه أيضاً بسحب الحافة",
+        sidebarWidthAccessibility: "عرض الشريط الجانبي بالبكسل",
+        sidebarWidthResetAccessibility: "إعادة عرض الشريط الجانبي إلى الافتراضي",
         contentWidth: "عرض المحتوى",
         contentWidthHint: "أقصى عرض للمحادثة وملفات Markdown على الشاشات العريضة",
         contentWidthAccessibility: "عرض المحتوى بالبكسل",
@@ -2703,6 +2708,14 @@ export const ar: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "تحديث المضيف",
+        hint: "حدّث معلومات اتصال هذا المضيف. سيبقى الاسم كما هو.",
+        modalHint: "غيّر العنوان أو المنفذ أو رابط الاتصال. سيبقى اسم المضيف كما هو.",
+        button: "تحديث",
+        updating: "جارٍ التحديث...",
+        differentHost: "هذا الاتصال يخص مضيفًا آخر. أضفه كمضيف جديد.",
+      },
       password: {
         guidance: "أزل هذا المضيف ثم أضفه مرة أخرى بكلمة المرور التي يطلبها هذا الخادم.",
       },

@@ -2521,6 +2521,10 @@ export const zhCN: TranslationResources = {
       },
       layout: {
         title: "布局",
+        sidebarWidth: "侧边栏宽度",
+        sidebarWidthHint: "宽屏上工作区侧边栏的宽度，也可以拖动侧边栏边缘调整",
+        sidebarWidthAccessibility: "侧边栏宽度（像素）",
+        sidebarWidthResetAccessibility: "将侧边栏宽度重置为默认值",
         contentWidth: "内容宽度",
         contentWidthHint: "宽屏上聊天和 Markdown 文件的最大宽度",
         contentWidthAccessibility: "内容宽度（像素）",
@@ -2637,6 +2641,14 @@ export const zhCN: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "更新 Host",
+        hint: "更新此 Host 的连接信息，名称保持不变。",
+        modalHint: "修改地址、端口或连接链接，Host 名称保持不变。",
+        button: "更新",
+        updating: "正在更新...",
+        differentHost: "该连接属于另一个 Host。请改用“添加主机”来添加它。",
+      },
       password: {
         guidance: "移除此主机，然后使用此守护进程要求的密码重新添加。",
       },

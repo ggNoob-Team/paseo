@@ -83,6 +83,7 @@ function projectionInput(options?: { groupMode?: SidebarGroupMode; pinnedCollaps
     projectNamesByViewKey: new Map([["project", "Project"]]),
     groupMode: options?.groupMode ?? ("project" as const),
     hosts: [{ serverId: "srv", label: "Solo Host" }],
+    hostOrder: [],
     pinnedCollapsed: options?.pinnedCollapsed ?? false,
     collapsedProjectKeys: new Set<string>(),
     collapsedWorkspaceGroupKeys: new Set<string>(),
@@ -272,6 +273,34 @@ describe("buildSidebarProjection", () => {
     expect(withUnknownHost.workspaceGroups.map((group) => group.label)).toEqual([
       "Secondary Host",
       "srv-a",
+    ]);
+  });
+
+  it("orders host sections by the saved order and leaves unlisted hosts in registry order", () => {
+    const projection = buildSidebarProjection({
+      ...twoHostInput([
+        { serverId: "srv-a", label: "Primary Host" },
+        { serverId: "srv-b", label: "Secondary Host" },
+      ]),
+      hostOrder: ["srv-b"],
+    });
+
+    expect(projection.workspaceGroups.map((group) => group.key)).toEqual([
+      "host:srv-b",
+      "host:srv-a",
+    ]);
+
+    const reordered = buildSidebarProjection({
+      ...twoHostInput([
+        { serverId: "srv-a", label: "Primary Host" },
+        { serverId: "srv-b", label: "Secondary Host" },
+      ]),
+      hostOrder: ["srv-b", "srv-a"],
+    });
+
+    expect(reordered.workspaceGroups.map((group) => group.key)).toEqual([
+      "host:srv-b",
+      "host:srv-a",
     ]);
   });
 

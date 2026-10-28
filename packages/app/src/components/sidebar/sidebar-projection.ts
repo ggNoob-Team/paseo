@@ -51,6 +51,8 @@ export interface SidebarProjectionInput {
   groupMode: SidebarGroupMode;
   /** Every host the registry knows, in registry order, with the name its section header shows. */
   hosts: readonly SidebarGroupHost[];
+  /** Host sections the reader has moved, first to last. Others keep registry order. */
+  hostOrder: readonly string[];
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -117,7 +119,12 @@ function buildWorkspaceGroups(
       );
     case "host":
       return hostWorkspaceGroups(
-        buildHostGroups(unpinnedWorkspaces, input.hosts, input.projectNamesByViewKey),
+        buildHostGroups(
+          unpinnedWorkspaces,
+          input.hosts,
+          input.projectNamesByViewKey,
+          input.hostOrder,
+        ),
       );
   }
 }

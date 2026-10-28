@@ -2571,6 +2571,11 @@ export const ja: TranslationResources = {
       },
       layout: {
         title: "レイアウト",
+        sidebarWidth: "サイドバー幅",
+        sidebarWidthHint:
+          "ワイド画面でのワークスペースサイドバーの幅。端をドラッグしても調整できます",
+        sidebarWidthAccessibility: "サイドバー幅 (ピクセル)",
+        sidebarWidthResetAccessibility: "サイドバー幅をデフォルトに戻す",
         contentWidth: "コンテンツ幅",
         contentWidthHint: "ワイド画面でのチャットと Markdown ファイルの最大幅",
         contentWidthAccessibility: "コンテンツ幅 (ピクセル)",
@@ -2689,6 +2694,14 @@ export const ja: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "ホストを更新",
+        hint: "このホストの接続情報を更新します。名前は変わりません。",
+        modalHint: "アドレス、ポート、接続リンクを変更します。ホスト名は変わりません。",
+        button: "更新",
+        updating: "更新中...",
+        differentHost: "この接続は別のホストのものです。新しいホストとして追加してください。",
+      },
       password: {
         guidance:
           "このホストを削除し、このデーモンが求めるパスワードを入力して追加し直してください。",

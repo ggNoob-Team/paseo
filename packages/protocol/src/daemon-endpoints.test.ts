@@ -274,4 +274,25 @@ describe("relay connection URI", () => {
       parseRelayConnectionUri(`https://app.paseo.sh/#connect=${encodeURIComponent(uri)}`),
     ).toEqual(parts);
   });
+
+  test("parses an encoded base64 key from a persisted relay URI", () => {
+    expect(
+      parseRelayConnectionUri(
+        "relay://45.40.254.22:4100/srv_htDHo1YCn08x?key=cZ%2BNyNyJX6Fq2cGclqC8JcHPLnYTjyQXxAEBU%2BldwTE%3D",
+      ),
+    ).toEqual({
+      offer: {
+        v: 2,
+        serverId: "srv_htDHo1YCn08x",
+        daemonPublicKeyB64: "cZ+NyNyJX6Fq2cGclqC8JcHPLnYTjyQXxAEBU+ldwTE=",
+        relay: { endpoint: "45.40.254.22:4100", useTls: false },
+      },
+    });
+  });
+
+  test("rejects relay URIs with embedded credentials", () => {
+    expect(() =>
+      parseRelayConnectionUri("relay://user:secret@relay.example.com:443/srv_test?key=abc"),
+    ).toThrow("Invalid relay connection URI");
+  });
 });

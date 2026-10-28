@@ -291,6 +291,7 @@ describe("upsertHostConnectionInProfiles", () => {
     };
     const existing: HostProfile = {
       ...makeHost("srv_known"),
+      label: "My host",
       password: "old-secret",
       connections: [existingConnection],
       preferredConnectionId: existingConnection.id,
@@ -309,6 +310,7 @@ describe("upsertHostConnectionInProfiles", () => {
 
     expect(profile.connections).toEqual([replacement]);
     expect("password" in profile.connections[0]!).toBe(false);
+    expect(profile.label).toBe("My host");
     expect(profile.password).toBe("new-secret");
     expect(profile.preferredConnectionId).toBe(replacement.id);
   });

@@ -1978,6 +1978,86 @@ export class HostRuntimeStore {
     });
   }
 
+  /**
+   * Probes a connection and applies it to an existing host in place. Unlike the
+   * upsert path, this keeps the host's name and replaces the connection the
+   * user edited instead of leaving the old address behind as another fallback.
+   */
+  async probeAndUpdateHostConnection(input: {
+    serverId: string;
+    connection: HostConnection;
+    password?: string;
+    replaceConnectionId?: string;
+  }): Promise<{ profile: HostProfile; serverId: string; hostname: string | null }> {
+    const existing = this.hosts.find((host) => host.serverId === input.serverId);
+    if (!existing) {
+      throw new Error(`Host ${input.serverId} was not found`);
+    }
+
+    const password = input.password?.trim();
+    const effectivePassword =
+      input.password === undefined ? existing.password : password || undefined;
+    const probeHost: HostProfile = {
+      ...existing,
+      ...(effectivePassword ? { password: effectivePassword } : {}),
+      connections: [input.connection],
+      preferredConnectionId: input.connection.id,
+    };
+    const { client, serverId, hostname } = await this.deps.connectToDaemon({
+      host: probeHost,
+      connection: input.connection,
+    });
+    if (serverId !== input.serverId) {
+      await client.close().catch(() => undefined);
+      const error = new Error("The connection belongs to a different host");
+      (error as Error & { code?: string }).code = "host_update_target_mismatch";
+      throw error;
+    }
+
+    const now = new Date().toISOString();
+    const replaceConnectionId = input.replaceConnectionId;
+    const withoutReplaced =
+      replaceConnectionId && replaceConnectionId !== input.connection.id
+        ? existing.connections.filter((connection) => connection.id !== replaceConnectionId)
+        : existing.connections;
+    const nextConnections = withoutReplaced.map((connection) =>
+      connection.id === input.connection.id ? input.connection : connection,
+    );
+    if (!nextConnections.some((connection) => connection.id === input.connection.id)) {
+      nextConnections.push(input.connection);
+    }
+    const preferredConnectionId =
+      existing.preferredConnectionId === replaceConnectionId ||
+      existing.preferredConnectionId === input.connection.id ||
+      !nextConnections.some((connection) => connection.id === existing.preferredConnectionId)
+        ? input.connection.id
+        : existing.preferredConnectionId;
+    const { password: previousPassword, ...rest } = existing;
+    const passwordFields: { password?: string } = {};
+    if (input.password === undefined) {
+      if (previousPassword) passwordFields.password = previousPassword;
+    } else if (password) {
+      passwordFields.password = password;
+    }
+    const profile: HostProfile = {
+      ...rest,
+      ...passwordFields,
+      connections: nextConnections,
+      preferredConnectionId,
+      updatedAt: now,
+    };
+    this.setHostsAndSync(
+      this.hosts.map((host) => (host.serverId === input.serverId ? profile : host)),
+      {
+        initialConnectionByServerId: new Map([
+          [input.serverId, { connectionId: input.connection.id, existingClient: client }],
+        ]),
+      },
+    );
+    await this.persistHosts();
+    return { profile, serverId, hostname };
+  }
+
   async probeAndUpsertRemoteSshConnection(input: {
     host: string;
     sshPort?: number;
@@ -2052,16 +2132,28 @@ export class HostRuntimeStore {
    * confirms a link, submitting the same link again in this flow (the
    * password retry) does not ask again. A new flow asks again.
    */
-  beginLinkPairing(): LinkPairing {
+  beginLinkPairing(targetServerId?: string): LinkPairing {
     let approvedOffer: ConnectionOffer | null = null;
     return {
       submit: async (link, password) => {
         const { offer, password: linkPassword } = parseOfferConnectionUrl(link);
+        if (targetServerId && offer.serverId !== targetServerId) {
+          const error = new Error("The pairing link belongs to a different host");
+          (error as Error & { code?: string }).code = "host_update_target_mismatch";
+          throw error;
+        }
         if (!approvedOffer || !isSameLinkedConnection(approvedOffer, offer)) {
           if (!(await this.confirmLink(offer))) return { status: "cancelled" };
           approvedOffer = offer;
         }
-        const result = await this.probeAndUpsertOffer(offer, password ?? linkPassword);
+        const preservedLabel = targetServerId
+          ? this.hosts.find((host) => host.serverId === targetServerId)?.label
+          : undefined;
+        const result = await this.probeAndUpsertOffer(
+          offer,
+          password ?? linkPassword,
+          preservedLabel,
+        );
         return { status: "connected", ...result };
       },
     };
@@ -2107,6 +2199,7 @@ export class HostRuntimeStore {
   private async probeAndUpsertOffer(
     offer: ConnectionOffer,
     password: string | undefined,
+    preservedLabel?: string,
   ): Promise<{ profile: HostProfile; serverId: string; hostname: string | null }> {
     const connection = relayConnectionFromOffer(offer);
     const probeHost: HostProfile = {
@@ -2122,7 +2215,11 @@ export class HostRuntimeStore {
     };
     const { client, hostname } = await this.deps.connectToDaemon({ host: probeHost, connection });
     await client.close().catch(() => undefined);
-    const profile = await this.upsertConnectionFromOffer(offer, hostname ?? undefined, password);
+    const profile = await this.upsertConnectionFromOffer(
+      offer,
+      preservedLabel ?? hostname ?? undefined,
+      password,
+    );
     return { profile, serverId: offer.serverId, hostname };
   }
 
@@ -2979,6 +3076,12 @@ export interface HostMutations {
     password?: string;
     label?: string;
   }) => Promise<{ profile: HostProfile; serverId: string; hostname: string | null }>;
+  probeAndUpdateHostConnection: (input: {
+    serverId: string;
+    connection: HostConnection;
+    password?: string;
+    replaceConnectionId?: string;
+  }) => Promise<{ profile: HostProfile; serverId: string; hostname: string | null }>;
   probeAndUpsertRemoteSshConnection: (input: {
     host: string;
     sshPort?: number;
@@ -2986,7 +3089,7 @@ export interface HostMutations {
     password?: string;
     label?: string;
   }) => Promise<{ profile: HostProfile; serverId: string; hostname: string | null }>;
-  beginLinkPairing: () => LinkPairing;
+  beginLinkPairing: (targetServerId?: string) => LinkPairing;
   renameHost: (serverId: string, label: string) => Promise<void>;
   setHostColor: (serverId: string, color: HostColor) => Promise<void>;
   setHostBadgeDisplay: (serverId: string, badgeDisplay: HostBadgeDisplay) => Promise<void>;
@@ -3000,8 +3103,9 @@ export function useHostMutations(): HostMutations {
     () => ({
       upsertDirectConnection: (input) => store.upsertDirectConnection(input),
       probeAndUpsertDirectConnection: (input) => store.probeAndUpsertDirectConnection(input),
+      probeAndUpdateHostConnection: (input) => store.probeAndUpdateHostConnection(input),
       probeAndUpsertRemoteSshConnection: (input) => store.probeAndUpsertRemoteSshConnection(input),
-      beginLinkPairing: () => store.beginLinkPairing(),
+      beginLinkPairing: (targetServerId) => store.beginLinkPairing(targetServerId),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
       setHostColor: (serverId, color) => store.setHostColor(serverId, color),
       setHostBadgeDisplay: (serverId, badgeDisplay) =>

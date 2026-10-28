@@ -66,13 +66,15 @@ export function hostWorkspaceGroupKey(serverId: string): string {
 /**
  * Sections by host: every workspace lands on the machine it lives on, so the same project appears
  * under each host that carries it instead of being merged across hosts the way project mode merges
- * it. Hosts that are not in the registry — a session the registry dropped while its workspaces are
- * still listed — keep their rows and fall in after the known hosts.
+ * it. The reader's saved host order leads; hosts it has not moved keep the registry order. Hosts
+ * that are not in the registry — a session the registry dropped while its workspaces are still
+ * listed — keep their rows and fall in after the known hosts unless the reader moved them.
  */
 export function buildHostGroups(
   workspaces: readonly SidebarWorkspaceEntry[],
   hosts: readonly SidebarGroupHost[],
   projectNamesByViewKey: Map<string, string>,
+  hostOrder: readonly string[] = [],
 ): HostGroup[] {
   const rowsByServerId = new Map<string, SidebarWorkspaceEntry[]>();
   for (const workspace of workspaces) {
@@ -85,6 +87,7 @@ export function buildHostGroups(
   }
 
   const labelByServerId = new Map(hosts.map((host) => [host.serverId, host.label]));
+  const preferredRankByServerId = new Map(hostOrder.map((serverId, index) => [serverId, index]));
   const registryRankByServerId = new Map(hosts.map((host, index) => [host.serverId, index]));
 
   const groups = [...rowsByServerId].map(([serverId, rows]) => {
@@ -98,6 +101,11 @@ export function buildHostGroups(
   });
 
   return groups.sort((a, b) => {
+    const aPreferred = preferredRankByServerId.get(a.serverId);
+    const bPreferred = preferredRankByServerId.get(b.serverId);
+    if (aPreferred !== undefined && bPreferred !== undefined) return aPreferred - bPreferred;
+    if (aPreferred !== undefined) return -1;
+    if (bPreferred !== undefined) return 1;
     const aRank = registryRankByServerId.get(a.serverId);
     const bRank = registryRankByServerId.get(b.serverId);
     if (aRank !== undefined && bRank !== undefined) return aRank - bRank;

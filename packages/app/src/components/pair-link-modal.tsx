@@ -62,6 +62,8 @@ const styles = StyleSheet.create((theme) => ({
 
 export interface PairLinkModalProps {
   visible: boolean;
+  /** Updates only this saved host and preserves its current name. */
+  targetServerId?: string;
   /** Continues a confirmed pairing whose host asked for a password. */
   passwordRequired?: PasswordRequiredPairing;
   onClose: () => void;
@@ -76,6 +78,7 @@ export interface PairLinkModalProps {
 
 export function PairLinkModal({
   visible,
+  targetServerId,
   passwordRequired,
   onClose,
   onCancel,
@@ -83,8 +86,9 @@ export function PairLinkModal({
 }: PairLinkModalProps) {
   return (
     <PairLinkModalContent
-      key={`${visible}:${passwordRequired?.link ?? ""}`}
+      key={`${visible}:${passwordRequired?.link ?? ""}:${targetServerId ?? ""}`}
       visible={visible}
+      targetServerId={targetServerId}
       passwordRequired={passwordRequired}
       onClose={onClose}
       onCancel={onCancel}
@@ -95,6 +99,7 @@ export function PairLinkModal({
 
 function PairLinkModalContent({
   visible,
+  targetServerId,
   passwordRequired,
   onClose,
   onCancel,
@@ -104,7 +109,7 @@ function PairLinkModalContent({
   const { t } = useTranslation();
   const daemons = useHosts();
   const { beginLinkPairing } = useHostMutations();
-  const [pairing] = useState(() => passwordRequired?.pairing ?? beginLinkPairing());
+  const [pairing] = useState(() => passwordRequired?.pairing ?? beginLinkPairing(targetServerId));
   const initialUrl = passwordRequired?.link;
   const isMobile = useIsCompactFormFactor();
 
@@ -168,6 +173,10 @@ function PairLinkModalContent({
         onSaved?.({ profile, serverId, hostname, isNewHost });
         handleClose();
       } catch (error) {
+        if ((error as { code?: string }).code === "host_update_target_mismatch") {
+          setErrorMessage(t("settings.host.connectionUpdate.differentHost"));
+          return;
+        }
         const message =
           error instanceof Error ? error.message : t("pairing.link.errors.unableToPair");
         setErrorMessage(message);

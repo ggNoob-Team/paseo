@@ -24,6 +24,7 @@ import {
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { PairLinkModal } from "@/components/pair-link-modal";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,9 @@ const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destruc
 const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 const editProfileIcon = <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const editHostConnectionIcon = (
+  <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+);
 const removeProfileIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
 const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 
@@ -364,10 +368,19 @@ export function HostSettingsPage({
 }) {
   const host = useHostProfile(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
+  const [isUpdateHostVisible, setIsUpdateHostVisible] = useState(false);
+  const openUpdateHost = useCallback(() => setIsUpdateHostVisible(true), []);
+  const closeUpdateHost = useCallback(() => setIsUpdateHostVisible(false), []);
 
   if (!host) {
     return <HostNotFound />;
   }
+
+  const canUpdateHost =
+    !isLocalDaemon &&
+    host.connections.some(
+      (connection) => connection.type === "directTcp" || connection.type === "relay",
+    );
 
   return (
     <View>
@@ -378,9 +391,41 @@ export function HostSettingsPage({
 
       {isLocalDaemon ? <LocalDaemonSection /> : null}
 
+      {canUpdateHost ? <UpdateHostCard onPress={openUpdateHost} /> : null}
+
       {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
+
+      <PairLinkModal
+        visible={isUpdateHostVisible}
+        targetServerId={host.serverId}
+        onClose={closeUpdateHost}
+      />
+    </View>
+  );
+}
+
+function UpdateHostCard({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={[settingsStyles.card, styles.updateHostCard]} testID="host-page-update-host-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("settings.host.connectionUpdate.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.connectionUpdate.hint")}</Text>
+        </View>
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={editHostConnectionIcon}
+          onPress={onPress}
+          testID="host-page-update-host-button"
+        >
+          {t("settings.host.connectionUpdate.button")}
+        </Button>
+      </View>
     </View>
   );
 }
@@ -1700,6 +1745,9 @@ const terminalProfileStyles = StyleSheet.create((theme) => ({
 }));
 
 const styles = StyleSheet.create((theme) => ({
+  updateHostCard: {
+    marginBottom: theme.spacing[3],
+  },
   updateFailure: {
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],

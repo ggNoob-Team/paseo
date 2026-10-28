@@ -2673,6 +2673,11 @@ export const en = {
       },
       layout: {
         title: "Layout",
+        sidebarWidth: "Sidebar width",
+        sidebarWidthHint:
+          "Width of the workspace sidebar on wide screens. You can also drag its edge",
+        sidebarWidthAccessibility: "Sidebar width in pixels",
+        sidebarWidthResetAccessibility: "Reset sidebar width to default",
         contentWidth: "Content width",
         contentWidthHint: "Max width of chat and Markdown files on wide screens",
         contentWidthAccessibility: "Content width in pixels",
@@ -2789,6 +2794,14 @@ export const en = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "Update host",
+        hint: "Update this host's connection details. Its name stays the same.",
+        modalHint: "Change the address, port, or connection link. The host name stays the same.",
+        button: "Update",
+        updating: "Updating...",
+        differentHost: "That connection belongs to a different host. Add it as a new host instead.",
+      },
       password: {
         guidance: "Remove this host and add it again with the password this daemon asks for.",
       },

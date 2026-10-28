@@ -2561,6 +2561,11 @@ export const ko: TranslationResources = {
       },
       layout: {
         title: "레이아웃",
+        sidebarWidth: "사이드바 너비",
+        sidebarWidthHint:
+          "와이드 화면에서 작업 공간 사이드바의 너비입니다. 가장자리를 드래그해 조정할 수도 있습니다",
+        sidebarWidthAccessibility: "사이드바 너비(픽셀)",
+        sidebarWidthResetAccessibility: "사이드바 너비를 기본값으로 재설정",
         contentWidth: "콘텐츠 너비",
         contentWidthHint: "와이드 화면에서 채팅과 Markdown 파일의 최대 너비",
         contentWidthAccessibility: "콘텐츠 너비(픽셀)",
@@ -2677,6 +2682,14 @@ export const ko: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "호스트 업데이트",
+        hint: "이 호스트의 연결 정보를 업데이트합니다. 이름은 그대로 유지됩니다.",
+        modalHint: "주소, 포트 또는 연결 링크를 변경합니다. 호스트 이름은 그대로 유지됩니다.",
+        button: "업데이트",
+        updating: "업데이트 중...",
+        differentHost: "이 연결은 다른 호스트에 속합니다. 새 호스트로 추가하세요.",
+      },
       password: {
         guidance: "이 호스트를 제거한 뒤 이 데몬이 요구하는 비밀번호로 다시 추가하세요.",
       },

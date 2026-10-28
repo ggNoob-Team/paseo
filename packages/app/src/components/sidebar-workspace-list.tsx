@@ -34,6 +34,7 @@ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop
 import { type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
+import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { ExternalLink, Plus } from "lucide-react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
@@ -411,6 +412,7 @@ function WorkspaceRowRightGroup({
   isPinned?: boolean;
   onTogglePin?: () => void;
 }) {
+  const hasFinePointer = useHasFinePointer();
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
   const trailing = useSidebarWorkspaceTrailing();
@@ -426,7 +428,7 @@ function WorkspaceRowRightGroup({
     trailing,
     hasArchiveAction: Boolean(onArchive),
     isHovered,
-    isTouchPlatform,
+    isTouchPlatform: isTouchPlatform || !hasFinePointer,
     showShortcut,
   });
   const kebab = useOpenKebabMenuVisibility(showKebabInSlot);

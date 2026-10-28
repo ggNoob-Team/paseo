@@ -2591,6 +2591,11 @@ export const ru: TranslationResources = {
       },
       layout: {
         title: "Макет",
+        sidebarWidth: "Ширина боковой панели",
+        sidebarWidthHint:
+          "Ширина боковой панели рабочего пространства на широких экранах. Также регулируется перетаскиванием края",
+        sidebarWidthAccessibility: "Ширина боковой панели в пикселях",
+        sidebarWidthResetAccessibility: "Сбросить ширину боковой панели",
         contentWidth: "Ширина содержимого",
         contentWidthHint: "Максимальная ширина чата и файлов Markdown на широких экранах",
         contentWidthAccessibility: "Ширина содержимого в пикселях",
@@ -2708,6 +2713,14 @@ export const ru: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "Обновить хост",
+        hint: "Обновите параметры подключения этого хоста. Имя останется прежним.",
+        modalHint: "Измените адрес, порт или ссылку подключения. Имя хоста останется прежним.",
+        button: "Обновить",
+        updating: "Обновление...",
+        differentHost: "Это подключение принадлежит другому хосту. Добавьте его как новый хост.",
+      },
       password: {
         guidance:
           "Удалите этот хост и добавьте его снова с паролем, который запрашивает этот демон.",

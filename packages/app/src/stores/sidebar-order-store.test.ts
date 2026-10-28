@@ -21,6 +21,7 @@ describe("migrateSidebarOrderState", () => {
     expect(migrated).toEqual({
       projectOrder: ["project-a"],
       pinnedWorkspaceOrder: [],
+      hostOrder: [],
       workspaceOrderByProject: {
         "project-a": ["host-a:main", "host-a:feature", "host-b:main"],
       },
@@ -33,6 +34,14 @@ describe("migrateSidebarOrderState", () => {
     });
 
     expect(migrated.pinnedWorkspaceOrder).toEqual(["host-a:one", "host-b:two"]);
+  });
+
+  it("normalizes saved host order", () => {
+    const migrated = migrateSidebarOrderState({
+      hostOrder: [" srv-b ", "srv-a", "srv-b", ""],
+    });
+
+    expect(migrated.hostOrder).toEqual(["srv-b", "srv-a"]);
   });
 });
 
@@ -54,6 +63,12 @@ describe("sidebar order keys that end in whitespace", () => {
     useSidebarOrderStore.getState().setProjectOrder([PROJECT_KEY]);
 
     expect(useSidebarOrderStore.getState().projectOrder).toEqual([PROJECT_KEY]);
+  });
+
+  it("stores each host once in the order the reader dropped it", () => {
+    useSidebarOrderStore.getState().setHostOrder(["srv-b", "srv-a", "srv-b"]);
+
+    expect(useSidebarOrderStore.getState().getHostOrder()).toEqual(["srv-b", "srv-a"]);
   });
 
   it("scopes a workspace order under the project key the sidebar indexes by", () => {

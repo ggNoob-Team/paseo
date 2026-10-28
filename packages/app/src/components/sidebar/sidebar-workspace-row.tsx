@@ -18,6 +18,7 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { isNative as platformIsNative } from "@/constants/platform";
+import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import {
@@ -401,6 +402,7 @@ function WorkspaceRowTrailingActions({
   onCopyPath?: () => void;
   onRename?: () => void;
 }) {
+  const hasFinePointer = useHasFinePointer();
   const { t } = useTranslation();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const {
@@ -414,7 +416,7 @@ function WorkspaceRowTrailingActions({
     trailing,
     hasArchiveAction: Boolean(onArchive),
     isHovered,
-    isTouchPlatform,
+    isTouchPlatform: isTouchPlatform || !hasFinePointer,
     showShortcut,
   });
   const kebab = useOpenKebabMenuVisibility(showKebabInSlot);

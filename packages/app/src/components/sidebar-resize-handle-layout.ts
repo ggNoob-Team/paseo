@@ -14,7 +14,8 @@
 
 export const POINTER_HANDLE_WIDTH = 10;
 export const TOUCH_HANDLE_WIDTH = 24;
-export const TOUCH_HANDLE_HEIGHT = 88;
+/** A longer, invisible grab lane is easier to catch with a thumb than a small dot. */
+export const TOUCH_HANDLE_HEIGHT = 160;
 
 /**
  * A finger resting on the grip drifts before it commits. Requiring horizontal

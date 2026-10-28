@@ -3716,6 +3716,48 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
+  it("probeAndUpdateHostConnection replaces the edited connection and keeps the host name", async () => {
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: "ignored-hostname",
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    try {
+      await store.upsertDirectConnection({
+        serverId: "srv_update_connection",
+        endpoint: "old.example.test:6767",
+        label: "ubuntu",
+      });
+
+      const replacement: HostConnection = {
+        id: "direct:new.example.test:6767",
+        type: "directTcp",
+        endpoint: "new.example.test:6767",
+        useTls: false,
+      };
+      await store.probeAndUpdateHostConnection({
+        serverId: "srv_update_connection",
+        connection: replacement,
+        replaceConnectionId: "direct:old.example.test:6767",
+      });
+
+      const host = store.getHosts().find((entry) => entry.serverId === "srv_update_connection");
+      expect(host?.label).toBe("ubuntu");
+      expect(host?.connections).toEqual([replacement]);
+      expect(host?.preferredConnectionId).toBe(replacement.id);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("probeAndUpsertConnection learns the real server id before storing a direct host", async () => {
     const connection: HostConnection = {
       id: "direct:lan:6767",
@@ -3934,6 +3976,39 @@ describe("HostRuntimeStore", () => {
 
     expect(requests).toHaveLength(1);
     expect(store.getHosts()).toHaveLength(1);
+    store.syncHosts([]);
+  });
+
+  it("keeps a saved host's name when updating it from a pairing link", async () => {
+    const store = createPairingStore({ hostname: "paired" });
+    answerHostConfirmations(store, true);
+    await store.beginLinkPairing().submit(encodeOfferUrl(makeOffer()));
+    await store.renameHost("srv_offer", "ubuntu");
+
+    const result = await store
+      .beginLinkPairing("srv_offer")
+      .submit(encodeOfferUrl(makeOffer({ daemonPublicKeyB64: "pk_updated" })));
+
+    expect(result).toMatchObject({ status: "connected", serverId: "srv_offer" });
+    const updatedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
+    expect(updatedHost?.label).toBe("ubuntu");
+    expect(
+      updatedHost?.connections.find((connection) => connection.type === "relay"),
+    ).toMatchObject({ daemonPublicKeyB64: "pk_updated" });
+    store.syncHosts([]);
+  });
+
+  it("rejects a different host's pairing link in update mode", async () => {
+    const store = createPairingStore();
+    answerHostConfirmations(store, true);
+    await store.beginLinkPairing().submit(encodeOfferUrl(makeOffer()));
+
+    await expect(
+      store
+        .beginLinkPairing("srv_offer")
+        .submit(encodeOfferUrl(makeOffer({ serverId: "srv_other" }))),
+    ).rejects.toMatchObject({ code: "host_update_target_mismatch" });
+    expect(store.getHosts().map((host) => host.serverId)).toEqual(["srv_offer"]);
     store.syncHosts([]);
   });
 

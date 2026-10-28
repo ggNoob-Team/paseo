@@ -37,6 +37,7 @@ export {
   MAX_SIDEBAR_WIDTH,
   MIN_TREE_RAIL_WIDTH,
   MIN_SIDEBAR_WIDTH,
+  clampSidebarWidth,
   clampTreeRailWidth,
   selectIsAgentListOpen,
   selectIsCompactFileExplorerOpen,

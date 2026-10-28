@@ -2605,6 +2605,11 @@ export const fr: TranslationResources = {
       },
       layout: {
         title: "Mise en page",
+        sidebarWidth: "Largeur de la barre latérale",
+        sidebarWidthHint:
+          "Largeur de la barre latérale de l’espace de travail sur grands écrans. Ajustable en faisant glisser son bord",
+        sidebarWidthAccessibility: "Largeur de la barre latérale en pixels",
+        sidebarWidthResetAccessibility: "Réinitialiser la largeur de la barre latérale",
         contentWidth: "Largeur du contenu",
         contentWidthHint:
           "Largeur maximale de la discussion et des fichiers Markdown sur les grands écrans",
@@ -2724,6 +2729,15 @@ export const fr: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "Mettre à jour l’hôte",
+        hint: "Mettez à jour les informations de connexion de cet hôte. Son nom reste inchangé.",
+        modalHint:
+          "Modifiez l’adresse, le port ou le lien de connexion. Le nom de l’hôte reste inchangé.",
+        button: "Mettre à jour",
+        updating: "Mise à jour...",
+        differentHost: "Cette connexion appartient à un autre hôte. Ajoutez-la comme nouvel hôte.",
+      },
       password: {
         guidance:
           "Supprimez cet hôte puis ajoutez-le à nouveau avec le mot de passe demandé par ce daemon.",

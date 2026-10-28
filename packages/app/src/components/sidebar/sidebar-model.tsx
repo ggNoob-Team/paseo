@@ -80,6 +80,7 @@ export function SidebarModelProvider({
   );
   const pinnedCollapsed = useSidebarCollapsedSectionsStore((state) => state.collapsedPinned);
   const pinnedWorkspaceOrder = useSidebarOrderStore((state) => state.pinnedWorkspaceOrder);
+  const hostOrder = useSidebarOrderStore((state) => state.hostOrder);
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
@@ -166,6 +167,7 @@ export function SidebarModelProvider({
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
       hosts: groupHosts,
+      hostOrder,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -176,6 +178,7 @@ export function SidebarModelProvider({
       collapsedWorkspaceGroupKeys,
       groupHosts,
       groupMode,
+      hostOrder,
       list.projectNamesByViewKey,
       filteredProjects,
       pinnedCollapsed,

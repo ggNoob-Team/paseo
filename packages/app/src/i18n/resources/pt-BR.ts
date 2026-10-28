@@ -2585,6 +2585,11 @@ export const ptBR: TranslationResources = {
       },
       layout: {
         title: "Layout",
+        sidebarWidth: "Largura da barra lateral",
+        sidebarWidthHint:
+          "Largura da barra lateral do espaço de trabalho em telas largas. Também ajustável arrastando a borda",
+        sidebarWidthAccessibility: "Largura da barra lateral em pixels",
+        sidebarWidthResetAccessibility: "Redefinir a largura da barra lateral",
         contentWidth: "Largura do conteúdo",
         contentWidthHint: "Largura máxima do chat e dos arquivos Markdown em telas largas",
         contentWidthAccessibility: "Largura do conteúdo em pixels",
@@ -2703,6 +2708,15 @@ export const ptBR: TranslationResources = {
       },
     },
     host: {
+      connectionUpdate: {
+        title: "Atualizar host",
+        hint: "Atualize as informações de conexão deste host. O nome permanece o mesmo.",
+        modalHint:
+          "Altere o endereço, a porta ou o link de conexão. O nome do host permanece o mesmo.",
+        button: "Atualizar",
+        updating: "Atualizando...",
+        differentHost: "Esta conexão pertence a outro host. Adicione-a como um novo host.",
+      },
       password: {
         guidance: "Remova este host e adicione-o novamente com a senha que este daemon pede.",
       },

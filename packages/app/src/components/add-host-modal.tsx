@@ -1,15 +1,22 @@
 import { useCallback, useMemo, useReducer, useRef, useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react-native";
-import type { HostProfile } from "@/types/host-connection";
+import {
+  relayConnectionFromOffer,
+  type HostConnection,
+  type HostProfile,
+} from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import {
   parseConnectionUri,
+  parseRelayConnectionUri,
   serializeConnectionUri,
   serializeConnectionUriForStorage,
+  serializeRelayConnectionUri,
 } from "@/utils/daemon-endpoints";
 import { buildConnectionFailureCopy } from "./connection-failure-copy";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
@@ -182,6 +189,32 @@ function prepareDirectConnection(
   };
 }
 
+function formatDirectConnectionFailure(input: {
+  error: unknown;
+  endpoint: string;
+  labels: DirectConnectionLabels;
+  t: TFunction;
+}): string {
+  const {
+    title,
+    detail,
+    raw: rawDetail,
+  } = buildConnectionFailureCopy({
+    endpoint: input.endpoint,
+    error: input.error,
+    labels: input.labels,
+  });
+  if (rawDetail && detail && rawDetail !== detail) {
+    return `${title}\n${detail}\n${input.t("pairing.direct.errors.details", {
+      detail: rawDetail,
+    })}`;
+  }
+  if (detail) {
+    return `${title}\n${detail}`;
+  }
+  return title;
+}
+
 function draftFromConnectionUri(uri: string): DirectConnectionDraft {
   const parsed = parseConnectionUri(uri);
   return {
@@ -192,10 +225,75 @@ function draftFromConnectionUri(uri: string): DirectConnectionDraft {
   };
 }
 
+interface InitialHostState {
+  draft: DirectConnectionDraft;
+  relayUri: string | null;
+  connectionId: string | null;
+}
+
+function resolveInitialHostState(host: HostProfile | undefined): InitialHostState {
+  const emptyDraft: DirectConnectionDraft = {
+    host: "",
+    port: "6767",
+    useTls: false,
+    password: host?.password ?? "",
+  };
+  if (!host) {
+    return { draft: emptyDraft, relayUri: null, connectionId: null };
+  }
+
+  const preferred = host.connections.find(
+    (connection) => connection.id === host.preferredConnectionId,
+  );
+  const direct =
+    preferred?.type === "directTcp"
+      ? preferred
+      : host.connections.find((connection) => connection.type === "directTcp");
+  if (direct) {
+    try {
+      const parsed = parseConnectionUri(`tcp://${direct.endpoint}`);
+      return {
+        draft: {
+          host: parsed.host,
+          port: String(parsed.port),
+          useTls: parsed.useTls,
+          password: host.password ?? "",
+        },
+        relayUri: null,
+        connectionId: direct.id,
+      };
+    } catch {
+      return { draft: emptyDraft, relayUri: null, connectionId: direct.id };
+    }
+  }
+
+  const relay =
+    preferred?.type === "relay"
+      ? preferred
+      : host.connections.find((connection) => connection.type === "relay");
+  if (relay) {
+    return {
+      draft: emptyDraft,
+      relayUri: serializeRelayConnectionUri({
+        offer: {
+          v: 2,
+          serverId: host.serverId,
+          daemonPublicKeyB64: relay.daemonPublicKeyB64,
+          relay: { endpoint: relay.relayEndpoint, useTls: relay.useTls ?? false },
+        },
+      }),
+      connectionId: relay.id,
+    };
+  }
+
+  return { draft: emptyDraft, relayUri: null, connectionId: null };
+}
+
 export interface AddHostModalProps {
   visible: boolean;
   onClose: () => void;
   onCancel?: () => void;
+  initialHost?: HostProfile;
   onSaved?: (result: {
     profile: HostProfile;
     serverId: string;
@@ -204,37 +302,52 @@ export interface AddHostModalProps {
   }) => void;
 }
 
-export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostModalProps) {
+export function AddHostModal({
+  visible,
+  onClose,
+  onCancel,
+  initialHost,
+  onSaved,
+}: AddHostModalProps) {
   return (
     <AddHostModalContent
-      key={String(visible)}
+      key={`${String(visible)}:${initialHost?.serverId ?? ""}`}
       visible={visible}
       onClose={onClose}
       onCancel={onCancel}
+      initialHost={initialHost}
       onSaved={onSaved}
     />
   );
 }
 
-function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostModalProps) {
+function AddHostModalContent({
+  visible,
+  onClose,
+  onCancel,
+  initialHost,
+  onSaved,
+}: AddHostModalProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const daemons = useHosts();
-  const { probeAndUpsertDirectConnection, beginLinkPairing } = useHostMutations();
+  const { probeAndUpsertDirectConnection, probeAndUpdateHostConnection, beginLinkPairing } =
+    useHostMutations();
   const [linkPairing] = useState(() => beginLinkPairing());
   const isMobile = useIsCompactFormFactor();
+  const initialState = useMemo(() => resolveInitialHostState(initialHost), [initialHost]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [host, setHost] = useState("");
-  const [port, setPort] = useState("6767");
-  const [useTls, setUseTls] = useState(false);
-  const [password, setPassword] = useState("");
+  const [host, setHost] = useState(initialState.draft.host);
+  const [port, setPort] = useState(initialState.draft.port);
+  const [useTls, setUseTls] = useState(initialState.draft.useTls);
+  const [password, setPassword] = useState(initialState.draft.password);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const [advancedUri, setAdvancedUri] = useState("");
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(initialState.relayUri !== null);
+  const [advancedUri, setAdvancedUri] = useState(initialState.relayUri ?? "");
   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
-  const advancedTarget = useRef(new PairingTargetTracker("", true));
+  const advancedTarget = useRef(new PairingTargetTracker(initialState.relayUri ?? "", true));
 
   const connectIcon = useMemo(
     () => <Link2 size={16} color={theme.colors.accentForeground} />,
@@ -267,7 +380,13 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
     }),
     [t],
   );
-  const header = useMemo<SheetHeader>(() => ({ title: t("pairing.direct.title") }), [t]);
+  const isUpdateHost = initialHost !== undefined;
+  const header = useMemo<SheetHeader>(
+    () => ({
+      title: isUpdateHost ? t("settings.host.connectionUpdate.title") : t("pairing.direct.title"),
+    }),
+    [isUpdateHost, t],
+  );
 
   // Each open mounts a fresh form (see AddHostModal), so closing needs no reset.
   const handleClose = useCallback(() => {
@@ -309,8 +428,100 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
     ],
   );
 
+  const handleUpdateHost = useCallback(async () => {
+    if (!initialHost || isSaving) return;
+
+    const relayUri = isAdvancedOpen ? advancedUri.trim() : "";
+    const isRelayLink = relayUri.startsWith("relay://") || relayUri.includes("#connect=");
+    let connection: HostConnection | null = null;
+    let preparedUri: string | null = null;
+    let passwordOverride = password;
+
+    try {
+      if (isRelayLink) {
+        const parsed = parseRelayConnectionUri(relayUri);
+        connection = relayConnectionFromOffer(parsed.offer);
+        passwordOverride = password || parsed.password || "";
+      } else {
+        const prepared = prepareDirectConnection(
+          { host, port, useTls, password },
+          directConnectionLabels,
+        );
+        preparedUri = prepared.uri;
+        connection = {
+          id: `direct:${prepared.endpoint}`,
+          type: "directTcp",
+          endpoint: prepared.endpoint,
+          useTls: prepared.useTls,
+        };
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : directConnectionLabels.invalidConnection,
+      );
+      return;
+    }
+
+    if (!connection) return;
+
+    try {
+      setIsSaving(true);
+      setErrorMessage("");
+      const result = await probeAndUpdateHostConnection({
+        serverId: initialHost.serverId,
+        connection,
+        password: passwordOverride,
+        ...(initialState.connectionId ? { replaceConnectionId: initialState.connectionId } : {}),
+      });
+      onSaved?.({ ...result, isNewHost: false });
+      handleClose();
+    } catch (error) {
+      if ((error as { code?: string }).code === "host_update_target_mismatch") {
+        setErrorMessage(t("settings.host.connectionUpdate.differentHost"));
+        return;
+      }
+      if (preparedUri) {
+        const combined = formatDirectConnectionFailure({
+          error,
+          endpoint: preparedUri,
+          labels: directConnectionLabels,
+          t,
+        });
+        setErrorMessage(combined);
+        if (!isMobile) {
+          Alert.alert(t("pairing.direct.errors.failedTitle"), combined);
+        }
+        return;
+      }
+      setErrorMessage(error instanceof Error ? error.message : t("common.errors.unableToSave"));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    advancedUri,
+    directConnectionLabels,
+    handleClose,
+    host,
+    initialHost,
+    initialState.connectionId,
+    isAdvancedOpen,
+    isMobile,
+    isSaving,
+    onSaved,
+    password,
+    port,
+    probeAndUpdateHostConnection,
+    t,
+    useTls,
+  ]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
+
+    if (initialHost) {
+      await handleUpdateHost();
+      return;
+    }
 
     const relayUri = isAdvancedOpen ? advancedUri.trim() : "";
     if (relayUri.startsWith("relay://") || relayUri.includes("#connect=")) {
@@ -345,25 +556,12 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
       onSaved?.({ profile, serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
-      const {
-        title,
-        detail,
-        raw: rawDetail,
-      } = buildConnectionFailureCopy({
-        endpoint: connection.uri,
+      const combined = formatDirectConnectionFailure({
         error,
+        endpoint: connection.uri,
         labels: directConnectionLabels,
+        t,
       });
-      let combined: string;
-      if (rawDetail && detail && rawDetail !== detail) {
-        combined = `${title}\n${detail}\n${t("pairing.direct.errors.details", {
-          detail: rawDetail,
-        })}`;
-      } else if (detail) {
-        combined = `${title}\n${detail}`;
-      } else {
-        combined = title;
-      }
       setErrorMessage(combined);
       if (!isMobile) {
         Alert.alert(t("pairing.direct.errors.failedTitle"), combined);
@@ -376,7 +574,9 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
     daemons,
     directConnectionLabels,
     handleClose,
+    handleUpdateHost,
     host,
+    initialHost,
     isAdvancedOpen,
     isMobile,
     isSaving,
@@ -446,6 +646,16 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;
+  const submitLabel = (() => {
+    if (isSaving) {
+      return isUpdateHost
+        ? t("settings.host.connectionUpdate.updating")
+        : t("pairing.direct.actions.connecting");
+    }
+    return isUpdateHost
+      ? t("settings.host.connectionUpdate.button")
+      : t("pairing.direct.actions.connect");
+  })();
 
   return (
     <AdaptiveModalSheet
@@ -454,7 +664,9 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
       onClose={handleClose}
       testID="add-host-modal"
     >
-      <Text style={styles.helper}>{t("pairing.direct.helper")}</Text>
+      <Text style={styles.helper}>
+        {isUpdateHost ? t("settings.host.connectionUpdate.modalHint") : t("pairing.direct.helper")}
+      </Text>
 
       <View style={styles.portRow}>
         <View style={hostFieldStyle}>
@@ -607,7 +819,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
           leftIcon={connectIcon}
           testID="direct-host-submit"
         >
-          {isSaving ? t("pairing.direct.actions.connecting") : t("pairing.direct.actions.connect")}
+          {submitLabel}
         </Button>
       </View>
     </AdaptiveModalSheet>

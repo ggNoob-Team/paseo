@@ -50,6 +50,7 @@ import {
 import { isNative } from "@/constants/platform";
 import type { PluginThemeOption } from "@/plugins/themes";
 import { settingsStyles } from "@/styles/settings";
+import { clampSidebarWidth, DEFAULT_SIDEBAR_WIDTH, usePanelStore } from "@/stores/panel-store";
 import { AppearancePreview } from "./appearance-preview";
 
 // ---------------------------------------------------------------------------
@@ -405,6 +406,74 @@ function ContentWidthRow({ value, onChange }: ContentWidthRowProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Sidebar width: the same value the desktop grip writes, as a numeric field
+// ---------------------------------------------------------------------------
+
+interface SidebarWidthRowProps {
+  value: number;
+  onChange: (value: number) => void;
+}
+
+function SidebarWidthRow({ value, onChange }: SidebarWidthRowProps) {
+  const { t } = useTranslation();
+  const width = clampSidebarWidth(Math.round(value));
+  const input = useRef<EditingTextInputHandle>(null);
+
+  useEffect(() => {
+    input.current?.replaceText(String(width));
+  }, [width]);
+
+  const commit = useCallback(() => {
+    const draft = input.current?.getText()?.trim() ?? "";
+    const parsed = draft.length > 0 ? Number(draft) : NaN;
+    const next = Number.isFinite(parsed) ? clampSidebarWidth(Math.round(parsed)) : width;
+    input.current?.replaceText(String(next));
+    if (next !== width) {
+      onChange(next);
+    }
+  }, [onChange, width]);
+
+  const reset = useCallback(() => {
+    onChange(DEFAULT_SIDEBAR_WIDTH);
+  }, [onChange]);
+
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.layout.sidebarWidth")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.layout.sidebarWidthHint")}
+        </Text>
+      </View>
+      <View style={styles.sizeField}>
+        {width === DEFAULT_SIDEBAR_WIDTH ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={reset}
+            accessibilityLabel={t("settings.appearance.layout.sidebarWidthResetAccessibility")}
+          >
+            {t("settings.appearance.layout.reset")}
+          </Button>
+        )}
+        <TextInput
+          ref={input}
+          initialValue={String(width)}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          selectTextOnFocus
+          style={styles.widthInput}
+          accessibilityLabel={t("settings.appearance.layout.sidebarWidthAccessibility")}
+        />
+        <Text style={styles.unit}>px</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Syntax highlight theme picker (commits immediately)
 // ---------------------------------------------------------------------------
 
@@ -478,6 +547,8 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
 export function AppearanceSection() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useAppSettings();
+  const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const {
     options: pluginThemes,
     selected: selectedPluginTheme,
@@ -692,10 +763,13 @@ export function AppearanceSection() {
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.layout.title")}>
         <View style={settingsStyles.card}>
-          <ContentWidthRow
-            value={settings.contentMaxWidth}
-            onChange={handleContentMaxWidthChange}
-          />
+          <SidebarWidthRow value={sidebarWidth} onChange={setSidebarWidth} />
+          <View style={settingsStyles.rowBorder}>
+            <ContentWidthRow
+              value={settings.contentMaxWidth}
+              onChange={handleContentMaxWidthChange}
+            />
+          </View>
         </View>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.syntax.title")}>

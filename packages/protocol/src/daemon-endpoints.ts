@@ -19,35 +19,65 @@ export interface ParsedRelayConnectionUri {
   password?: string;
 }
 
-export function parseRelayConnectionUri(input: string): ParsedRelayConnectionUri {
-  const trimmed = input.trim();
-  const connectIndex = trimmed.indexOf("#connect=");
-  const uri =
-    connectIndex >= 0
-      ? decodeURIComponent(trimmed.slice(connectIndex + "#connect=".length))
-      : trimmed;
-  let url: URL;
+function decodeRelayUriComponent(value: string): string {
   try {
-    url = new URL(uri);
+    return decodeURIComponent(value.replace(/\+/g, " "));
   } catch {
     throw new Error("Invalid relay connection URI");
   }
-  if (url.protocol !== "relay:" || !url.hostname || !url.port || url.username || url.password) {
+}
+
+function parseRelaySearchParams(input: string): Map<string, string> {
+  const params = new Map<string, string>();
+  for (const part of input.split("&")) {
+    if (!part) continue;
+    const separatorIndex = part.indexOf("=");
+    const rawKey = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
+    const rawValue = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
+    const key = decodeRelayUriComponent(rawKey);
+    if (!params.has(key)) {
+      params.set(key, decodeRelayUriComponent(rawValue));
+    }
+  }
+  return params;
+}
+
+export function parseRelayConnectionUri(input: string): ParsedRelayConnectionUri {
+  const trimmed = input.trim();
+  const connectIndex = trimmed.indexOf("#connect=");
+  let uri = trimmed;
+  if (connectIndex >= 0) {
+    try {
+      uri = decodeURIComponent(trimmed.slice(connectIndex + "#connect=".length));
+    } catch {
+      throw new Error("Invalid relay connection URI");
+    }
+  }
+
+  // Hermes does not reliably parse custom URL schemes, so parse the fixed relay
+  // URI shape directly instead of depending on URL.hostname/port and searchParams.
+  const match = /^relay:\/\/([^/?#]+)(\/[^?#]*)?(?:\?([^#]*))?(?:#.*)?$/i.exec(uri);
+  if (!match) {
     throw new Error("Invalid relay connection URI");
   }
-  const serverId = decodeURIComponent(url.pathname.slice(1));
-  const key = url.searchParams.get("key");
+  const authority = match[1];
+  if (!authority || authority.includes("@")) {
+    throw new Error("Invalid relay connection URI");
+  }
+  const serverId = decodeRelayUriComponent((match[2] ?? "").slice(1));
+  const params = parseRelaySearchParams(match[3] ?? "");
+  const key = params.get("key");
   if (!serverId || !key || serverId.includes("/")) {
     throw new Error("Relay connection URI requires a server id and key");
   }
-  const endpoint = normalizeHostPort(url.host);
-  const password = url.searchParams.get("password") || undefined;
+  const endpoint = normalizeHostPort(authority);
+  const password = params.get("password") || undefined;
   return {
     offer: {
       v: 2,
       serverId,
       daemonPublicKeyB64: key,
-      relay: { endpoint, useTls: url.searchParams.get("ssl") === "true" },
+      relay: { endpoint, useTls: params.get("ssl") === "true" },
     },
     ...(password ? { password } : {}),
   };

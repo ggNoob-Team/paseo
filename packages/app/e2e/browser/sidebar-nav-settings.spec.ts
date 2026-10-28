@@ -50,7 +50,18 @@ function readSidebarGripOpacity(page: Page): Promise<number> {
     .evaluate((element) => Number(getComputedStyle(element).opacity));
 }
 
-async function narrowSidebarWithTouch(page: Page): Promise<void> {
+async function expectSidebarGripHidden(page: Page): Promise<void> {
+  await expect.poll(() => readSidebarGripOpacity(page)).toBe(0);
+}
+
+async function expectSidebarGripVisible(page: Page): Promise<void> {
+  await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+}
+
+async function narrowSidebarWithTouch(
+  page: Page,
+  onTouchStart?: () => Promise<void>,
+): Promise<void> {
   const bounds = await leftSidebarHandle(page).boundingBox();
   if (!bounds) throw new Error("Left sidebar resize handle has no bounds");
   const x = bounds.x + bounds.width / 2;
@@ -61,6 +72,7 @@ async function narrowSidebarWithTouch(page: Page): Promise<void> {
       type: "touchStart",
       touchPoints: [{ x, y }],
     });
+    await onTouchStart?.();
     for (let distance = 10; distance <= 90; distance += 10) {
       await cdp.send("Input.dispatchTouchEvent", {
         type: "touchMove",
@@ -76,7 +88,7 @@ async function narrowSidebarWithTouch(page: Page): Promise<void> {
 test.describe("Left sidebar resizing on a wide touch screen", () => {
   test.use({ viewport: { width: 900, height: 960 }, isMobile: true, hasTouch: true });
 
-  test("shows a grab handle and remembers the dragged width after reload and folding", async ({
+  test("reveals an elongated grab handle while pressed and remembers the dragged width", async ({
     page,
   }, testInfo) => {
     const workspace = await seedWorkspace({ repoPrefix: "left-sidebar-touch-resize-" });
@@ -86,13 +98,18 @@ test.describe("Left sidebar resizing on a wide touch screen", () => {
       expect(
         await page.evaluate(() => window.matchMedia("(hover: hover) and (pointer: fine)").matches),
       ).toBe(false);
-      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+      await expectSidebarGripHidden(page);
+      const handleBounds = await leftSidebarHandle(page).boundingBox();
+      if (!handleBounds) throw new Error("Left sidebar resize handle has no bounds");
+      expect(handleBounds.height).toBeGreaterThanOrEqual(160);
       const initialBoundary = await readSidebarBoundary(page);
 
-      await narrowSidebarWithTouch(page);
+      await narrowSidebarWithTouch(page, async () => {
+        await expectSidebarGripVisible(page);
+      });
       await expect.poll(() => readSidebarBoundary(page)).toBeLessThan(initialBoundary - 50);
       const resizedBoundary = await readSidebarBoundary(page);
-      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+      await expectSidebarGripHidden(page);
 
       await page.reload();
       await expect.poll(() => readSidebarBoundary(page)).toBeCloseTo(resizedBoundary, 0);
@@ -100,7 +117,7 @@ test.describe("Left sidebar resizing on a wide touch screen", () => {
       await expect(leftSidebarHandle(page)).toHaveCount(0);
       await page.setViewportSize({ width: 900, height: 960 });
       await expect.poll(() => readSidebarBoundary(page)).toBeCloseTo(resizedBoundary, 0);
-      await expect.poll(() => readSidebarGripOpacity(page)).toBeGreaterThan(0);
+      await expectSidebarGripHidden(page);
       await page.screenshot({ path: testInfo.outputPath("wide-touch-sidebar-resized.png") });
     } finally {
       await workspace.cleanup();
