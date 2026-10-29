@@ -498,6 +498,8 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         version: item.version,
         data: item.data,
       };
+    case "turn_activity":
+      return null;
   }
 }
 

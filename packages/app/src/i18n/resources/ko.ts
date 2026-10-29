@@ -312,6 +312,9 @@ export const ko: TranslationResources = {
     scrollToBottom: "맨 아래로 스크롤",
     historyLoadFailed: "에이전트 기록을 로드할 수 없습니다.",
     messageCapped: "이 메시지는 길이 제한으로 잘렸습니다({{bytes}}바이트).",
+    turnActivity: {
+      ranCommand: "명령을 실행했습니다",
+    },
     permission: {
       rejectedPlan: "거부된 계획",
       approvedPlan: "승인된 계획",

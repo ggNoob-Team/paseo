@@ -11,6 +11,7 @@ export interface TurnFooterHost {
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  hideDuration?: boolean;
 }
 
 export interface StreamLayoutItem {
@@ -74,7 +75,26 @@ function createTurnFooterHost(input: {
     items: input.items,
     timing: input.timingByAssistantId.get(input.item.id),
     startIndex: input.index,
+    hideDuration: hasTurnActivityForAssistant(input.items, input.index),
   };
+}
+
+function hasTurnActivityForAssistant(items: StreamItem[], assistantIndex: number): boolean {
+  const assistant = items[assistantIndex];
+  if (assistant?.kind !== "assistant_message") {
+    return false;
+  }
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (!item) return false;
+    if (item.kind === "turn_activity") {
+      return item.assistantItemId === assistant.id;
+    }
+    if (item.kind === "user_message" || !continuesTurn(item, assistant)) {
+      return false;
+    }
+  }
+  return false;
 }
 
 function findLatestAssistantInResponse(input: {
@@ -245,7 +265,8 @@ function areTurnFooterHostsEqual(
     left.itemId === right.itemId &&
     left.timing === right.timing &&
     left.startIndex === right.startIndex &&
-    left.items === right.items
+    left.items === right.items &&
+    left.hideDuration === right.hideDuration
   );
 }
 

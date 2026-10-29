@@ -312,6 +312,9 @@ export const ar: TranslationResources = {
     scrollToBottom: "قم بالتمرير إلى الأسفل",
     historyLoadFailed: "تعذر تحميل سجل الوكيل",
     messageCapped: "تم اقتطاع هذه الرسالة ({{bytes}} بايت).",
+    turnActivity: {
+      ranCommand: "تم تشغيل الأمر",
+    },
     permission: {
       rejectedPlan: "خطة مرفوضة",
       approvedPlan: "خطة معتمدة",

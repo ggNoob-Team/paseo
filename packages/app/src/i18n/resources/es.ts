@@ -314,6 +314,9 @@ export const es: TranslationResources = {
     scrollToBottom: "Desplazarse hacia abajo",
     historyLoadFailed: "No se pudo cargar el historial del agente",
     messageCapped: "Este mensaje fue truncado ({{bytes}} bytes).",
+    turnActivity: {
+      ranCommand: "Comando ejecutado",
+    },
     permission: {
       rejectedPlan: "Plan rechazado",
       approvedPlan: "Plan aprobado",

@@ -66,6 +66,8 @@ export function estimateStreamItemHeight({
       return COLLAPSED_TOOL_SEQUENCE_ROW_HEIGHT_ESTIMATE;
     case "thought":
       return COLLAPSED_TOOL_SEQUENCE_ROW_HEIGHT_ESTIMATE;
+    case "turn_activity":
+      return COLLAPSED_TOOL_SEQUENCE_ROW_HEIGHT_ESTIMATE;
     case "todo_list":
       return 144;
     case "notification":

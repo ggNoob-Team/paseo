@@ -64,6 +64,8 @@ import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { createStreamPresentation, getStreamItemMessageId } from "./presentation";
+import { TurnActivity } from "./turn-activity";
+import { isShellToolCallItem, type ShellToolCallItem } from "./turn-activity-blocks";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
@@ -169,6 +171,7 @@ function renderStreamItemWithTurnFooter(input: {
       items={footerHost.items}
       timing={footerHost.timing}
       startIndex={footerHost.startIndex}
+      hideDuration={footerHost.hideDuration}
       supportsTimelineCursor={input.supportsTimelineCursor}
       onForkAssistantTurn={input.onForkAssistantTurn}
     />
@@ -783,8 +786,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         item: Extract<StreamItem, { kind: "tool_call" }>,
         isLastInSequence: boolean,
         maxDetailHeight?: number,
+        source: "stream" | "turn-activity" | "turn-activity-group" = "stream",
+        disableOuterSpacing = false,
       ) => {
         const { payload } = item;
+        const isShellCall = isShellToolCallItem(item);
+        const shellLabelOverride =
+          source === "turn-activity" && isShellCall
+            ? t("agentStream.turnActivity.ranCommand")
+            : undefined;
 
         if (payload.source === "agent") {
           const data = payload.data;
@@ -812,6 +822,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               serverId={resolvedServerId}
               metadata={data.metadata}
               agentMessage={data.agentMessage}
+              displayLabel={shellLabelOverride}
+              hideSummaryWhenCollapsed={source === "turn-activity" && isShellCall}
+              forceInline={source !== "stream"}
+              disableOuterSpacing={disableOuterSpacing}
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
@@ -828,13 +842,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             args={data.arguments}
             result={data.result}
             status={data.status}
+            displayLabel={shellLabelOverride}
+            hideSummaryWhenCollapsed={source === "turn-activity" && isShellCall}
+            forceInline={source !== "stream"}
+            disableOuterSpacing={disableOuterSpacing}
             isLastInSequence={isLastInSequence}
             onOpenFilePath={handleToolCallOpenFile}
             maxDetailHeight={maxDetailHeight}
           />
         );
       },
-      [context.cwd, resolvedServerId, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [context.cwd, resolvedServerId, setInlineDetailsExpanded, handleToolCallOpenFile, t],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity
@@ -842,18 +860,22 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const getToolCallGroup = useStableEvent((hostId: string) =>
       presentation.groupsByHostId.get(hostId),
     );
-    const renderToolCallItem = useCallback(
-      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "tool_call" }>) => {
-        const group = getToolCallGroup(item.id);
+    const renderToolCallItemFor = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        source: "stream" | "turn-activity" | "turn-activity-group" = "stream",
+      ) => {
+        const group = source === "turn-activity-group" ? undefined : getToolCallGroup(item.id);
         if (!group) {
-          return renderSingleToolCallItem(item, layoutItem.isLastInToolSequence);
+          return renderSingleToolCallItem(item, isLastInSequence, undefined, source);
         }
         const expanded = expandedToolCallGroupIds.has(group.run.id);
         return (
           <OverviewToolCallGroupView
             group={group}
             expanded={expanded}
-            isLastInSequence={layoutItem.isLastInToolSequence}
+            isLastInSequence={isLastInSequence}
             onExpandedChange={setToolCallGroupExpanded}
           >
             {expanded
@@ -863,6 +885,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                       call,
                       index === group.run.calls.length - 1,
                       GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT,
+                      source,
                     )}
                   </React.Fragment>
                 ))
@@ -876,6 +899,81 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         renderSingleToolCallItem,
         setToolCallGroupExpanded,
       ],
+    );
+    const renderToolCallItem = useCallback(
+      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "tool_call" }>) =>
+        renderToolCallItemFor(item, layoutItem.isLastInToolSequence),
+      [renderToolCallItemFor],
+    );
+
+    const renderTurnActivityChild = useCallback(
+      (item: StreamItem): ReactNode => {
+        switch (item.kind) {
+          case "assistant_message":
+            return (
+              <AssistantFileLinkResolverProvider
+                client={client}
+                serverId={resolvedServerId}
+                workspaceRoot={workspaceRoot}
+                onOpenWorkspaceFile={handleInlinePathPress}
+                toast={toast}
+              >
+                <AssistantMessage
+                  occurrenceKey={createAssistantImageOccurrenceKey({
+                    agentId,
+                    itemId: item.id,
+                  })}
+                  message={item.text}
+                  timestamp={item.timestamp.getTime()}
+                  workspaceRoot={workspaceRoot}
+                  serverId={resolvedServerId}
+                  client={client}
+                  spacing="compactTop"
+                  phase="complete"
+                />
+              </AssistantFileLinkResolverProvider>
+            );
+
+          case "tool_call":
+            return renderToolCallItemFor(item, false, "turn-activity");
+
+          case "todo_list":
+            return <TodoListCard items={item.items} activity={item.activity} />;
+
+          case "notification":
+            return <Notification level={item.level} message={item.message} />;
+
+          case "compaction":
+            return (
+              <CompactionMarker
+                status={item.status}
+                trigger={item.trigger}
+                preTokens={item.preTokens}
+              />
+            );
+
+          case "plugin":
+            return (
+              <PluginTimelineItemView agentId={agentId} item={item} serverId={resolvedServerId} />
+            );
+
+          default:
+            return null;
+        }
+      },
+      [
+        agentId,
+        client,
+        handleInlinePathPress,
+        renderToolCallItemFor,
+        resolvedServerId,
+        toast,
+        workspaceRoot,
+      ],
+    );
+    const renderTurnActivityShellItem = useCallback(
+      (item: ShellToolCallItem) => renderToolCallItemFor(item, true, "turn-activity-group"),
+      [renderToolCallItemFor],
     );
 
     const renderStreamItemContent = useCallback(
@@ -893,6 +991,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           case "tool_call":
             return renderToolCallItem(layoutItem, item);
+
+          case "turn_activity":
+            return (
+              <TurnActivity
+                item={item}
+                renderItem={renderTurnActivityChild}
+                renderShellItem={renderTurnActivityShellItem}
+              />
+            );
 
           case "notification":
             return <Notification level={item.level} message={item.message} />;
@@ -924,6 +1031,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         renderAssistantMessageItem,
         renderThoughtItem,
         renderToolCallItem,
+        renderTurnActivityChild,
+        renderTurnActivityShellItem,
         resolvedServerId,
       ],
     );

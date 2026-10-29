@@ -313,6 +313,9 @@ export const ptBR: TranslationResources = {
     scrollToBottom: "Rolar para o fim",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
     messageCapped: "Esta mensagem foi truncada ({{bytes}} bytes).",
+    turnActivity: {
+      ranCommand: "Comando executado",
+    },
     permission: {
       rejectedPlan: "Plano rejeitado",
       approvedPlan: "Plano aprovado",

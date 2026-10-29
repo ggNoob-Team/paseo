@@ -6,7 +6,8 @@ import {
   type PreparedToolCallHistory,
   type ToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
-import type { StreamItem, UserMessageItem } from "@/types/stream";
+import type { StreamItem, TurnActivityItem, UserMessageItem } from "@/types/stream";
+import { startsNewTurn } from "./turn-membership";
 
 interface PresentationInput {
   tail: StreamItem[];
@@ -20,6 +21,90 @@ interface PresentationInput {
 export function getStreamItemMessageId(item: StreamItem): string {
   if (item.kind === "plugin") return item.sourceId ?? item.id;
   return item.id;
+}
+
+function isTurnActivityDetail(item: StreamItem): boolean {
+  if (item.kind === "thought" || item.kind === "user_message" || item.kind === "turn_activity") {
+    return false;
+  }
+  if (item.kind === "assistant_message") {
+    return item.text.trim().length > 0;
+  }
+  return true;
+}
+
+function foldCompletedTurn(segment: StreamItem[]): StreamItem[] | null {
+  const first = segment[0];
+  if (first?.kind !== "user_message") {
+    return null;
+  }
+
+  let finalIndex = -1;
+  for (let index = segment.length - 1; index >= 1; index -= 1) {
+    const item = segment[index];
+    if (item?.kind === "assistant_message" && item.text.trim().length > 0) {
+      finalIndex = index;
+      break;
+    }
+  }
+  if (finalIndex <= 1) {
+    return null;
+  }
+
+  const final = segment[finalIndex];
+  if (final?.kind !== "assistant_message") {
+    return null;
+  }
+
+  const details = segment.slice(1, finalIndex).filter(isTurnActivityDetail);
+  const trailing = segment.slice(finalIndex + 1).filter((item) => item.kind !== "thought");
+  const turnId =
+    first.turnId !== undefined && first.turnId === final.turnId ? first.turnId : undefined;
+  const activity: TurnActivityItem = {
+    kind: "turn_activity",
+    id: `turn-activity:${first.id}`,
+    ...(turnId ? { turnId } : {}),
+    timestamp: final.timestamp,
+    durationMs: Math.max(0, final.timestamp.getTime() - first.timestamp.getTime()),
+    assistantItemId: final.id,
+    items: details,
+  };
+  return [first, activity, final, ...trailing];
+}
+
+const completedTurnGroupingCache = new WeakMap<StreamItem[], StreamItem[]>();
+
+/**
+ * Folds each completed user turn into one summary row followed by its final answer.
+ * The process rows live inside that summary so they keep their chronological order.
+ * A slice that begins mid-turn is left untouched because there is no complete turn
+ * to summarize.
+ */
+export function groupCompletedTurns(items: StreamItem[]): StreamItem[] {
+  const cached = completedTurnGroupingCache.get(items);
+  if (cached) return cached;
+
+  const output: StreamItem[] = [];
+  let changed = false;
+  let start = 0;
+  for (let index = 1; index <= items.length; index += 1) {
+    const isBoundary =
+      index === items.length || startsNewTurn(items[index], items[index - 1] ?? null);
+    if (!isBoundary) continue;
+    const segment = items.slice(start, index);
+    const folded = foldCompletedTurn(segment);
+    if (folded) {
+      output.push(...folded);
+      changed = true;
+    } else {
+      output.push(...segment);
+    }
+    start = index;
+  }
+
+  const result = changed ? output : items;
+  completedTurnGroupingCache.set(items, result);
+  return result;
 }
 
 /** Source messages reach plugins before display projection. */
@@ -71,12 +156,17 @@ export function createStreamPresentation() {
       preparedTail = historyRows;
       preparedLevel = input.level;
     }
-    return projectToolCallDetailLevel({
+    const projected = projectToolCallDetailLevel({
       level: input.level,
       tail: historyRows,
       head,
       preparedHistory,
       isTurnActive: input.isTurnActive,
     });
+    const tail = groupCompletedTurns(projected.tail);
+    const projectedHead = input.isTurnActive ? projected.head : groupCompletedTurns(projected.head);
+    return tail === projected.tail && projectedHead === projected.head
+      ? projected
+      : { ...projected, tail, head: projectedHead };
   };
 }

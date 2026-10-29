@@ -76,6 +76,8 @@ function sourceTimelineItem(item: StreamItem): AgentTimelineItem | null {
       };
     case "plugin":
       return null;
+    case "turn_activity":
+      return null;
   }
 }
 

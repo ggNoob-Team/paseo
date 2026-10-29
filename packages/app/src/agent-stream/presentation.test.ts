@@ -13,7 +13,11 @@ import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { buildAgentStreamRenderModel } from "./model";
-import { createStreamPresentation, getStreamItemMessageId } from "./presentation";
+import {
+  createStreamPresentation,
+  getStreamItemMessageId,
+  groupCompletedTurns,
+} from "./presentation";
 
 const runtime = {
   paseo: {},
@@ -125,6 +129,170 @@ function assistant(text: string, messageId = "message-1"): AgentStreamEventPaylo
 function rows(result: { tail: StreamItem[]; head: StreamItem[] }): StreamItem[] {
   return [...result.tail, ...result.head];
 }
+
+function turnUser(id: string, at: number): UserMessageItem {
+  return {
+    kind: "user_message",
+    id,
+    messageId: id,
+    turnId: `turn-${id}`,
+    text: id,
+    timestamp: new Date(at),
+  };
+}
+
+function turnAssistant(id: string, at: number, text: string): StreamItem {
+  return {
+    kind: "assistant_message",
+    id,
+    messageId: id,
+    turnId: `turn-${id.split(":")[0]}`,
+    text,
+    timestamp: new Date(at),
+  };
+}
+
+function turnThought(id: string, at: number, text: string): StreamItem {
+  return {
+    kind: "thought",
+    id,
+    turnId: `turn-${id.split(":")[0]}`,
+    text,
+    status: "ready",
+    timestamp: new Date(at),
+  };
+}
+
+describe("completed turn activity grouping", () => {
+  it("keeps commentary and tool calls in chronological order inside one summary row", () => {
+    const items: StreamItem[] = [
+      turnUser("prompt-1", 1_000),
+      turnAssistant("prompt-1:commentary", 2_000, "Checking the repo first."),
+      { ...toolCall("call-1", "bash"), turnId: "turn-prompt-1", timestamp: new Date(3_000) },
+      turnAssistant("prompt-1:final", 5_000, "Done."),
+    ];
+
+    const grouped = groupCompletedTurns(items);
+
+    expect(grouped.map((item) => item.kind)).toEqual([
+      "user_message",
+      "turn_activity",
+      "assistant_message",
+    ]);
+    const activity = grouped[1];
+    if (activity?.kind !== "turn_activity") throw new Error("Expected turn activity");
+    expect(activity.durationMs).toBe(4_000);
+    expect(activity.assistantItemId).toBe("prompt-1:final");
+    expect(activity.items.map((item) => item.kind)).toEqual(["assistant_message", "tool_call"]);
+    expect(activity.items[0]).toMatchObject({ text: "Checking the repo first." });
+  });
+
+  it("omits raw reasoning from details and trailing positions", () => {
+    const items: StreamItem[] = [
+      turnUser("prompt-2", 1_000),
+      turnThought("prompt-2:thought-1", 1_500, "Hidden reasoning"),
+      turnAssistant("prompt-2:commentary", 2_000, "I will inspect the build."),
+      turnThought("prompt-2:thought-2", 2_500, "More hidden reasoning"),
+      { ...toolCall("call-2", "bash"), turnId: "turn-prompt-2", timestamp: new Date(3_000) },
+      turnAssistant("prompt-2:final", 4_000, "Build is clean."),
+      turnThought("prompt-2:thought-3", 4_500, "Trailing reasoning"),
+    ];
+
+    const grouped = groupCompletedTurns(items);
+
+    expect(grouped.map((item) => item.kind)).toEqual([
+      "user_message",
+      "turn_activity",
+      "assistant_message",
+    ]);
+    const activity = grouped[1];
+    if (activity?.kind !== "turn_activity") throw new Error("Expected turn activity");
+    expect(activity.items).toHaveLength(2);
+    expect(activity.items.some((item) => item.kind === "thought")).toBe(false);
+  });
+
+  it("leaves a history slice that begins mid-turn untouched", () => {
+    const items: StreamItem[] = [
+      turnAssistant("prompt-3:commentary", 1_000, "Continuing an older turn."),
+      toolCall("call-3", "bash"),
+      turnAssistant("prompt-3:final", 2_000, "Older answer."),
+    ];
+
+    expect(groupCompletedTurns(items)).toBe(items);
+  });
+
+  it("does not add a summary when the turn has no process rows", () => {
+    const items: StreamItem[] = [
+      turnUser("prompt-4", 1_000),
+      turnAssistant("prompt-4:final", 2_000, "Direct answer."),
+    ];
+
+    expect(groupCompletedTurns(items)).toBe(items);
+  });
+
+  it("folds each completed turn but keeps the final answers outside the summary", () => {
+    const items: StreamItem[] = [
+      turnUser("prompt-5", 1_000),
+      turnAssistant("prompt-5:commentary", 1_500, "First process note."),
+      turnAssistant("prompt-5:final", 2_000, "First answer."),
+      turnUser("prompt-6", 3_000),
+      turnAssistant("prompt-6:commentary", 3_500, "Second process note."),
+      turnAssistant("prompt-6:final", 4_000, "Second answer."),
+    ];
+
+    const grouped = groupCompletedTurns(items);
+
+    expect(grouped.map((item) => item.kind)).toEqual([
+      "user_message",
+      "turn_activity",
+      "assistant_message",
+      "user_message",
+      "turn_activity",
+      "assistant_message",
+    ]);
+    expect(grouped.filter((item) => item.kind === "turn_activity")).toHaveLength(2);
+    expect(grouped.filter((item) => item.kind === "assistant_message")).toMatchObject([
+      { text: "First answer." },
+      { text: "Second answer." },
+    ]);
+  });
+
+  it("keeps the active turn expanded and folds it once the turn is no longer active", () => {
+    const items: StreamItem[] = [
+      turnUser("prompt-7", 1_000),
+      turnAssistant("prompt-7:commentary", 2_000, "Working through it."),
+      { ...toolCall("call-7", "bash"), turnId: "turn-prompt-7", timestamp: new Date(3_000) },
+      turnAssistant("prompt-7:final", 4_000, "Answer."),
+    ];
+    const present = createStreamPresentation();
+    const active = present({
+      level: "detailed",
+      tail: [],
+      head: items,
+      transform: undefined,
+      isTurnActive: true,
+    });
+    const completed = createStreamPresentation()({
+      level: "detailed",
+      tail: [],
+      head: items,
+      transform: undefined,
+      isTurnActive: false,
+    });
+
+    expect(active.head.map((item) => item.kind)).toEqual([
+      "user_message",
+      "assistant_message",
+      "tool_call",
+      "assistant_message",
+    ]);
+    expect(completed.head.map((item) => item.kind)).toEqual([
+      "user_message",
+      "turn_activity",
+      "assistant_message",
+    ]);
+  });
+});
 
 describe("whole-message Markdown presentation", () => {
   it("keeps paragraphs, fences and quotes in one progressively updated row", () => {

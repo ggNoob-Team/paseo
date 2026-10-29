@@ -552,6 +552,7 @@ interface AssistantTurnFooterProps {
   getContent: () => string;
   completedAt?: Date;
   durationMs?: number | null;
+  showTiming?: boolean;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
 }
 
@@ -596,6 +597,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   getContent,
   completedAt,
   durationMs,
+  showTiming = true,
   onFork,
 }: AssistantTurnFooterProps) {
   const { t } = useTranslation();
@@ -614,12 +616,14 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
 
   const durationLabel = useMemo(
     () =>
-      durationMs !== undefined && durationMs !== null ? getTurnDurationLabel(durationMs, t) : "",
-    [durationMs, t],
+      showTiming && durationMs !== undefined && durationMs !== null
+        ? getTurnDurationLabel(durationMs, t)
+        : "",
+    [durationMs, showTiming, t],
   );
   const timestampLabel = useMemo(
-    () => (completedAt ? formatMessageTimestamp(completedAt) : ""),
-    [completedAt],
+    () => (showTiming && completedAt ? formatMessageTimestamp(completedAt) : ""),
+    [completedAt, showTiming],
   );
 
   const primaryLabel = durationLabel || timestampLabel;
@@ -2223,6 +2227,8 @@ interface ToolCallProps {
   agentMessage?: AgentMessage;
   serverId?: string;
   toolName: string;
+  displayLabel?: string;
+  hideSummaryWhenCollapsed?: boolean;
   args?: unknown;
   result?: unknown;
   error?: unknown;
@@ -2244,6 +2250,8 @@ export const ToolCall = memo(function ToolCall({
   agentMessage,
   serverId,
   toolName,
+  displayLabel,
+  hideSummaryWhenCollapsed = false,
   args,
   result,
   error,
@@ -2392,8 +2400,8 @@ export const ToolCall = memo(function ToolCall({
   return (
     <ExpandableBadge
       testID="tool-call-badge"
-      label={presentation.displayName}
-      secondaryLabel={presentation.summary}
+      label={displayLabel ?? presentation.displayName}
+      secondaryLabel={hideSummaryWhenCollapsed && !isExpanded ? undefined : presentation.summary}
       icon={presentation.icon}
       isExpanded={shouldRenderInline && isExpanded}
       onToggle={presentation.canOpenDetails ? handleToggle : undefined}
@@ -2410,6 +2418,8 @@ export const ToolCall = memo(function ToolCall({
 
 function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.toolName !== next.toolName) return false;
+  if (previous.displayLabel !== next.displayLabel) return false;
+  if (previous.hideSummaryWhenCollapsed !== next.hideSummaryWhenCollapsed) return false;
   if (previous.serverId !== next.serverId) return false;
   if (previous.agentMessage !== next.agentMessage) return false;
   if (previous.args !== next.args) return false;

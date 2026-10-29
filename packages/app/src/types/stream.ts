@@ -86,6 +86,7 @@ export type StreamItem =
   | TodoListItem
   | NotificationItem
   | CompactionItem
+  | TurnActivityItem
   | PluginTimelineStreamItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
@@ -835,6 +836,22 @@ export interface TodoListItem {
   provider: AgentProvider;
   items: TodoEntry[];
   activity: TaskActivity;
+}
+
+/**
+ * Display-only projection of a completed turn's process. The source timeline keeps
+ * assistant commentary and tool calls as separate items; presentation folds them into
+ * this row so the transcript can show the final answer without the execution trace.
+ */
+export interface TurnActivityItem {
+  kind: "turn_activity";
+  id: string;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  timestamp: Date;
+  durationMs: number;
+  assistantItemId: string;
+  items: StreamItem[];
 }
 
 export type StreamUpdateSource = "live" | "canonical";

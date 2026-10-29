@@ -77,6 +77,7 @@ export const TurnFooter = memo(function TurnFooter({
       items={host.items}
       timing={host.timing}
       startIndex={host.startIndex}
+      hideDuration={host.hideDuration}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
@@ -88,6 +89,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items,
   timing,
   startIndex,
+  hideDuration,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -95,6 +97,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  hideDuration?: boolean;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -105,6 +108,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         items={items}
         timing={timing}
         startIndex={startIndex}
+        hideDuration={hideDuration}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
       />
@@ -161,6 +165,7 @@ function CompletedTurnFooter({
   items,
   timing,
   startIndex,
+  hideDuration,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -168,6 +173,7 @@ function CompletedTurnFooter({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  hideDuration?: boolean;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -200,6 +206,7 @@ function CompletedTurnFooter({
         getContent={getContent}
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
+        showTiming={!hideDuration}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
       />
     </View>

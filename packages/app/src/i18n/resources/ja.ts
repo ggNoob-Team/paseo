@@ -314,6 +314,9 @@ export const ja: TranslationResources = {
     scrollToBottom: "下にスクロール",
     historyLoadFailed: "エージェントの履歴を読み込めませんでした",
     messageCapped: "このメッセージは上限で切り詰められました（{{bytes}}バイト）。",
+    turnActivity: {
+      ranCommand: "コマンドを実行しました",
+    },
     permission: {
       rejectedPlan: "却下されたプラン",
       approvedPlan: "承認されたプラン",

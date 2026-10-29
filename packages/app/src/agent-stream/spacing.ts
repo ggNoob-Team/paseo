@@ -28,6 +28,12 @@ export function getGapBetweenStreamItems(
   if (item.kind === "user_message" && belowItem.kind === "assistant_message") {
     return 0;
   }
+  if (item.kind === "user_message" && belowItem.kind === "turn_activity") {
+    return 0;
+  }
+  if (item.kind === "turn_activity" && belowItem.kind === "assistant_message") {
+    return SPACING[2];
+  }
   if (isToolSequenceItem(item) && isToolSequenceItem(belowItem)) {
     return 0;
   }
