@@ -211,14 +211,54 @@ describe("completed turn activity grouping", () => {
     expect(activity.items.some((item) => item.kind === "thought")).toBe(false);
   });
 
-  it("leaves a history slice that begins mid-turn untouched", () => {
+  it("folds a restored history slice that begins mid-turn", () => {
     const items: StreamItem[] = [
-      turnAssistant("prompt-3:commentary", 1_000, "Continuing an older turn."),
-      toolCall("call-3", "bash"),
+      turnThought("prompt-3:thought-1", 500, "Continuing an older turn."),
+      { ...toolCall("call-3", "bash"), turnId: "turn-prompt-3", timestamp: new Date(1_000) },
       turnAssistant("prompt-3:final", 2_000, "Older answer."),
+      turnUser("prompt-4", 3_000),
+      turnAssistant("prompt-4:final", 4_000, "Newer answer."),
     ];
 
+    const grouped = groupCompletedTurns(items);
+
+    // The replica slice drops the prompt row of the oldest turn, so that segment
+    // must still collapse instead of exposing its reasoning and commands.
+    expect(grouped.map((item) => item.kind)).toEqual([
+      "turn_activity",
+      "assistant_message",
+      "user_message",
+      "assistant_message",
+    ]);
+    const activity = grouped[0];
+    if (activity?.kind !== "turn_activity") throw new Error("Expected turn activity");
+    expect(activity.items.map((item) => item.kind)).toEqual(["tool_call"]);
+    expect(activity.assistantItemId).toBe("prompt-3:final");
+    expect(activity.durationMs).toBe(1_500);
+  });
+
+  it("keeps a single late reply untouched when no process precedes it", () => {
+    const items: StreamItem[] = [turnAssistant("prompt-8:final", 1_000, "Only an answer.")];
+
     expect(groupCompletedTurns(items)).toBe(items);
+  });
+
+  it("keeps the summary row id when an older page supplies the missing prompt", () => {
+    const partial: StreamItem[] = [
+      turnAssistant("prompt-9:commentary", 2_000, "Still working."),
+      { ...toolCall("call-9", "bash"), turnId: "turn-prompt-9", timestamp: new Date(3_000) },
+      turnAssistant("prompt-9:final", 4_000, "Final answer."),
+    ];
+    const complete: StreamItem[] = [turnUser("prompt-9", 1_000), ...partial];
+
+    const partialActivity = groupCompletedTurns(partial)[0];
+    const completeActivity = groupCompletedTurns(complete)[1];
+    if (partialActivity?.kind !== "turn_activity") throw new Error("Expected turn activity");
+    if (completeActivity?.kind !== "turn_activity") throw new Error("Expected turn activity");
+
+    // Scroll anchoring keys off this id: prepending the prompt must not replace the row.
+    expect(completeActivity.id).toBe(partialActivity.id);
+    expect(completeActivity.durationMs).toBe(3_000);
   });
 
   it("does not add a summary when the turn has no process rows", () => {

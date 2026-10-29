@@ -65,7 +65,11 @@ import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { createStreamPresentation, getStreamItemMessageId } from "./presentation";
 import { TurnActivity } from "./turn-activity";
-import { isShellToolCallItem, type ShellToolCallItem } from "./turn-activity-blocks";
+import {
+  getShellCommandText,
+  isShellToolCallItem,
+  type ShellToolCallItem,
+} from "./turn-activity-blocks";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
@@ -791,6 +795,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ) => {
         const { payload } = item;
         const isShellCall = isShellToolCallItem(item);
+        const copyCommandText =
+          isShellCall && source !== "stream" ? (getShellCommandText(item) ?? undefined) : undefined;
         const shellLabelOverride =
           source === "turn-activity" && isShellCall
             ? t("agentStream.turnActivity.ranCommand")
@@ -824,6 +830,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               agentMessage={data.agentMessage}
               displayLabel={shellLabelOverride}
               hideSummaryWhenCollapsed={source === "turn-activity" && isShellCall}
+              copyText={copyCommandText}
               forceInline={source !== "stream"}
               disableOuterSpacing={disableOuterSpacing}
               isLastInSequence={isLastInSequence}
@@ -844,6 +851,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             status={data.status}
             displayLabel={shellLabelOverride}
             hideSummaryWhenCollapsed={source === "turn-activity" && isShellCall}
+            copyText={copyCommandText}
             forceInline={source !== "stream"}
             disableOuterSpacing={disableOuterSpacing}
             isLastInSequence={isLastInSequence}

@@ -18,6 +18,20 @@ export function isShellToolCallItem(item: StreamItem): item is ShellToolCallItem
     : SHELL_TOOL_NAMES.has(payload.data.toolName.trim().toLowerCase());
 }
 
+/** The exact command to put on the clipboard for a shell row, when known. */
+export function getShellCommandText(item: ShellToolCallItem): string | null {
+  const { payload } = item;
+  if (payload.source === "agent") {
+    return payload.data.detail.type === "shell" ? payload.data.detail.command : null;
+  }
+  const { arguments: args } = payload.data;
+  if (typeof args !== "object" || args === null) {
+    return null;
+  }
+  const command = Reflect.get(args, "command");
+  return typeof command === "string" && command.trim().length > 0 ? command : null;
+}
+
 /**
  * Consecutive shell calls read as one "Ran command" step, matching how other
  * chat clients collapse an execution streak. Commentary or a different tool

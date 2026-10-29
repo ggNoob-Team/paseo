@@ -60,7 +60,14 @@ test("collapses a completed turn and expands its process in order", async ({ pag
     await expect(commandRow).toContainText("Shell");
     await expect(commandRow).toContainText("node scripts/simulate-stream-burst.mjs");
 
-    const commandToggle = commandRow.getByRole("button");
+    // Each command row can be copied without expanding its output.
+    await commandRow.hover();
+    const copyCommandButton = commandRow.getByTestId("tool-call-copy-command");
+    await expect(copyCommandButton).toBeVisible();
+    await copyCommandButton.click();
+    await expect(copyCommandButton).toHaveAttribute("aria-label", "Copied");
+
+    const commandToggle = commandRow.getByRole("button").first();
     await commandRow.scrollIntoViewIfNeeded();
     await commandToggle.click();
     await expect(commandRow).toContainText("[burst] tick 1 userIsAtBottom=true");
@@ -81,6 +88,44 @@ test("collapses a completed turn and expands its process in order", async ({ pag
       (entry) => entry.kind === "turn-activity-shell-group",
     );
     expect(groupIndex).toBeGreaterThan(0);
+  } finally {
+    await agent.cleanup();
+  }
+});
+
+test("keeps completed turns collapsed after a reload", async ({ page }) => {
+  test.setTimeout(150_000);
+  const agent = await seedMockAgentWorkspace({
+    repoPrefix: "turn-activity-reload-",
+    title: "Turn activity reload",
+    model: "ten-second-stream",
+  });
+
+  try {
+    await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
+    await expectComposerVisible(page);
+    await agent.client.sendAgentMessage(agent.agentId, "Review the scroll behavior.");
+    await agent.client.waitForFinish(agent.agentId, 60_000);
+    await expect(page.getByText("(end of synthetic stream)", { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await page.reload();
+    await expectComposerVisible(page);
+    await expect(page.getByText("(end of synthetic stream)", { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Nothing is expanded, so the history must not expose process rows or reasoning.
+    await expect(page.getByTestId("tool-call-badge")).toHaveCount(0);
+    await expect(page.getByText("Thinking", { exact: true })).toHaveCount(0);
+
+    // Scrolling into older rows must not reveal an unfolded process either.
+    await page.mouse.move(700, 400);
+    await page.mouse.wheel(0, -4000);
+    await expect(page.getByTestId("turn-activity").first()).toBeVisible();
+    await expect(page.getByTestId("tool-call-badge")).toHaveCount(0);
+    await expect(page.getByText("Thinking", { exact: true })).toHaveCount(0);
   } finally {
     await agent.cleanup();
   }

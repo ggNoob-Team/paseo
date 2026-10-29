@@ -35,19 +35,24 @@ function isTurnActivityDetail(item: StreamItem): boolean {
 
 function foldCompletedTurn(segment: StreamItem[]): StreamItem[] | null {
   const first = segment[0];
-  if (first?.kind !== "user_message") {
+  if (!first) {
     return null;
   }
 
+  // A restored timeline slice can start mid-turn: the replica keeps the most recent
+  // items, so the prompt row of the oldest loaded turn is often missing. Fold those
+  // segments too, otherwise a cold start leaves the whole loaded trace expanded.
+  const prompt = first.kind === "user_message" ? first : null;
+  const detailStart = prompt ? 1 : 0;
   let finalIndex = -1;
-  for (let index = segment.length - 1; index >= 1; index -= 1) {
+  for (let index = segment.length - 1; index >= detailStart; index -= 1) {
     const item = segment[index];
     if (item?.kind === "assistant_message" && item.text.trim().length > 0) {
       finalIndex = index;
       break;
     }
   }
-  if (finalIndex <= 1) {
+  if (finalIndex <= detailStart) {
     return null;
   }
 
@@ -56,20 +61,23 @@ function foldCompletedTurn(segment: StreamItem[]): StreamItem[] | null {
     return null;
   }
 
-  const details = segment.slice(1, finalIndex).filter(isTurnActivityDetail);
+  const details = segment.slice(detailStart, finalIndex).filter(isTurnActivityDetail);
   const trailing = segment.slice(finalIndex + 1).filter((item) => item.kind !== "thought");
   const turnId =
     first.turnId !== undefined && first.turnId === final.turnId ? first.turnId : undefined;
   const activity: TurnActivityItem = {
     kind: "turn_activity",
-    id: `turn-activity:${first.id}`,
+    // Keyed on the final answer rather than the segment's first row: loading older
+    // history can prepend the missing prompt, and the scroll anchor must keep the
+    // same row id across that re-fold.
+    id: `turn-activity:${final.id}`,
     ...(turnId ? { turnId } : {}),
     timestamp: final.timestamp,
     durationMs: Math.max(0, final.timestamp.getTime() - first.timestamp.getTime()),
     assistantItemId: final.id,
     items: details,
   };
-  return [first, activity, final, ...trailing];
+  return [...(prompt ? [prompt] : []), activity, final, ...trailing];
 }
 
 const completedTurnGroupingCache = new WeakMap<StreamItem[], StreamItem[]>();
@@ -77,8 +85,7 @@ const completedTurnGroupingCache = new WeakMap<StreamItem[], StreamItem[]>();
 /**
  * Folds each completed user turn into one summary row followed by its final answer.
  * The process rows live inside that summary so they keep their chronological order.
- * A slice that begins mid-turn is left untouched because there is no complete turn
- * to summarize.
+ * Segments that begin mid-turn (a restored slice missing its prompt row) fold as well.
  */
 export function groupCompletedTurns(items: StreamItem[]): StreamItem[] {
   const cached = completedTurnGroupingCache.get(items);

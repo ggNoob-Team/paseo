@@ -13,6 +13,7 @@ import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
 import { TaskListRow } from "@/components/task-list-row";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { AddToNotesButton } from "@/notes/add-to-notes-button";
@@ -23,6 +24,7 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import type { TaskActivity, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
 import { setAssistantMessageHeight } from "@/utils/assistant-message-height-estimate";
+import { copyToClipboard } from "@/utils/clipboard";
 import { isRenderProfileEnabled } from "@/utils/render-profiler";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
@@ -133,6 +135,8 @@ const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
 const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
 const ThemedChevronRightIcon = withUnistyles(ChevronRight);
+const ThemedCopyIcon = withUnistyles(Copy);
+const ThemedCheckIcon = withUnistyles(Check);
 const ThemedNotificationInfo = withUnistyles(Info);
 const ThemedNotificationWarning = withUnistyles(TriangleAlertIcon);
 const ThemedNotificationError = withUnistyles(XCircle);
@@ -966,6 +970,16 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     width: 14,
     height: 14,
   },
+  copyButton: {
+    marginLeft: theme.spacing[1],
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    flexShrink: 0,
+  },
+  copyTooltipText: {
+    color: theme.colors.popoverForeground,
+    fontSize: theme.fontSize.sm,
+  },
   detailWrapper: {
     borderBottomLeftRadius: theme.borderRadius.lg,
     borderBottomRightRadius: theme.borderRadius.lg,
@@ -1516,9 +1530,13 @@ export const TodoListCard = memo(function TodoListCard({
   );
 });
 
+const COPY_FEEDBACK_MS = 1500;
+
 interface ExpandableBadgeProps {
   label: string;
   secondaryLabel?: string;
+  /** When set, the row offers a copy action for this text. */
+  copyText?: string;
   icon?: ComponentType<{ size?: number; color?: string }>;
   isExpanded: boolean;
   style?: StyleProp<ViewStyle>;
@@ -1622,6 +1640,9 @@ interface ExpandableBadgeLabelRowProps {
   onOpenFilePress: (event: GestureResponderEvent) => void;
   onOpenFileHoverIn: () => void;
   onOpenFileHoverOut: () => void;
+  showCopyButton: boolean;
+  copiedCopy: boolean;
+  onCopyPress: (event: GestureResponderEvent) => void;
 }
 
 function ExpandableBadgeLabelRow({
@@ -1648,6 +1669,9 @@ function ExpandableBadgeLabelRow({
   onOpenFilePress,
   onOpenFileHoverIn,
   onOpenFileHoverOut,
+  showCopyButton,
+  copiedCopy,
+  onCopyPress,
 }: ExpandableBadgeLabelRowProps) {
   const { t } = useTranslation();
   return (
@@ -1684,6 +1708,36 @@ function ExpandableBadgeLabelRow({
             uniProps={isOpenFileHovered ? foregroundColorMapping : foregroundMutedColorMapping}
           />
         </Pressable>
+      ) : null}
+      {showCopyButton ? (
+        <>
+          <View style={expandableBadgeStylesheet.spacer} />
+          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger asChild>
+              <Pressable
+                onPress={onCopyPress}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  copiedCopy ? t("message.actions.copied") : t("message.actions.copyCommand")
+                }
+                testID="tool-call-copy-command"
+                style={expandableBadgeStylesheet.copyButton}
+                hitSlop={6}
+              >
+                {copiedCopy ? (
+                  <ThemedCheckIcon size={13} uniProps={foregroundColorMapping} />
+                ) : (
+                  <ThemedCopyIcon size={13} uniProps={foregroundMutedColorMapping} />
+                )}
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="end" offset={6}>
+              <Text style={expandableBadgeStylesheet.copyTooltipText}>
+                {t("message.actions.copyCommand")}
+              </Text>
+            </TooltipContent>
+          </Tooltip>
+        </>
       ) : null}
       {isWebShimmer ? (
         <ExpandableBadgeWebShimmerOverlay
@@ -1883,6 +1937,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   label,
   style,
   secondaryLabel,
+  copyText,
   icon,
   isExpanded,
   onToggle,
@@ -1897,10 +1952,15 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   testID,
 }: ExpandableBadgeProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const hasFinePointer = useHasFinePointer();
   const [isHovered, setIsHovered] = useState(false);
   const [isOpenFileHovered, setIsOpenFileHovered] = useState(false);
+  const [copiedCopy, setCopiedCopy] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInteractive = Boolean(onToggle);
+  // Desktop rows reveal the copy action on hover; touch devices keep it visible.
+  const showCopyButton = copyText !== undefined && (isHovered || !hasFinePointer);
   const hasDetailContent = Boolean(renderDetails);
   const detailContent = hasDetailContent && isExpanded ? renderDetails?.() : null;
   const detailWrapperRef = useRef<View | null>(null);
@@ -1926,6 +1986,26 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   );
   const handleOpenFileHoverIn = useCallback(() => setIsOpenFileHovered(true), []);
   const handleOpenFileHoverOut = useCallback(() => setIsOpenFileHovered(false), []);
+  const handleCopyPress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation?.();
+      if (!copyText) return;
+      void copyToClipboard(copyText);
+      setCopiedCopy(true);
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => {
+        setCopiedCopy(false);
+        copyResetRef.current = null;
+      }, COPY_FEEDBACK_MS);
+    },
+    [copyText],
+  );
+  useEffect(
+    () => () => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    },
+    [],
+  );
 
   const nativeGradientIdRef = useRef(
     `shimmer-gradient-${Math.random().toString(36).substring(2, 9)}`,
@@ -2187,6 +2267,9 @@ export const ExpandableBadge = memo(function ExpandableBadge({
             onOpenFilePress={handleOpenFilePress}
             onOpenFileHoverIn={handleOpenFileHoverIn}
             onOpenFileHoverOut={handleOpenFileHoverOut}
+            showCopyButton={showCopyButton}
+            copiedCopy={copiedCopy}
+            onCopyPress={handleCopyPress}
           />
         </View>
       </Pressable>
@@ -2207,6 +2290,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
 function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: ExpandableBadgeProps) {
   if (previous.label !== next.label) return false;
   if (previous.secondaryLabel !== next.secondaryLabel) return false;
+  if (previous.copyText !== next.copyText) return false;
   if (previous.icon !== next.icon) return false;
   if (previous.isExpanded !== next.isExpanded) return false;
   if (previous.style !== next.style) return false;
@@ -2229,6 +2313,7 @@ interface ToolCallProps {
   toolName: string;
   displayLabel?: string;
   hideSummaryWhenCollapsed?: boolean;
+  copyText?: string;
   args?: unknown;
   result?: unknown;
   error?: unknown;
@@ -2252,6 +2337,7 @@ export const ToolCall = memo(function ToolCall({
   toolName,
   displayLabel,
   hideSummaryWhenCollapsed = false,
+  copyText,
   args,
   result,
   error,
@@ -2402,6 +2488,7 @@ export const ToolCall = memo(function ToolCall({
       testID="tool-call-badge"
       label={displayLabel ?? presentation.displayName}
       secondaryLabel={hideSummaryWhenCollapsed && !isExpanded ? undefined : presentation.summary}
+      copyText={copyText}
       icon={presentation.icon}
       isExpanded={shouldRenderInline && isExpanded}
       onToggle={presentation.canOpenDetails ? handleToggle : undefined}
@@ -2420,6 +2507,7 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.toolName !== next.toolName) return false;
   if (previous.displayLabel !== next.displayLabel) return false;
   if (previous.hideSummaryWhenCollapsed !== next.hideSummaryWhenCollapsed) return false;
+  if (previous.copyText !== next.copyText) return false;
   if (previous.serverId !== next.serverId) return false;
   if (previous.agentMessage !== next.agentMessage) return false;
   if (previous.args !== next.args) return false;

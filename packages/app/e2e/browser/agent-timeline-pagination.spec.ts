@@ -27,9 +27,28 @@ import {
   seedRealisticOlderTimeline,
   sendLiveTurnBeforeHydration,
   expectTimelineViewportAnchoredAfterPrepend,
+  waitForTimelineGeometryToSettle,
   userNavigatesTimelineToHistoryStartWithKeyboard,
   userScrollsTimelineToHistoryStart,
 } from "../support/helpers/timeline-pagination";
+
+/** The first row that begins inside the viewport, i.e. what the reader sees at the top. */
+async function readReadingRow(page: import("@playwright/test").Page) {
+  const timeline = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
+  return timeline.evaluate((element) => {
+    if (!(element instanceof HTMLElement)) return null;
+    const viewportTop = element.getBoundingClientRect().top;
+    const rows = element.querySelectorAll<HTMLElement>("[data-history-row-id]");
+    for (const row of rows) {
+      const bounds = row.getBoundingClientRect();
+      const top = bounds.top - viewportTop;
+      if (top >= 0) {
+        return { id: row.dataset.historyRowId ?? "", top };
+      }
+    }
+    return null;
+  });
+}
 
 test.describe("Agent timeline pagination", () => {
   test("shows spoken words without voice instructions in history, live updates and after reload", async ({
@@ -219,6 +238,44 @@ test.describe("Agent timeline pagination", () => {
       await scrollTimelineUntilOlderHistoryIsReachable(page, agent.oldestPrompt);
 
       await expectTimelinePromptVisible(page, agent.oldestPrompt);
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
+  test("keeps the reading row in place when a restored timeline loads older history", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const agent = await seedLongMockAgentTimeline({ turns: 40 });
+    try {
+      await test.step("load a long timeline", async () => {
+        await openAgentTimeline(page, agent);
+        await scrollTimelineUntilOlderHistoryIsReachable(page, agent.oldestPrompt);
+      });
+      // Hold older pages before the reload so the restored connection is gated too.
+      const history = await holdOlderHistoryPages(page, agent);
+      // The restored replica only keeps the latest 50 rows, so its oldest turn is
+      // missing the prompt row and gets folded again once older pages arrive.
+      await test.step("restore from the replica cache", async () => {
+        await reloadAgentTimelineFromPersistedReplica(page, agent);
+      });
+
+      await test.step("reach the restored history start", async () => {
+        await userScrollsTimelineToHistoryStart(page);
+        await history.expectRequestedPages(1);
+      });
+      const readingRow = await readReadingRow(page);
+      const viewport = await rememberTimelineViewport(page);
+      expect(readingRow).not.toBeNull();
+
+      history.releasePage(1);
+      await expectTimelineViewportAnchoredAfterPrepend(page, viewport);
+      await waitForTimelineGeometryToSettle(page);
+
+      const after = await readReadingRow(page);
+      expect(after?.id).toBe(readingRow?.id);
+      expect(Math.abs((after?.top ?? 0) - (readingRow?.top ?? 0))).toBeLessThanOrEqual(2);
     } finally {
       await agent.cleanup();
     }

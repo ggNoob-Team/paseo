@@ -447,6 +447,7 @@ export const en = {
     },
     actions: {
       copyCode: "Copy code",
+      copyCommand: "Copy command",
       copyTurn: "Copy turn",
       copyMessage: "Copy message",
       forkMenu: "Fork chat from here",

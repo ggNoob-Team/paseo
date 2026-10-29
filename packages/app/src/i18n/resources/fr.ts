@@ -457,6 +457,7 @@ export const fr: TranslationResources = {
     },
     actions: {
       copyCode: "Copier le code",
+      copyCommand: "Copier la commande",
       copyTurn: "Copier l’échange",
       copyMessage: "Copier le message",
       forkMenu: "Forker la conversation à partir d’ici",

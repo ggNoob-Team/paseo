@@ -1,7 +1,11 @@
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import type { StreamItem, ToolCallItem } from "@/types/stream";
 import { describe, expect, it } from "vitest";
-import { groupTurnActivityBlocks, isShellToolCallItem } from "./turn-activity-blocks";
+import {
+  getShellCommandText,
+  groupTurnActivityBlocks,
+  isShellToolCallItem,
+} from "./turn-activity-blocks";
 
 function shellCall(id: string, command: string): ToolCallItem {
   const detail: ToolCallDetail = {
@@ -121,5 +125,32 @@ describe("groupTurnActivityBlocks", () => {
 
     expect(isShellToolCallItem(orchestratorCall)).toBe(true);
     expect(groupTurnActivityBlocks([orchestratorCall])[0]?.kind).toBe("shell_group");
+  });
+
+  it("exposes the exact command text for copying", () => {
+    expect(getShellCommandText(shellCall("1", "git status --short"))).toBe("git status --short");
+    const read = readCall("2");
+    if (read.kind === "tool_call") {
+      expect(getShellCommandText(read)).toBeNull();
+    }
+  });
+
+  it("reads the command from orchestrator arguments", () => {
+    const orchestratorCall: StreamItem = {
+      kind: "tool_call",
+      id: "tool-orchestrator",
+      timestamp: new Date(1_000),
+      payload: {
+        source: "orchestrator",
+        data: {
+          toolCallId: "orchestrator",
+          toolName: "bash",
+          arguments: { command: "ls -la" },
+          status: "completed",
+        },
+      },
+    };
+
+    expect(getShellCommandText(orchestratorCall)).toBe("ls -la");
   });
 });
