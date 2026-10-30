@@ -81,6 +81,7 @@ function TerminalPanel() {
   const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
   const { isWorkspaceFocused, isPaneFocused } = usePaneFocus();
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
+    projectId: w.projectId,
     workspaceDirectory: w.workspaceDirectory,
   }));
   const workspaceDirectory = workspaceFields?.workspaceDirectory || null;
@@ -107,6 +108,8 @@ function TerminalPanel() {
   return (
     <TerminalPane
       serverId={serverId}
+      workspaceId={workspaceId}
+      projectId={workspaceFields?.projectId ?? null}
       cwd={workspaceDirectory}
       terminalId={target.terminalId}
       isWorkspaceFocused={isWorkspaceFocused}

@@ -61,7 +61,10 @@ import { usePanelStore } from "@/stores/panel-store";
 import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";
 import { useSessionStore } from "@/stores/session-store";
 import { toXtermTheme } from "@/utils/to-xterm-theme";
+import { decodeUtf8 } from "@/utils/decode-utf8";
+import { concatByteChunks, sanitizeTerminalOutput } from "@/terminal/agent-prompt/terminal-output";
 import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";
+import { TerminalAgentPrompt } from "@/terminal/agent-prompt/terminal-agent-prompt";
 import { TerminalFloatingCopyAction, TerminalPasteAction } from "./terminal-copy-paste-actions";
 import {
   createTerminalResizeDebouncer,
@@ -90,6 +93,8 @@ import {
 
 interface TerminalPaneProps {
   serverId: string;
+  workspaceId: string;
+  projectId: string | null;
   cwd: string;
   terminalId: string;
   isWorkspaceFocused: boolean;
@@ -101,6 +106,10 @@ interface TerminalPaneProps {
 const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];
 const TERMINAL_RESIZE_DEBOUNCE_MS = 100;
 const TERMINAL_KEY_BAR_MAX_WIDTH = 880;
+const OPERATOR_OUTPUT_IDLE_MS = 1_200;
+const OPERATOR_OUTPUT_POLL_MS = 120;
+const OPERATOR_OUTPUT_TIMEOUT_MS = 60_000;
+const OPERATOR_MAX_CAPTURE_BYTES = 512 * 1024;
 
 const MODIFIER_LABELS = {
   ctrl: "Ctrl",
@@ -226,6 +235,8 @@ function KeyboardToggleButton({
 
 export function TerminalPane({
   serverId,
+  workspaceId,
+  projectId,
   cwd,
   terminalId,
   isWorkspaceFocused,
@@ -297,6 +308,11 @@ export function TerminalPane({
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
   useBlockMobilePanelOpenGestures(isMobile && isWorkspaceFocused && isPaneFocused && hasSelection);
   const emulatorRef = useRef<TerminalEmulatorHandle>(null);
+  const outputCaptureRef = useRef<{
+    chunks: Uint8Array[];
+    bytes: number;
+    lastOutputAt: number;
+  } | null>(null);
   const findRef = useRef<TerminalPaneFindHandle>(null);
   const handleFindRequest = useCallback(() => findRef.current?.open(), []);
   const handleFindResult = useCallback(
@@ -524,7 +540,51 @@ export function TerminalPane({
         return;
       }
       emulatorRef.current?.writeOutput(data);
+      const capture = outputCaptureRef.current;
+      if (!capture) {
+        return;
+      }
+      capture.lastOutputAt = Date.now();
+      if (capture.bytes < OPERATOR_MAX_CAPTURE_BYTES) {
+        const copy = data.slice();
+        capture.chunks.push(copy);
+        capture.bytes += copy.length;
+      }
     },
+  );
+
+  const runOperatorCommands = useCallback(
+    async (commands: string[]): Promise<string> => {
+      if (!client) {
+        throw new Error("Terminal is not connected");
+      }
+      const capture = {
+        chunks: [] as Uint8Array[],
+        bytes: 0,
+        lastOutputAt: Date.now(),
+      };
+      outputCaptureRef.current = capture;
+      try {
+        const enter = String.fromCharCode(13);
+        client.sendTerminalInput(terminalId, {
+          type: "input",
+          data: commands.join(enter) + enter,
+        });
+        const deadline = Date.now() + OPERATOR_OUTPUT_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, OPERATOR_OUTPUT_POLL_MS);
+          });
+          if (Date.now() - capture.lastOutputAt >= OPERATOR_OUTPUT_IDLE_MS) {
+            break;
+          }
+        }
+      } finally {
+        outputCaptureRef.current = null;
+      }
+      return sanitizeTerminalOutput(decodeUtf8(concatByteChunks(capture.chunks)));
+    },
+    [client, terminalId],
   );
 
   const handleStreamRestore = useStableEvent(
@@ -1131,6 +1191,14 @@ export function TerminalPane({
           </Text>
         </View>
       ) : null}
+
+      <TerminalAgentPrompt
+        projectId={projectId}
+        runCommands={runOperatorCommands}
+        serverId={serverId}
+        workspaceDirectory={cwd}
+        workspaceId={workspaceId}
+      />
 
       {showVirtualKeyBar ? (
         <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
