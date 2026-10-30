@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 
-import { resolveStructuredGenerationProviders } from "./structured-generation-providers.js";
+import {
+  resolveStructuredGenerationProviders,
+  selectFastestThinkingOptionId,
+} from "./structured-generation-providers.js";
 import type { ProviderSnapshotEntry } from "./agent-sdk-types.js";
 
 const READY = "ready" as const;
@@ -239,5 +242,79 @@ describe("resolveStructuredGenerationProviders", () => {
 
     expect(providers).toEqual([{ provider: "current-provider", model: "configured-model" }]);
     expect(snapshots.calls).toEqual([{ cwd: "/tmp/repo", wait: true }]);
+  });
+
+  test("tries the request selection first with its fastest thinking option", async () => {
+    const snapshots = new ProviderSnapshots([
+      {
+        provider: "opencode",
+        status: READY,
+        enabled: true,
+        models: [
+          {
+            provider: "opencode",
+            id: "opencode/claude-haiku-5-5",
+            label: "Claude Haiku 5.5",
+            isDefault: true,
+          },
+          {
+            provider: "opencode",
+            id: "opencode/deepseek-v4.1-flash",
+            label: "DeepSeek V4.1 Flash",
+            thinkingOptions: [
+              { id: "default", label: "Default", isDefault: true },
+              { id: "low", label: "Low" },
+              { id: "medium", label: "Medium" },
+              { id: "high", label: "High" },
+              { id: "max", label: "Max" },
+            ],
+            defaultThinkingOptionId: "default",
+          },
+        ],
+      },
+    ]);
+
+    const providers = await resolveStructuredGenerationProviders({
+      cwd: "/tmp/repo",
+      providerSnapshotManager: snapshots,
+      preferredSelection: {
+        provider: "opencode",
+        model: "opencode/deepseek-v4.1-flash",
+        thinkingOptionId: "high",
+      },
+      preferFastThinking: true,
+    });
+
+    expect(providers[0]).toEqual({
+      provider: "opencode",
+      model: "opencode/deepseek-v4.1-flash",
+      thinkingOptionId: "low",
+    });
+  });
+
+  test("selects the cheapest thinking option offered by a model", () => {
+    const base = { provider: "opencode", id: "test-model", label: "Test Model" };
+
+    expect(
+      selectFastestThinkingOptionId({
+        ...base,
+        thinkingOptions: [
+          { id: "default", label: "Default", isDefault: true },
+          { id: "none", label: "None" },
+          { id: "low", label: "Low" },
+        ],
+      }),
+    ).toBe("none");
+
+    expect(
+      selectFastestThinkingOptionId({
+        ...base,
+        thinkingOptions: [
+          { id: "default", label: "Default", isDefault: true },
+          { id: "high", label: "High" },
+          { id: "max", label: "Max" },
+        ],
+      }),
+    ).toBe("default");
   });
 });

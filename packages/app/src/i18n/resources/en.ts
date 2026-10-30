@@ -395,6 +395,85 @@ export const en = {
     textHint: "Editable: delete anything you don't want to keep.",
     nothingSelected: "Choose at least one block.",
   },
+  quickInput: {
+    title: "Quick input",
+    placeholder: "Ask anything, or type to find a session",
+    loading: "Loading sessions...",
+    idleHint: "Enter a message to route by project, title, or recent context. Press Esc to skip.",
+    searchHint:
+      "Enter opens the highlighted session and keeps your input as a draft. Use ↑/↓ to choose.",
+    slowRouteLoading: "Local matches are uncertain. Asking the model for a second opinion…",
+    slowRouteFailed: "The model check is unavailable. Local matches are still available.",
+    slowRouteErrors: {
+      auth: "{{provider}} API key is invalid or expired. Update it in Settings → Providers and try again.",
+      timeout:
+        "The model check timed out. Local matches are still available; choose a session or retry.",
+      unavailable: "{{provider}} is currently unavailable. Local matches are still available.",
+      no_providers: "No model is available to check this match. Local matches are still available.",
+      invalid_response:
+        "The model returned an unreadable result. Local matches are still available.",
+      unknown: "The model check is unavailable. Local matches are still available.",
+    },
+    slowRouteProviderFallback: "The selected model",
+    modelRanked: "Model checked",
+    slowRouteProgress: {
+      title: "Model is deciding",
+      elapsed: "{{seconds}}s",
+      preparing: "Prepared {{count}} candidate sessions",
+      thinking: "{{model}} is comparing project, title, and recent context",
+      validating: "Result received. Validating candidates and confidence",
+      fallback: "That model is unavailable. Trying a fallback model",
+      choosingModel: "Choosing a model",
+      fastThinking: "Routing uses the lowest thinking level for the selected model.",
+      steps: {
+        preparing: "Candidates",
+        thinking: "Compare",
+        validating: "Rank",
+      },
+    },
+    sections: {
+      active: "Continue",
+      recent: "Recently used",
+      other: "Other sessions",
+    },
+    reasons: {
+      title: "Title",
+      project: "Project",
+      recent: "Recent context",
+      keyword: "Keyword",
+    },
+    status: {
+      running: "Running",
+      attention: "Needs attention",
+    },
+    actions: {
+      send: "Send",
+      sendTo: "Send to {{title}}",
+      open: "Open session",
+      skip: "Skip",
+      viewAll: "View all {{count}}",
+      showLess: "Show less",
+      newSession: "New session",
+      browseAll: "Browse all sessions",
+    },
+    fallback: {
+      lowTitle: "Not confident about this match",
+      lowDescription:
+        "Open or choose a session first. You can still send directly to the current selection once you are sure.",
+      noneTitle: "No session matches",
+      noneDescription:
+        "Start a new session, browse all sessions, or explicitly send to the current selection.",
+    },
+    empty: {
+      title: "No open sessions",
+      description: "Start a new session or browse all sessions on your hosts.",
+    },
+    errors: {
+      sendFailed: "Could not send. Your message is still here.",
+      hostOffline: "This host is offline.",
+      sessionGone: "That session is no longer available. Choose another one.",
+    },
+  },
   sessions: {
     title: "History",
     empty: "No sessions yet",
@@ -2522,6 +2601,12 @@ export const en = {
     general: {
       title: "General",
       sending: "Sending",
+      quickInput: {
+        title: "Startup",
+        label: "Open quick input on launch",
+        description:
+          "Show the smart session router once per app launch. Turn off to restore the last workspace directly.",
+      },
       browserData: {
         title: "Browser data",
         siteData: "Cookies and site data",

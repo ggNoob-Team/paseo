@@ -1,11 +1,20 @@
 import { router, usePathname } from "expo-router";
-import { CalendarClock, Clock3, History, NotebookPen, Plus, Search } from "lucide-react-native";
+import {
+  CalendarClock,
+  Clock3,
+  History,
+  NotebookPen,
+  Plus,
+  Search,
+  Zap,
+} from "lucide-react-native";
 import { memo, useCallback, useMemo, useRef, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { useHostRouteServerId } from "@/navigation/host-route-context";
 import { PluginSidebarItem } from "@/plugins/sidebar-items";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
@@ -16,11 +25,15 @@ import {
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import {
+  useActiveWorkspaceSelection,
+  useLastWorkspaceSelection,
+} from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import {
   buildNewWorkspaceRoute,
   buildNotesRoute,
+  buildHostQuickInputRoute,
   buildRecentRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
@@ -228,6 +241,34 @@ function SidebarNotesRow({ onBeforeNavigate }: SidebarNavRowProps) {
   );
 }
 
+function SidebarQuickInputRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const routeServerId = useHostRouteServerId();
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const lastWorkspaceSelection = useLastWorkspaceSelection();
+  const serverId =
+    routeServerId ?? activeWorkspaceSelection?.serverId ?? lastWorkspaceSelection?.serverId ?? null;
+  const handlePress = useCallback(() => {
+    if (!serverId) {
+      return;
+    }
+    onBeforeNavigate?.();
+    router.push(buildHostQuickInputRoute(serverId));
+  }, [onBeforeNavigate, serverId]);
+
+  return (
+    <SidebarHeaderRow
+      icon={Zap}
+      label={t(builtinSidebarNavLabelKey("quick-input"))}
+      onPress={handlePress}
+      isActive={pathname.includes("/quick-input")}
+      testID="sidebar-quick-input"
+      variant="compact"
+    />
+  );
+}
+
 const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps>> = {
   "new-workspace": SidebarNewWorkspaceRow,
   history: SidebarHistoryRow,
@@ -235,6 +276,7 @@ const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps
   schedules: SidebarSchedulesRow,
   recent: SidebarRecentRow,
   notes: SidebarNotesRow,
+  "quick-input": SidebarQuickInputRow,
 };
 
 const styles = StyleSheet.create({

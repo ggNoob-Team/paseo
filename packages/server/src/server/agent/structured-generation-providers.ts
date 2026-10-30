@@ -38,6 +38,14 @@ export interface ResolveStructuredGenerationProvidersOptions {
     model?: string | null;
     thinkingOptionId?: string | null;
   };
+  /** A request-specific model that should be tried before configured defaults. */
+  preferredSelection?: {
+    provider?: AgentProvider | null;
+    model?: string | null;
+    thinkingOptionId?: string | null;
+  };
+  /** Use the least expensive thinking option for every resolved candidate. */
+  preferFastThinking?: boolean;
 }
 
 /**
@@ -57,12 +65,24 @@ export async function resolveStructuredGenerationProviders(
   const entriesByProvider = new Map(enabledEntries.map((entry) => [entry.provider, entry]));
   const providers: StructuredGenerationProvider[] = [];
 
+  const preferFastThinking = options.preferFastThinking === true;
+  const preferredSelection = resolveCurrentSelection(
+    options.preferredSelection,
+    modelEntries,
+    entriesByProvider,
+    preferFastThinking,
+  );
+  if (preferredSelection) {
+    providers.push(preferredSelection);
+  }
+
   if (configuredProviders.length > 0) {
     for (const configured of configuredProviders) {
       const resolvedConfigured = resolveConfiguredCandidate(
         configured,
         modelEntries,
         entriesByProvider,
+        preferFastThinking,
       );
       if (resolvedConfigured) {
         providers.push(resolvedConfigured);
@@ -72,7 +92,7 @@ export async function resolveStructuredGenerationProviders(
   }
 
   for (const identifier of DEFAULT_STRUCTURED_GENERATION_PROVIDERS) {
-    const resolved = resolveByModelSubstring(modelEntries, identifier);
+    const resolved = resolveByModelSubstring(modelEntries, identifier, preferFastThinking);
     if (resolved) {
       providers.push(resolved);
     }
@@ -82,6 +102,7 @@ export async function resolveStructuredGenerationProviders(
     options.currentSelection,
     modelEntries,
     entriesByProvider,
+    preferFastThinking,
   );
   if (currentSelection) {
     providers.push(currentSelection);
@@ -94,6 +115,7 @@ function resolveCurrentSelection(
   selection: ResolveStructuredGenerationProvidersOptions["currentSelection"],
   readyEntries: readonly ProviderSnapshotEntry[],
   entriesByProvider: ReadonlyMap<AgentProvider, ProviderSnapshotEntry>,
+  preferFastThinking: boolean,
 ): StructuredGenerationProvider | null {
   if (!selection) {
     return null;
@@ -112,6 +134,7 @@ function resolveCurrentSelection(
     },
     readyEntries,
     entriesByProvider,
+    preferFastThinking,
   );
   if (normalized) {
     return normalized;
@@ -131,7 +154,11 @@ function resolveCurrentSelection(
     return { provider };
   }
 
-  const thinkingOptionId = resolveThinkingOptionId(model, selection.thinkingOptionId);
+  const thinkingOptionId = resolveThinkingOptionId(
+    model,
+    selection.thinkingOptionId,
+    preferFastThinking,
+  );
   return {
     provider,
     model: model.id,
@@ -143,6 +170,7 @@ function resolveConfiguredCandidate(
   candidate: { provider: string; model?: string; thinkingOptionId?: string },
   readyEntries: readonly ProviderSnapshotEntry[],
   entriesByProvider: ReadonlyMap<AgentProvider, ProviderSnapshotEntry>,
+  preferFastThinking: boolean,
 ): StructuredGenerationProvider | null {
   const provider = candidate.provider.trim();
   if (!provider) {
@@ -153,15 +181,29 @@ function resolveConfiguredCandidate(
   const configuredModel = candidate.model?.trim();
   if (topLevelEntry) {
     if (configuredModel) {
+      const configuredDefinition = (topLevelEntry.models ?? []).find(
+        (model) => model.id === configuredModel,
+      );
+      const thinkingOptionId = configuredDefinition
+        ? resolveThinkingOptionId(
+            configuredDefinition,
+            candidate.thinkingOptionId,
+            preferFastThinking,
+          )
+        : candidate.thinkingOptionId;
       return {
         provider,
         model: configuredModel,
-        ...(candidate.thinkingOptionId ? { thinkingOptionId: candidate.thinkingOptionId } : {}),
+        ...(thinkingOptionId ? { thinkingOptionId } : {}),
       };
     }
 
     const model = selectDefaultModel(topLevelEntry.models ?? []);
-    const thinkingOptionId = resolveThinkingOptionId(model, candidate.thinkingOptionId);
+    const thinkingOptionId = resolveThinkingOptionId(
+      model,
+      candidate.thinkingOptionId,
+      preferFastThinking,
+    );
     return {
       provider,
       ...(model ? { model: model.id } : {}),
@@ -185,7 +227,11 @@ function resolveConfiguredCandidate(
     };
   }
 
-  const thinkingOptionId = resolveThinkingOptionId(nestedMatch.model, candidate.thinkingOptionId);
+  const thinkingOptionId = resolveThinkingOptionId(
+    nestedMatch.model,
+    candidate.thinkingOptionId,
+    preferFastThinking,
+  );
   return {
     provider: nestedMatch.provider,
     model: nestedMatch.model.id,
@@ -224,6 +270,7 @@ function resolveNestedProviderModel(
 function resolveByModelSubstring(
   entries: readonly ProviderSnapshotEntry[],
   identifier: StructuredGenerationProviderIdentifier,
+  preferFastThinking: boolean,
 ): StructuredGenerationProvider | null {
   const needle = identifier.modelSubstring.trim().toLowerCase();
   if (!needle) {
@@ -236,7 +283,11 @@ function resolveByModelSubstring(
       if (!haystacks.some((value) => value.includes(needle))) {
         continue;
       }
-      const thinkingOptionId = resolveThinkingOptionId(model, identifier.thinkingOptionId);
+      const thinkingOptionId = resolveThinkingOptionId(
+        model,
+        identifier.thinkingOptionId,
+        preferFastThinking,
+      );
       return {
         provider: entry.provider,
         model: model.id,
@@ -266,17 +317,74 @@ function selectDefaultModel(models: readonly AgentModelDefinition[]): AgentModel
 function resolveThinkingOptionId(
   model: AgentModelDefinition | null | undefined,
   preferredThinkingOptionId: string | null | undefined,
+  preferFastThinking: boolean,
 ): string | undefined {
   if (!model) {
     return undefined;
   }
+  if (preferFastThinking) {
+    return selectFastestThinkingOptionId(model);
+  }
+  const thinkingOptions = model.thinkingOptions ?? [];
   if (
     preferredThinkingOptionId &&
-    model.thinkingOptions?.some((option) => option.id === preferredThinkingOptionId)
+    (thinkingOptions.length === 0 ||
+      thinkingOptions.some((option) => option.id === preferredThinkingOptionId))
   ) {
     return preferredThinkingOptionId;
   }
   return model.defaultThinkingOptionId;
+}
+
+const FAST_THINKING_TOKENS = [
+  "none",
+  "off",
+  "disabled",
+  "关闭",
+  "无",
+  "なし",
+  "minimal",
+  "minimum",
+  "min",
+  "最低",
+  "最小",
+  "low",
+  "light",
+  "fast",
+  "quick",
+  "低",
+  "快速",
+] as const;
+
+/**
+ * Return the cheapest thinking option a model exposes. Provider option order is
+ * usually low-to-high, so the first option is the final fallback.
+ */
+export function selectFastestThinkingOptionId(
+  model: AgentModelDefinition | null | undefined,
+): string | undefined {
+  const options = model?.thinkingOptions;
+  if (!options || options.length === 0) {
+    return undefined;
+  }
+
+  const normalize = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "");
+  for (const token of FAST_THINKING_TOKENS) {
+    const match = options.find((option) => {
+      const id = normalize(option.id);
+      const label = normalize(option.label);
+      return id === token || label === token || id.startsWith(token) || label.startsWith(token);
+    });
+    if (match) {
+      return match.id;
+    }
+  }
+
+  return options[0]?.id;
 }
 
 function dedupeProviders(

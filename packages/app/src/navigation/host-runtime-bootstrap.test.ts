@@ -394,6 +394,61 @@ describe("resolveHostIndexRoute", () => {
       }),
     ).toEqual("/open-project");
   });
+
+  it("opens quick input on the first cold-launch restore when it is enabled", () => {
+    expect(
+      resolveHostIndexRoute({
+        serverId: "server-saved",
+        workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
+        workspaceSelectionStatus: "exists",
+        quickInput: { enabled: true, launchConsumed: false, hasWorkspaces: true },
+      }),
+    ).toEqual("/h/server-saved/quick-input");
+  });
+
+  it("restores the workspace when quick input is disabled", () => {
+    expect(
+      resolveHostIndexRoute({
+        serverId: "server-saved",
+        workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
+        workspaceSelectionStatus: "exists",
+        quickInput: { enabled: false, launchConsumed: false, hasWorkspaces: true },
+      }),
+    ).toEqual("/h/server-saved/workspace/workspace-a");
+  });
+
+  it("restores the workspace once the quick input launch was consumed", () => {
+    expect(
+      resolveHostIndexRoute({
+        serverId: "server-saved",
+        workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
+        workspaceSelectionStatus: "exists",
+        quickInput: { enabled: true, launchConsumed: true, hasWorkspaces: true },
+      }),
+    ).toEqual("/h/server-saved/workspace/workspace-a");
+  });
+
+  it("does not open quick input when the host has no workspaces", () => {
+    expect(
+      resolveHostIndexRoute({
+        serverId: "server-saved",
+        workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
+        workspaceSelectionStatus: "unknown",
+        quickInput: { enabled: true, launchConsumed: false, hasWorkspaces: false },
+      }),
+    ).toEqual("/h/server-saved/workspace/workspace-a");
+  });
+
+  it("keeps project selection when quick input is enabled but nothing was restored", () => {
+    expect(
+      resolveHostIndexRoute({
+        serverId: "server-saved",
+        workspaceSelection: null,
+        workspaceSelectionStatus: "unknown",
+        quickInput: { enabled: true, launchConsumed: false, hasWorkspaces: false },
+      }),
+    ).toEqual("/open-project");
+  });
 });
 
 describe("host runtime app lifecycle", () => {

@@ -8,6 +8,7 @@ import type {
 import type { Href } from "expo-router";
 import {
   buildHostRootRoute,
+  buildHostQuickInputRoute,
   buildHostWorkspaceRoute,
   buildOpenProjectRoute,
 } from "@/utils/host-routes";
@@ -156,11 +157,23 @@ export function resolveHostIndexRoute(input: {
   serverId: string;
   workspaceSelection: ActiveWorkspaceSelection | null;
   workspaceSelectionStatus: WorkspaceSelectionStatus;
+  quickInput?: {
+    enabled: boolean;
+    launchConsumed: boolean;
+    hasWorkspaces: boolean;
+  };
 }): Href {
   if (
     input.workspaceSelection?.serverId === input.serverId &&
     shouldRestoreWorkspaceSelection(input)
   ) {
+    if (
+      input.quickInput?.enabled &&
+      !input.quickInput.launchConsumed &&
+      input.quickInput.hasWorkspaces
+    ) {
+      return buildHostQuickInputRoute(input.serverId);
+    }
     return buildHostWorkspaceRoute(input.serverId, input.workspaceSelection.workspaceId);
   }
   return buildOpenProjectRoute();

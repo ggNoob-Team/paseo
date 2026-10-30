@@ -400,6 +400,85 @@ export const ko: TranslationResources = {
     textHint: "편집할 수 있습니다. 필요 없는 부분은 지우세요.",
     nothingSelected: "최소 하나를 선택하세요.",
   },
+  quickInput: {
+    title: "빠른 입력",
+    placeholder: "무엇이든 입력하거나 세션을 검색하세요",
+    loading: "세션 불러오는 중…",
+    idleHint: "메시지를 입력하면 프로젝트, 제목 또는 최근 맥락으로 라우팅합니다. Esc로 건너뜁니다.",
+    searchHint: "Enter로 강조된 세션을 열고 입력을 초안으로 저장합니다. ↑/↓로 선택하세요.",
+    slowRouteLoading: "로컬 일치의 확신도가 낮아 모델에 재판단을 요청하고 있습니다…",
+    slowRouteFailed: "모델 확인을 사용할 수 없습니다. 로컬 일치 결과는 계속 사용할 수 있습니다.",
+    slowRouteErrors: {
+      auth: "{{provider}} API 키가 유효하지 않거나 만료되었습니다. 설정 → Providers에서 업데이트한 후 다시 시도하세요.",
+      timeout:
+        "모델 확인 시간이 초과되었습니다. 로컬 일치는 계속 사용할 수 있습니다. 세션을 선택하거나 다시 시도하세요.",
+      unavailable:
+        "{{provider}}을(를) 현재 사용할 수 없습니다. 로컬 일치는 계속 사용할 수 있습니다.",
+      no_providers: "이 일치를 확인할 모델이 없습니다. 로컬 일치는 계속 사용할 수 있습니다.",
+      invalid_response:
+        "모델이 읽을 수 없는 결과를 반환했습니다. 로컬 일치는 계속 사용할 수 있습니다.",
+      unknown: "모델 확인을 사용할 수 없습니다. 로컬 일치는 계속 사용할 수 있습니다.",
+    },
+    slowRouteProviderFallback: "선택한 모델",
+    modelRanked: "모델 확인됨",
+    slowRouteProgress: {
+      title: "모델이 판단 중",
+      elapsed: "{{seconds}}초",
+      preparing: "{{count}}개 후보 세션을 정리했습니다",
+      thinking: "{{model}} 모델이 프로젝트, 제목, 최근 맥락을 비교 중입니다",
+      validating: "결과를 받았습니다. 후보와 신뢰도를 검증 중입니다",
+      fallback: "현재 모델을 사용할 수 없어 대체 모델을 시도 중입니다",
+      choosingModel: "모델 선택 중",
+      fastThinking: "라우팅은 선택한 모델의 가장 낮은 사고 수준을 사용합니다.",
+      steps: {
+        preparing: "후보",
+        thinking: "비교",
+        validating: "정렬",
+      },
+    },
+    sections: {
+      active: "계속하기",
+      recent: "최근 사용",
+      other: "기타 세션",
+    },
+    reasons: {
+      title: "제목",
+      project: "프로젝트",
+      recent: "최근 맥락",
+      keyword: "키워드",
+    },
+    status: {
+      running: "실행 중",
+      attention: "확인 필요",
+    },
+    actions: {
+      send: "보내기",
+      sendTo: "{{title}}에 보내기",
+      open: "세션 열기",
+      skip: "건너뛰기",
+      viewAll: "전체 {{count}}개 보기",
+      showLess: "접기",
+      newSession: "새 세션",
+      browseAll: "모든 세션 둘러보기",
+    },
+    fallback: {
+      lowTitle: "이 일치 항목이 확실하지 않습니다",
+      lowDescription:
+        "먼저 세션을 열거나 선택하세요. 확실해지면 현재 선택으로 직접 보낼 수도 있습니다.",
+      noneTitle: "일치하는 세션이 없습니다",
+      noneDescription:
+        "새 세션을 시작하거나 모든 세션을 둘러보거나 현재 선택으로 명시적으로 보내세요.",
+    },
+    empty: {
+      title: "열린 세션이 없습니다",
+      description: "새 세션을 시작하거나 호스트의 모든 세션을 둘러보세요.",
+    },
+    errors: {
+      sendFailed: "보내지 못했습니다. 입력 내용은 여기에 남아 있습니다.",
+      hostOffline: "이 호스트가 오프라인입니다.",
+      sessionGone: "해당 세션을 더 이상 사용할 수 없습니다. 다른 세션을 선택하세요.",
+    },
+  },
   sessions: {
     title: "기록",
     empty: "아직 세션이 없습니다",
@@ -2408,6 +2487,12 @@ export const ko: TranslationResources = {
     general: {
       title: "일반",
       sending: "전송",
+      quickInput: {
+        title: "시작",
+        label: "실행 시 빠른 입력 열기",
+        description:
+          "앱을 실행할 때마다 스마트 세션 라우터를 한 번 표시합니다. 끄면 마지막 작업 공간을 바로 복원합니다.",
+      },
       browserData: {
         title: "브라우저 데이터",
         siteData: "쿠키 및 사이트 데이터",

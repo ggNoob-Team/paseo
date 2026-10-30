@@ -6,6 +6,7 @@ import {
   StructuredAgentFallbackError,
   StructuredAgentResponseError,
   type AgentCaller,
+  type StructuredGenerationProgress,
 } from "./agent-response-loop.js";
 import type { AgentManager } from "./agent-manager.js";
 
@@ -217,6 +218,38 @@ describe("generateStructuredAgentResponseWithFallback", () => {
     expect(manager.checkedProviders).toEqual(["claude", "codex"]);
   });
 
+  it("reports provider availability and attempt progress", async () => {
+    const progress: StructuredGenerationProgress[] = [];
+    const manager = createManager([
+      { provider: "claude", available: false, error: "missing auth" },
+      { provider: "codex", available: true, error: null },
+    ]);
+
+    await generateStructuredAgentResponseWithFallback({
+      manager,
+      cwd: "/tmp/project",
+      prompt: "Return JSON",
+      schema,
+      providers: [
+        { provider: "claude", model: "haiku" },
+        { provider: "codex", model: "gpt-5.4-mini" },
+      ],
+      onProgress: (event) => progress.push(event),
+      runner: async () => ({ summary: "ok" }),
+    });
+
+    expect(progress).toEqual([
+      {
+        type: "unavailable",
+        provider: "claude",
+        model: "haiku",
+        error: "missing auth",
+      },
+      { type: "attempt", provider: "codex", model: "gpt-5.4-mini" },
+      { type: "succeeded", provider: "codex", model: "gpt-5.4-mini" },
+    ]);
+  });
+
   it("falls back when an available provider fails", async () => {
     const calls: Array<{ provider: string; model?: string }> = [];
     const manager = createManager([
@@ -328,5 +361,44 @@ describe("generateStructuredAgentResponseWithFallback", () => {
         },
       }),
     ).rejects.toBeInstanceOf(StructuredAgentFallbackError);
+  });
+
+  it("does not retry another model from a provider after an authentication failure", async () => {
+    const calls: Array<{ provider: string; model?: string }> = [];
+    const manager = createManager([
+      { provider: "opencode", available: true, error: null },
+      { provider: "claude", available: true, error: null },
+    ]);
+
+    const result = await generateStructuredAgentResponseWithFallback({
+      manager,
+      cwd: "/tmp/project",
+      prompt: "Return JSON",
+      schema,
+      providers: [
+        { provider: "opencode", model: "opencode/deepseek-v4.1-flash" },
+        { provider: "opencode", model: "opencode/claude-haiku-5-5" },
+        { provider: "claude", model: "claude-haiku-2026" },
+      ],
+      runner: async (options) => {
+        calls.push({
+          provider: options.agentConfig.provider,
+          model: options.agentConfig.model ?? undefined,
+        });
+        if (options.agentConfig.provider === "opencode") {
+          throw new Error(
+            '{"name":"APIError","data":{"message":"This API key has expired.","statusCode":401}}',
+          );
+        }
+        return { summary: "ok" };
+      },
+    });
+
+    expect(result).toEqual({ summary: "ok" });
+    expect(calls).toEqual([
+      { provider: "opencode", model: "opencode/deepseek-v4.1-flash" },
+      { provider: "claude", model: "claude-haiku-2026" },
+    ]);
+    expect(manager.checkedProviders).toEqual(["opencode", "claude"]);
   });
 });

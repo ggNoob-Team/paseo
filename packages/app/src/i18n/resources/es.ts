@@ -405,6 +405,92 @@ export const es: TranslationResources = {
     textHint: "Editable: borra lo que no quieras conservar.",
     nothingSelected: "Elige al menos un bloque.",
   },
+  quickInput: {
+    title: "Entrada rápida",
+    placeholder: "Escribe cualquier cosa o busca una sesión",
+    loading: "Cargando sesiones...",
+    idleHint:
+      "Escribe un mensaje para dirigirlo por proyecto, título o contexto reciente. Pulsa Esc para omitir.",
+    searchHint:
+      "Intro abre la sesión resaltada y guarda tu texto como borrador. Usa ↑/↓ para elegir.",
+    slowRouteLoading:
+      "Las coincidencias locales son inciertas. Pidiendo una segunda opinión al modelo…",
+    slowRouteFailed:
+      "La comprobación del modelo no está disponible. Las coincidencias locales siguen disponibles.",
+    slowRouteErrors: {
+      auth: "La clave API de {{provider}} no es válida o ha caducado. Actualízala en Ajustes → Proveedores y vuelve a intentarlo.",
+      timeout:
+        "La comprobación del modelo agotó el tiempo. Las coincidencias locales siguen disponibles; elige una sesión o reintenta.",
+      unavailable:
+        "{{provider}} no está disponible ahora. Las coincidencias locales siguen disponibles.",
+      no_providers:
+        "No hay ningún modelo disponible para comprobar esta coincidencia. Las coincidencias locales siguen disponibles.",
+      invalid_response:
+        "El modelo devolvió un resultado ilegible. Las coincidencias locales siguen disponibles.",
+      unknown:
+        "La comprobación del modelo no está disponible. Las coincidencias locales siguen disponibles.",
+    },
+    slowRouteProviderFallback: "El modelo seleccionado",
+    modelRanked: "Comprobado por el modelo",
+    slowRouteProgress: {
+      title: "El modelo está decidiendo",
+      elapsed: "{{seconds}} s",
+      preparing: "{{count}} sesiones candidatas preparadas",
+      thinking: "{{model}} está comparando proyecto, título y contexto reciente",
+      validating: "Resultado recibido. Validando candidatos y confianza",
+      fallback: "Ese modelo no está disponible. Probando un modelo alternativo",
+      choosingModel: "Eligiendo un modelo",
+      fastThinking:
+        "El enrutamiento usa el nivel de razonamiento más bajo del modelo seleccionado.",
+      steps: {
+        preparing: "Candidatos",
+        thinking: "Comparar",
+        validating: "Ordenar",
+      },
+    },
+    sections: {
+      active: "Continuar",
+      recent: "Usadas recientemente",
+      other: "Otras sesiones",
+    },
+    reasons: {
+      title: "Título",
+      project: "Proyecto",
+      recent: "Contexto reciente",
+      keyword: "Palabra clave",
+    },
+    status: {
+      running: "En ejecución",
+      attention: "Requiere atención",
+    },
+    actions: {
+      send: "Enviar",
+      sendTo: "Enviar a {{title}}",
+      open: "Abrir sesión",
+      skip: "Omitir",
+      viewAll: "Ver todas ({{count}})",
+      showLess: "Mostrar menos",
+      newSession: "Nueva sesión",
+      browseAll: "Explorar todas las sesiones",
+    },
+    fallback: {
+      lowTitle: "No estoy seguro de esta coincidencia",
+      lowDescription:
+        "Abre o elige primero una sesión. Aún puedes enviar directamente a la selección actual cuando estés seguro.",
+      noneTitle: "Ninguna sesión coincide",
+      noneDescription:
+        "Inicia una nueva sesión, explora todas las sesiones o envía explícitamente a la selección actual.",
+    },
+    empty: {
+      title: "No hay sesiones abiertas",
+      description: "Inicia una nueva sesión o explora todas las sesiones de tus hosts.",
+    },
+    errors: {
+      sendFailed: "No se pudo enviar. Tu mensaje sigue aquí.",
+      hostOffline: "Este host está desconectado.",
+      sessionGone: "Esa sesión ya no está disponible. Elige otra.",
+    },
+  },
   sessions: {
     title: "Historial",
     empty: "Aún no hay sesiones",
@@ -2447,6 +2533,12 @@ export const es: TranslationResources = {
     general: {
       title: "General",
       sending: "Envío",
+      quickInput: {
+        title: "Inicio",
+        label: "Abrir entrada rápida al iniciar",
+        description:
+          "Muestra el enrutador inteligente una vez por inicio. Desactívalo para restaurar el último espacio de trabajo directamente.",
+      },
       browserData: {
         title: "Datos del navegador",
         siteData: "Cookies y datos de sitios",

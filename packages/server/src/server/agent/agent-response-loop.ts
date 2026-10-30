@@ -30,6 +30,12 @@ export interface StructuredGenerationProvider {
   thinkingOptionId?: string;
 }
 
+export type StructuredGenerationProgress =
+  | { type: "attempt"; provider: AgentProvider; model: string | null }
+  | { type: "unavailable"; provider: AgentProvider; model: string | null; error: string | null }
+  | { type: "failed"; provider: AgentProvider; model: string | null; error: string }
+  | { type: "succeeded"; provider: AgentProvider; model: string | null };
+
 export interface StructuredGenerationAttempt {
   provider: AgentProvider;
   model: string | null;
@@ -94,6 +100,7 @@ export interface StructuredAgentGenerationWithFallbackOptions<T> {
   maxRetries?: number;
   schemaName?: string;
   logger?: StructuredGenerationLogger;
+  onProgress?: (progress: StructuredGenerationProgress) => void;
   runner?: <TResult>(options: StructuredAgentGenerationOptions<TResult>) => Promise<TResult>;
 }
 
@@ -395,6 +402,14 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+const AUTHENTICATION_FAILURE_PATTERN =
+  /api[_ -]?key[^\n]*(expired|invalid|revoked)|authentication_error|authentication failed|invalid_api_key|incorrect api key|unauthorized|"statuscode"\s*:\s*401|status\s*[:=]\s*401/i;
+
+export function isStructuredGenerationAuthenticationError(error: unknown): boolean {
+  return AUTHENTICATION_FAILURE_PATTERN.test(errorMessage(error));
+}
+
+// eslint-disable-next-line complexity
 export async function generateStructuredAgentResponseWithFallback<T>(
   options: StructuredAgentGenerationWithFallbackOptions<T>,
 ): Promise<T> {
@@ -409,6 +424,7 @@ export async function generateStructuredAgentResponseWithFallback<T>(
     maxRetries,
     schemaName,
     logger,
+    onProgress,
     runner,
   } = options;
 
@@ -420,11 +436,34 @@ export async function generateStructuredAgentResponseWithFallback<T>(
     runner ??
     ((input: StructuredAgentGenerationOptions<T>) => generateStructuredAgentResponse<T>(input));
   const attempts: StructuredGenerationAttempt[] = [];
+  const authenticationFailedProviders = new Set<AgentProvider>();
 
   for (const candidate of providers) {
+    if (authenticationFailedProviders.has(candidate.provider)) {
+      onProgress?.({
+        type: "unavailable",
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+        error: "authentication failed for an earlier model",
+      });
+      attempts.push({
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+        available: false,
+        error: "authentication failed for an earlier model",
+      });
+      continue;
+    }
+
     const availabilityEntry = await manager.getProviderAvailability(candidate.provider);
     if (!availabilityEntry.available) {
       const reason = availabilityEntry.error ?? "unavailable";
+      onProgress?.({
+        type: "unavailable",
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+        error: availabilityEntry.error ?? null,
+      });
       attempts.push({
         provider: candidate.provider,
         model: candidate.model ?? null,
@@ -439,6 +478,11 @@ export async function generateStructuredAgentResponseWithFallback<T>(
     }
 
     try {
+      onProgress?.({
+        type: "attempt",
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+      });
       const result = await runStructured({
         manager,
         prompt,
@@ -465,14 +509,28 @@ export async function generateStructuredAgentResponseWithFallback<T>(
           "Structured generation: succeeded after fallback",
         );
       }
+      onProgress?.({
+        type: "succeeded",
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+      });
       return result;
     } catch (error) {
+      onProgress?.({
+        type: "failed",
+        provider: candidate.provider,
+        model: candidate.model ?? null,
+        error: errorMessage(error),
+      });
       attempts.push({
         provider: candidate.provider,
         model: candidate.model ?? null,
         available: true,
         error: errorMessage(error),
       });
+      if (isStructuredGenerationAuthenticationError(error)) {
+        authenticationFailedProviders.add(candidate.provider);
+      }
       logger?.warn(
         { err: error, provider: candidate.provider, model: candidate.model, schemaName },
         "Structured generation: provider failed",

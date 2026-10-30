@@ -405,6 +405,91 @@ export const fr: TranslationResources = {
     textHint: "Modifiable : supprimez ce que vous ne voulez pas garder.",
     nothingSelected: "Choisissez au moins un bloc.",
   },
+  quickInput: {
+    title: "Saisie rapide",
+    placeholder: "Demandez n'importe quoi ou recherchez une session",
+    loading: "Chargement des sessions…",
+    idleHint:
+      "Saisissez un message pour le router par projet, titre ou contexte récent. Appuyez sur Échap pour passer.",
+    searchHint:
+      "Entrée ouvre la session surlignée et conserve votre texte comme brouillon. Utilisez ↑/↓ pour choisir.",
+    slowRouteLoading:
+      "Les correspondances locales sont incertaines. Demande d’un second avis au modèle…",
+    slowRouteFailed:
+      "La vérification du modèle est indisponible. Les correspondances locales restent disponibles.",
+    slowRouteErrors: {
+      auth: "La clé API de {{provider}} est invalide ou expirée. Mettez-la à jour dans Réglages → Fournisseurs, puis réessayez.",
+      timeout:
+        "La vérification du modèle a expiré. Les correspondances locales restent disponibles ; choisissez une session ou réessayez.",
+      unavailable:
+        "{{provider}} est indisponible pour le moment. Les correspondances locales restent disponibles.",
+      no_providers:
+        "Aucun modèle n'est disponible pour vérifier cette correspondance. Les correspondances locales restent disponibles.",
+      invalid_response:
+        "Le modèle a renvoyé un résultat illisible. Les correspondances locales restent disponibles.",
+      unknown:
+        "La vérification du modèle est indisponible. Les correspondances locales restent disponibles.",
+    },
+    slowRouteProviderFallback: "Le modèle sélectionné",
+    modelRanked: "Vérifié par le modèle",
+    slowRouteProgress: {
+      title: "Le modèle décide",
+      elapsed: "{{seconds}} s",
+      preparing: "{{count}} sessions candidates préparées",
+      thinking: "{{model}} compare le projet, le titre et le contexte récent",
+      validating: "Résultat reçu. Validation des candidats et de la confiance",
+      fallback: "Ce modèle est indisponible. Essai d’un modèle de secours",
+      choosingModel: "Choix du modèle",
+      fastThinking: "Le routage utilise le niveau de réflexion le plus bas du modèle sélectionné.",
+      steps: {
+        preparing: "Candidats",
+        thinking: "Comparer",
+        validating: "Trier",
+      },
+    },
+    sections: {
+      active: "Continuer",
+      recent: "Récemment utilisées",
+      other: "Autres sessions",
+    },
+    reasons: {
+      title: "Titre",
+      project: "Projet",
+      recent: "Contexte récent",
+      keyword: "Mot-clé",
+    },
+    status: {
+      running: "En cours",
+      attention: "Nécessite votre attention",
+    },
+    actions: {
+      send: "Envoyer",
+      sendTo: "Envoyer à {{title}}",
+      open: "Ouvrir la session",
+      skip: "Passer",
+      viewAll: "Tout afficher ({{count}})",
+      showLess: "Afficher moins",
+      newSession: "Nouvelle session",
+      browseAll: "Parcourir toutes les sessions",
+    },
+    fallback: {
+      lowTitle: "Correspondance incertaine",
+      lowDescription:
+        "Ouvrez ou choisissez d’abord une session. Vous pouvez toujours envoyer directement à la sélection actuelle une fois sûr.",
+      noneTitle: "Aucune session ne correspond",
+      noneDescription:
+        "Démarrez une nouvelle session, parcourez toutes les sessions ou envoyez explicitement à la sélection actuelle.",
+    },
+    empty: {
+      title: "Aucune session ouverte",
+      description: "Démarrez une nouvelle session ou parcourez toutes les sessions de vos hôtes.",
+    },
+    errors: {
+      sendFailed: "Échec de l’envoi. Votre message est toujours ici.",
+      hostOffline: "Cet hôte est hors ligne.",
+      sessionGone: "Cette session n’est plus disponible. Choisissez-en une autre.",
+    },
+  },
   sessions: {
     title: "Historique",
     empty: "Aucune session pour l’instant",
@@ -2447,6 +2532,12 @@ export const fr: TranslationResources = {
     general: {
       title: "Général",
       sending: "Envoi",
+      quickInput: {
+        title: "Démarrage",
+        label: "Ouvrir la saisie rapide au lancement",
+        description:
+          "Affiche le routeur intelligent une fois par lancement. Désactivez pour restaurer directement le dernier espace de travail.",
+      },
       browserData: {
         title: "Données du navigateur",
         siteData: "Cookies et données des sites",

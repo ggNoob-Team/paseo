@@ -403,6 +403,91 @@ export const ptBR: TranslationResources = {
     textHint: "Editável: apague o que não quiser manter.",
     nothingSelected: "Escolha pelo menos um bloco.",
   },
+  quickInput: {
+    title: "Entrada rápida",
+    placeholder: "Peça qualquer coisa ou digite para encontrar uma sessão",
+    loading: "Carregando sessões...",
+    idleHint:
+      "Digite uma mensagem para direcioná-la por projeto, título ou contexto recente. Pressione Esc para pular.",
+    searchHint:
+      "Enter abre a sessão destacada e mantém seu texto como rascunho. Use ↑/↓ para escolher.",
+    slowRouteLoading:
+      "As correspondências locais são incertas. Pedindo uma segunda opinião ao modelo…",
+    slowRouteFailed:
+      "A verificação do modelo não está disponível. As correspondências locais continuam disponíveis.",
+    slowRouteErrors: {
+      auth: "A chave de API do {{provider}} é inválida ou expirou. Atualize-a em Ajustes → Provedores e tente novamente.",
+      timeout:
+        "A verificação do modelo expirou. As correspondências locais continuam disponíveis; escolha uma sessão ou tente novamente.",
+      unavailable:
+        "{{provider}} não está disponível no momento. As correspondências locais continuam disponíveis.",
+      no_providers:
+        "Nenhum modelo está disponível para verificar esta correspondência. As correspondências locais continuam disponíveis.",
+      invalid_response:
+        "O modelo retornou um resultado ilegível. As correspondências locais continuam disponíveis.",
+      unknown:
+        "A verificação do modelo não está disponível. As correspondências locais continuam disponíveis.",
+    },
+    slowRouteProviderFallback: "O modelo selecionado",
+    modelRanked: "Verificado pelo modelo",
+    slowRouteProgress: {
+      title: "O modelo está decidindo",
+      elapsed: "{{seconds}} s",
+      preparing: "{{count}} sessões candidatas preparadas",
+      thinking: "{{model}} está comparando projeto, título e contexto recente",
+      validating: "Resultado recebido. Validando candidatos e confiança",
+      fallback: "Esse modelo não está disponível. Tentando um modelo alternativo",
+      choosingModel: "Escolhendo um modelo",
+      fastThinking: "O roteamento usa o menor nível de raciocínio do modelo selecionado.",
+      steps: {
+        preparing: "Candidatos",
+        thinking: "Comparar",
+        validating: "Classificar",
+      },
+    },
+    sections: {
+      active: "Continuar",
+      recent: "Usadas recentemente",
+      other: "Outras sessões",
+    },
+    reasons: {
+      title: "Título",
+      project: "Projeto",
+      recent: "Contexto recente",
+      keyword: "Palavra-chave",
+    },
+    status: {
+      running: "Em execução",
+      attention: "Precisa de atenção",
+    },
+    actions: {
+      send: "Enviar",
+      sendTo: "Enviar para {{title}}",
+      open: "Abrir sessão",
+      skip: "Pular",
+      viewAll: "Ver todas ({{count}})",
+      showLess: "Mostrar menos",
+      newSession: "Nova sessão",
+      browseAll: "Explorar todas as sessões",
+    },
+    fallback: {
+      lowTitle: "Não tenho certeza desta correspondência",
+      lowDescription:
+        "Abra ou escolha uma sessão primeiro. Você ainda pode enviar diretamente para a seleção atual quando tiver certeza.",
+      noneTitle: "Nenhuma sessão corresponde",
+      noneDescription:
+        "Inicie uma nova sessão, explore todas as sessões ou envie explicitamente para a seleção atual.",
+    },
+    empty: {
+      title: "Nenhuma sessão aberta",
+      description: "Inicie uma nova sessão ou explore todas as sessões dos seus hosts.",
+    },
+    errors: {
+      sendFailed: "Não foi possível enviar. Sua mensagem continua aqui.",
+      hostOffline: "Este host está offline.",
+      sessionGone: "Essa sessão não está mais disponível. Escolha outra.",
+    },
+  },
   sessions: {
     title: "Histórico de agentes",
     empty: "Nenhuma sessão ainda",
@@ -2431,6 +2516,12 @@ export const ptBR: TranslationResources = {
     general: {
       title: "Geral",
       sending: "Envio",
+      quickInput: {
+        title: "Inicialização",
+        label: "Abrir entrada rápida ao iniciar",
+        description:
+          "Mostra o roteador inteligente uma vez por inicialização. Desative para restaurar o último workspace diretamente.",
+      },
       browserData: {
         title: "Dados do navegador",
         siteData: "Cookies e dados de sites",

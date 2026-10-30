@@ -404,6 +404,85 @@ export const ja: TranslationResources = {
     textHint: "編集できます。不要な部分は削除してください。",
     nothingSelected: "少なくとも1つ選択してください。",
   },
+  quickInput: {
+    title: "クイック入力",
+    placeholder: "内容を入力するか、セッションを検索",
+    loading: "セッションを読み込み中…",
+    idleHint:
+      "メッセージを入力すると、プロジェクト・タイトル・最近の文脈から振り分けます。Esc でスキップ。",
+    searchHint:
+      "Enter でハイライトしたセッションを開き、入力を下書きとして保存します。↑/↓ で選択。",
+    slowRouteLoading: "ローカル一致の確信度が低いため、モデルに再判定を依頼しています…",
+    slowRouteFailed: "モデルによる確認を利用できません。ローカルの一致結果は引き続き使えます。",
+    slowRouteErrors: {
+      auth: "{{provider}} の API キーが無効か期限切れです。設定 → Providers で更新してから再試行してください。",
+      timeout:
+        "モデルによる判定がタイムアウトしました。ローカル一致は引き続き利用できます。セッションを選ぶか再試行してください。",
+      unavailable: "{{provider}} は現在利用できません。ローカル一致は引き続き利用できます。",
+      no_providers: "この一致を判定できるモデルがありません。ローカル一致は引き続き利用できます。",
+      invalid_response: "モデルの結果を解析できませんでした。ローカル一致は引き続き利用できます。",
+      unknown: "モデルによる判定を利用できません。ローカル一致は引き続き利用できます。",
+    },
+    slowRouteProviderFallback: "選択中のモデル",
+    modelRanked: "モデル確認済み",
+    slowRouteProgress: {
+      title: "モデルが判定中",
+      elapsed: "{{seconds}} 秒",
+      preparing: "{{count}} 件の候補セッションを整理しました",
+      thinking: "{{model}} がプロジェクト、タイトル、最近の文脈を比較しています",
+      validating: "結果を受信しました。候補と信頼度を検証しています",
+      fallback: "このモデルは利用できません。代替モデルを試しています",
+      choosingModel: "モデルを選択中",
+      fastThinking: "ルーティングは選択したモデルの最小思考レベルを使用します。",
+      steps: {
+        preparing: "候補",
+        thinking: "比較",
+        validating: "並べ替え",
+      },
+    },
+    sections: {
+      active: "続行中",
+      recent: "最近使用",
+      other: "その他のセッション",
+    },
+    reasons: {
+      title: "タイトル",
+      project: "プロジェクト",
+      recent: "最近の文脈",
+      keyword: "キーワード",
+    },
+    status: {
+      running: "実行中",
+      attention: "対応が必要",
+    },
+    actions: {
+      send: "送信",
+      sendTo: "{{title}} に送信",
+      open: "セッションを開く",
+      skip: "スキップ",
+      viewAll: "すべて表示（{{count}}）",
+      showLess: "折りたたむ",
+      newSession: "新しいセッション",
+      browseAll: "すべてのセッションを表示",
+    },
+    fallback: {
+      lowTitle: "この一致には確信がありません",
+      lowDescription:
+        "先にセッションを開くか選択してください。確信が持てたら現在の選択へ直接送信することもできます。",
+      noneTitle: "一致するセッションがありません",
+      noneDescription:
+        "新しいセッションを開始するか、すべてのセッションを表示するか、現在の選択へ明示的に送信してください。",
+    },
+    empty: {
+      title: "開いているセッションがありません",
+      description: "新しいセッションを開始するか、ホスト上のすべてのセッションを表示してください。",
+    },
+    errors: {
+      sendFailed: "送信できませんでした。入力内容はここに残っています。",
+      hostOffline: "このホストはオフラインです。",
+      sessionGone: "そのセッションは利用できなくなりました。別のセッションを選んでください。",
+    },
+  },
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
@@ -2419,6 +2498,12 @@ export const ja: TranslationResources = {
     general: {
       title: "一般",
       sending: "送信",
+      quickInput: {
+        title: "起動",
+        label: "起動時にクイック入力を開く",
+        description:
+          "アプリ起動時にスマートセッションルーターを1回表示します。オフにすると前回のワークスペースを直接復元します。",
+      },
       browserData: {
         title: "ブラウザーデータ",
         siteData: "Cookie とサイトデータ",

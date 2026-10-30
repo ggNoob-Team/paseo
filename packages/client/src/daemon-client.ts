@@ -38,6 +38,7 @@ import {
   ShutdownRequestedStatusPayloadSchema,
   DaemonUpdateResponseSchema,
   SessionInboundMessageSchema,
+  QuickInputRouteCandidateSchema,
   type ActiveTurnBehavior,
   type ServerInfoStatusPayload,
 } from "@getpaseo/protocol/messages";
@@ -2333,6 +2334,7 @@ export class DaemonClient {
     message: SessionInboundMessage;
     timeout?: number;
     select: (msg: SessionOutboundMessage) => T | null;
+    onMessage?: (msg: SessionOutboundMessage) => void;
     options?: { skipQueue?: boolean };
   }): Promise<T> {
     const wire = this.owned.prepareRequest(params.message);
@@ -2351,7 +2353,9 @@ export class DaemonClient {
             }),
           };
         }
-        const value = params.select(wire.receive(msg));
+        const received = wire.receive(msg);
+        params.onMessage?.(received);
+        const value = params.select(received);
         if (value === null) {
           return null;
         }
@@ -3874,6 +3878,90 @@ export class DaemonClient {
     });
     if (payload.error) {
       throw new Error(payload.error);
+    }
+    return payload;
+  }
+
+  async routeQuickInput(
+    input: {
+      query: string;
+      candidates: Array<{
+        agentId: string;
+        title: string;
+        projectName: string;
+        workspaceName: string;
+        cwd: string;
+        recentContext: string[];
+      }>;
+      selection?: {
+        provider: AgentProvider;
+        model?: string | null;
+        thinkingOptionId?: string | null;
+      } | null;
+    },
+    options: {
+      requestId?: string;
+      timeout?: number;
+      onProgress?: (
+        progress: Extract<
+          SessionOutboundMessage,
+          { type: "quick_input.route.progress" }
+        >["payload"],
+      ) => void;
+    } = {},
+  ): Promise<{
+    agentIds: string[];
+    action: "existing" | "new" | "none";
+    confidence: "high" | "low";
+    reason: "title" | "project" | "recent" | "keyword" | "none";
+    explanation: string | null;
+    error: string | null;
+    errorCode?:
+      | "auth"
+      | "timeout"
+      | "unavailable"
+      | "no_providers"
+      | "invalid_response"
+      | "unknown"
+      | null;
+    errorProvider?: AgentProvider | null;
+  }> {
+    const requestId = this.createRequestId(options.requestId);
+    const requestMessage = SessionInboundMessageSchema.parse({
+      type: "quick_input.route.request",
+      requestId,
+      query: input.query,
+      candidates: input.candidates.map((candidate) =>
+        QuickInputRouteCandidateSchema.parse(candidate),
+      ),
+      selection: input.selection ?? undefined,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message: requestMessage,
+      timeout: options.timeout,
+      options: { skipQueue: true },
+      onMessage: (progressMessage) => {
+        if (
+          progressMessage.type === "quick_input.route.progress" &&
+          progressMessage.payload.requestId === requestId
+        ) {
+          options.onProgress?.(progressMessage.payload);
+        }
+      },
+      select: (response) =>
+        response.type === "quick_input.route.response" && response.payload.requestId === requestId
+          ? response.payload
+          : null,
+    });
+    if (payload.error) {
+      const error = new Error(payload.error) as Error & {
+        errorCode?: string | null;
+        errorProvider?: string | null;
+      };
+      error.errorCode = payload.errorCode ?? "unknown";
+      error.errorProvider = payload.errorProvider ?? null;
+      throw error;
     }
     return payload;
   }

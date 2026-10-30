@@ -13,6 +13,7 @@ import {
   NotebookPen,
   Plus,
   Search,
+  Zap,
   type LucideIcon,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -48,6 +49,7 @@ const BUILTIN_ICONS: Record<BuiltinSidebarItemId, LucideIcon> = {
   schedules: CalendarClock,
   recent: Clock3,
   notes: NotebookPen,
+  "quick-input": Zap,
   usage: Gauge,
 };
 

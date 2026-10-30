@@ -2096,6 +2096,29 @@ export const AgentTimelineListPromptsRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const QuickInputRouteCandidateSchema = z.object({
+  agentId: z.string().min(1),
+  title: z.string().max(500),
+  projectName: z.string().max(500),
+  workspaceName: z.string().max(500),
+  cwd: z.string().max(2_000),
+  recentContext: z.array(z.string().max(2_000)).max(5),
+});
+
+export const QuickInputRouteSelectionSchema = z.object({
+  provider: AgentProviderSchema,
+  model: z.string().max(500).nullable().optional(),
+  thinkingOptionId: z.string().max(500).nullable().optional(),
+});
+
+export const QuickInputRouteRequestMessageSchema = z.object({
+  type: z.literal("quick_input.route.request"),
+  requestId: z.string(),
+  query: z.string().trim().min(1).max(8_000),
+  candidates: z.array(QuickInputRouteCandidateSchema).min(1).max(40),
+  selection: QuickInputRouteSelectionSchema.nullable().optional(),
+});
+
 export const ProviderSubagentListRequestMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.request"),
   parentAgentId: z.string(),
@@ -3766,6 +3789,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineSearchRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
+  QuickInputRouteRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -5213,6 +5237,49 @@ export const AgentTimelineListPromptsResponseMessageSchema = z.object({
       }),
     ),
     error: z.string().nullable(),
+  }),
+});
+
+export const QuickInputRouteReasonSchema = z.enum([
+  "title",
+  "project",
+  "recent",
+  "keyword",
+  "none",
+]);
+
+export const QuickInputRouteErrorCodeSchema = z.enum([
+  "auth",
+  "timeout",
+  "unavailable",
+  "no_providers",
+  "invalid_response",
+  "unknown",
+]);
+
+export const QuickInputRouteResponseMessageSchema = z.object({
+  type: z.literal("quick_input.route.response"),
+  payload: z.object({
+    requestId: z.string(),
+    action: z.enum(["existing", "new", "none"]),
+    agentIds: z.array(z.string()).max(5),
+    confidence: z.enum(["high", "low"]),
+    reason: QuickInputRouteReasonSchema,
+    explanation: z.string().nullable(),
+    error: z.string().nullable(),
+    errorCode: QuickInputRouteErrorCodeSchema.nullable().optional(),
+    errorProvider: AgentProviderSchema.nullable().optional(),
+  }),
+});
+
+export const QuickInputRouteProgressMessageSchema = z.object({
+  type: z.literal("quick_input.route.progress"),
+  payload: z.object({
+    requestId: z.string(),
+    stage: z.enum(["preparing", "thinking", "validating", "fallback"]),
+    candidateCount: z.number().int().nonnegative(),
+    provider: AgentProviderSchema.nullable(),
+    model: z.string().nullable(),
   }),
 });
 
@@ -7588,6 +7655,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
+  QuickInputRouteResponseMessageSchema,
+  QuickInputRouteProgressMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,

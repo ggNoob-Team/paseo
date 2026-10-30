@@ -16,7 +16,7 @@ Each layout owns only the routes directly inside its directory.
   `h/[serverId]/workspace/[workspaceId]`, `h/[serverId]/open-project`, or
   `h/[serverId]/index`.
 - `packages/app/src/app/h/[serverId]/_layout.tsx` owns the host leaves with
-  relative screen names: `index`, `workspace/[workspaceId]/index`,
+  relative screen names: `index`, `quick-input`, `workspace/[workspaceId]/index`,
   `agent/[agentId]`, `sessions`, `open-project`, `settings`,
   `plugin/[pluginId]/[surfaceId]`, and
   `plugin/[pluginId]/[contributionKind]/[contributionId]`.
@@ -38,6 +38,13 @@ leaf.
 remembered workspace for that host after the remembered selection has hydrated
 and the workspace has not been proven missing. If there is no restorable
 workspace, it goes to global `/open-project`.
+
+On the first cold-launch entry per app process, a restorable workspace opens
+`/h/[serverId]/quick-input` instead when the user has not disabled the smart
+quick-input setting. The launch gate is consumed when that page opens, when the
+user skips it, or when startup takes the ordinary workspace/open-project path.
+No remembered workspace or no workspace on the host keeps the existing startup
+flow. Deep links and notification opens still go directly to their target.
 
 This restore is based on the last navigated workspace, not current connection
 status. Do not redirect to another online host just because the remembered host
@@ -196,8 +203,10 @@ state:
 The pure policy tests should still enforce the boundary split:
 
 - root startup with a saved workspace returns `/h/[serverId]`;
-- host index with the same saved workspace returns
+- host index on a normal restore with the same saved workspace returns
   `/h/[serverId]/workspace/[workspaceId]`;
+- host index on the first cold-launch restore with smart quick input enabled
+  returns `/h/[serverId]/quick-input`;
 - host index with no restorable workspace returns `/open-project`.
 
 ## Checklist

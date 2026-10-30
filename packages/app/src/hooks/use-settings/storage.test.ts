@@ -80,6 +80,32 @@ describe("loadAppSettingsFromStorage", () => {
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
   });
 
+  it("defaults quick input to enabled for settings written by older builds", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "dark" }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).quickInputEnabled).toBe(true);
+  });
+
+  it("persists an explicit quick input opt-out", async () => {
+    const deps = makeDeps();
+    const queryClient = new QueryClient();
+
+    await saveAppSettings({
+      queryClient,
+      updates: { quickInputEnabled: false },
+      deps,
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).quickInputEnabled).toBe(false);
+    expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}").quickInputEnabled).toBe(
+      false,
+    );
+  });
+
   it("keeps valid settings when another build wrote unknown fields or enum values", async () => {
     const stored = {
       theme: "dark",

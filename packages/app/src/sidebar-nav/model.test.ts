@@ -45,10 +45,11 @@ describe("resolveSidebarNavItems", () => {
       { key: "schedules", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
       { key: kanbanKey, visible: true },
       { key: notesKey, visible: true },
     ]);
-    expect(items[6]).toEqual({ kind: "plugin", key: kanbanKey, group: kanban, visible: true });
+    expect(items[7]).toEqual({ kind: "plugin", key: kanbanKey, group: kanban, visible: true });
     expect(items[0]).toEqual({
       kind: "builtin",
       key: "new-workspace",
@@ -76,6 +77,7 @@ describe("resolveSidebarNavItems", () => {
       { key: "search", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
       { key: notesKey, visible: true },
     ]);
   });
@@ -98,6 +100,7 @@ describe("resolveSidebarNavItems", () => {
       "schedules",
       "recent",
       "notes",
+      "quick-input",
     ]);
   });
 
@@ -118,6 +121,7 @@ describe("resolveSidebarNavItems", () => {
       { key: "schedules", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
     ]);
   });
 });
@@ -149,6 +153,7 @@ describe("setSidebarNavItemVisible", () => {
       { key: "schedules", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
       { key: kanbanKey, visible: true },
     ]);
   });
@@ -174,6 +179,7 @@ describe("setSidebarNavItemVisible", () => {
       { key: "schedules", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
     ]);
   });
 
@@ -201,6 +207,7 @@ describe("setSidebarNavItemVisible", () => {
       { key: "schedules", visible: true },
       { key: "recent", visible: true },
       { key: "notes", visible: true },
+      { key: "quick-input", visible: true },
     ]);
     expect(
       summarize(
@@ -243,6 +250,7 @@ describe("moveSidebarNavItem", () => {
       "schedules",
       "recent",
       "notes",
+      "quick-input",
       kanbanKey,
     ]);
   });
@@ -257,6 +265,7 @@ describe("moveSidebarNavItem", () => {
       "recent",
       "schedules",
       "notes",
+      "quick-input",
       kanbanKey,
     ]);
   });
@@ -302,6 +311,7 @@ describe("builtinSidebarNavShortcutAction", () => {
     expect(builtinSidebarNavShortcutAction("schedules")).toBeNull();
     expect(builtinSidebarNavShortcutAction("recent")).toBeNull();
     expect(builtinSidebarNavShortcutAction("notes")).toBeNull();
+    expect(builtinSidebarNavShortcutAction("quick-input")).toBeNull();
   });
 });
 
